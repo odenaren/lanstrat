@@ -241,7 +241,11 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
     <!-- Left: strategy -->
     <div>
       <div class="card" style="margin-bottom:20px">
-        <div class="section-title">Draft &amp; Strategi</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+          <div class="section-title" style="margin-bottom:0;border-bottom:none;padding-bottom:0">Draft &amp; Strategi</div>
+          <div id="match-result-btns" style="display:flex;gap:8px"></div>
+        </div>
+        <div style="border-bottom:1px solid var(--border);margin-bottom:14px"></div>
         <div id="detail-strategy" class="strategy-raw"></div>
       </div>
     </div>
@@ -842,6 +846,7 @@ async function loadHistory() {
           </div>`;
         }).join('')}</div>
       </div>
+      ${m.result==='win'?'<span class="match-entry-badge" style="background:rgba(39,174,96,.15);border:1px solid #27ae6055;color:#2ecc71">✓ VINST</span>':m.result==='loss'?'<span class="match-entry-badge" style="background:rgba(231,76,60,.12);border:1px solid #c0392b55;color:#e74c3c">✗ FÖRLUST</span>':''}
       <span class="match-entry-badge ${hasItems?'badge-has-items':'badge-no-items'}">${hasItems?'Items klara':'Lägg till motståndare'}</span>
       <button onclick="toggleMemory(event,'${m.id}',${!m.excludeFromMemory})" title="${m.excludeFromMemory?'Inkludera i minne':'Exkludera från minne'}" style="background:none;border:1px solid ${m.excludeFromMemory?'var(--border)':'var(--gold-dim)'};color:${m.excludeFromMemory?'var(--text-dim)':'var(--gold)'};cursor:pointer;font-size:12px;padding:3px 8px;border-radius:3px;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.04em;white-space:nowrap;transition:all .15s">${m.excludeFromMemory?'● Ej minne':'● Minne'}</button>
       <button class="match-entry-del" onclick="deleteMatch(event,'${m.id}')" title="Ta bort">✕</button>`;
@@ -849,6 +854,12 @@ async function loadHistory() {
     list.appendChild(el);
   });
 }
+async function setMatchResult(id, result) {
+  await apiFetch('/matches/'+id+'/result', {method:'PUT', body:JSON.stringify({result})});
+  openDetail(id);
+  loadHistory();
+}
+
 async function toggleMemory(e, id, exclude) {
   e.stopPropagation();
   await apiFetch('/matches/'+id+'/memory', {method:'PUT', body:JSON.stringify({excludeFromMemory: exclude})});
@@ -877,6 +888,15 @@ async function openDetail(id) {
   const date=new Date(m.createdAt).toLocaleString('sv-SE',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
   document.getElementById('detail-title').textContent=m.name||(m.players||[]).map(p=>p.name).join(' · ');
   document.getElementById('detail-title').title=(m.players||[]).map(p=>p.name).join(' · ');
+  // Render result buttons
+  const resultEl = document.getElementById('match-result-btns');
+  if(resultEl) {
+    resultEl.innerHTML = `
+      <button onclick="setMatchResult('${m.id}','win')" style="padding:7px 18px;border-radius:4px;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;transition:all .15s;border:1px solid #27ae6055;background:${m.result==='win'?'rgba(39,174,96,.3)':'none'};color:${m.result==='win'?'#2ecc71':'#27ae60'}">✓ Vinst</button>
+      <button onclick="setMatchResult('${m.id}','loss')" style="padding:7px 18px;border-radius:4px;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;transition:all .15s;border:1px solid #c0392b55;background:${m.result==='loss'?'rgba(231,76,60,.2)':'none'};color:${m.result==='loss'?'#e74c3c':'#c0392b'}">✗ Förlust</button>
+      ${m.result?`<button onclick="setMatchResult('${m.id}',null)" style="padding:7px 12px;border-radius:4px;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:all .15s;border:1px solid var(--border);background:none;color:var(--text-dim)">Rensa</button>`:''}
+    `;
+  }
   document.getElementById('detail-date').textContent=date;
   document.getElementById('detail-strategy').innerHTML=mdToHtml(m.strategy||'');
 
