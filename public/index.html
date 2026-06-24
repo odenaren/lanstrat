@@ -210,6 +210,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
     <div class="card">
       <h3>Spelare i matchen</h3>
       <div id="player-select-list" class="player-select-list"></div>
+      <button onclick="invertMatchPlayers()" style="width:100%;margin-top:8px;padding:7px;background:none;border:1px solid var(--border);color:var(--text-dim);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:4px;transition:all .15s" onmouseover="this.style.borderColor='var(--gold-dim)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">Invertera val</button>
       <button class="gen-btn" id="gen-btn" onclick="generateStrategy()">Välj minst 3 spelare</button>
     </div>
     <div class="strategy-area" id="strategy-area">
@@ -618,6 +619,13 @@ function renderMatchPage() {
   btn.textContent=valid?`Generera strategi (${n} spelare)`:n<3?'Välj minst 3 spelare':'Max 5 spelare';
 }
 
+function invertMatchPlayers() {
+  const allIndexes = players.map((_,i) => i);
+  const newSet = new Set(allIndexes.filter(i => !matchPlayers.has(i)));
+  matchPlayers = newSet;
+  renderMatchPage();
+}
+
 function getLaningCtx(n){
   if(n===5)return'Ni är ett fullt lag (5v5). Tilldela alla fem roller: Carry (safe lane pos 1), Mid (pos 2), Offlaner (pos 3), Support 4, Support 5.';
   if(n===4)return'Ni är 4 spelare. Förslag: Carry (pos 1), Mid (pos 2), Offlaner (pos 3), flex Support/roamer. Välj solo-starka hjältar.';
@@ -629,8 +637,12 @@ async function generateStrategy() {
   const active=[...matchPlayers].map(i=>players[i]);
   const n=active.length;
   if(n<3||n>5)return;
+
+  // Wildcard: roughly 1 in 4 chance (25%), marked separately
+  const isWildcard = Math.random() < 0.25;
+
   const area=document.getElementById('strategy-area');
-  area.innerHTML=`<div class="thinking"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div> Genererar strategi för ${n} spelare...</div>`;
+  area.innerHTML=`<div class="thinking"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div> ${isWildcard?'🎲 Slumpar en vild strategi...':'Genererar strategi för '+n+' spelare...'}</div>`;
 
   const poolSummary=active.map(p=>{
     const names=(p.heroes||[]).map(id=>{ const h=HERO_LIST.find(x=>x.id===id); return h?h.name+' ('+h.roles.join('/')+')':null; }).filter(Boolean);
@@ -638,7 +650,8 @@ async function generateStrategy() {
   }).join('\n\n');
 
   const draftNames = active.map(p=>p.name).join(', ');
-  const prompt='Du är en Dota 2 draft-expert. '+n+' spelare ska spela en match.\n\nHERO POOLS:\n'+poolSummary+'\n\nLANING-KONTEXT:\n'+getLaningCtx(n)+'\n\nSvara i exakt detta format — börja med JSON-blocket, sedan strategin:\n\nDRAFT_JSON_START\n{"name":"Kort strateginamn på svenska (max 4 ord, t.ex. Splitpush eller Tidig aggression)","draft":{"SPELARNNAMN":"Hjältenamn",...}}\nDRAFT_JSON_END\n\nSedan strategitexten med dessa rubriker:\n1. **Rekommenderad draft** – vilken hjälte varje spelare bör spela och varför\n2. **Laning setup** – vem spelar vilken roll/lane\n3. **Spelstil och gameplan** – early/mid/late-game\n4. **Nyckelsynergier** – starka kombos\n5. **Win condition**\n\nSpelarna heter: '+draftNames+'\nVar konkret. Använd svenska. Tydliga rubriker.';
+  const wildcardInstruction = isWildcard ? '\n\nDETTA ÄR EN WILD CARD-STRATEGI: Välj något oortodox, oväntat och lite galet som ändå kan funka på ett LAN bland vänner. Kanske en ovanlig rolltilldelning, en hjälte som normalt inte passar rollen men kan överraska, eller en extrem spelstil. Ha kul med det men det ska fortfarande vara spelbart. Markera i strateginamnet att det är wild card, t.ex. med 🎲 eller ordet WILD.' : '';
+  const prompt='Du är en Dota 2 draft-expert. '+n+' spelare ska spela en match.'+wildcardInstruction+'\n\nHERO POOLS:\n'+poolSummary+'\n\nLANING-KONTEXT:\n'+getLaningCtx(n)+'\n\nSvara i exakt detta format — börja med JSON-blocket, sedan strategin:\n\nDRAFT_JSON_START\n{"name":"Kort strateginamn på svenska (max 4 ord, t.ex. Splitpush eller Tidig aggression)","draft":{"SPELARNNAMN":"Hjältenamn",...}}\nDRAFT_JSON_END\n\nSedan strategitexten med dessa rubriker:\n1. **Rekommenderad draft** – vilken hjälte varje spelare bör spela och varför\n2. **Laning setup** – vem spelar vilken roll/lane\n3. **Spelstil och gameplan** – early/mid/late-game\n4. **Nyckelsynergier** – starka kombos\n5. **Win condition**\n\nSpelarna heter: '+draftNames+'\nVar konkret. Använd svenska. Tydliga rubriker.';
 
   try {
     const resp=await fetch('/api/strategy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
@@ -661,13 +674,14 @@ async function generateStrategy() {
       players:active.map(p=>({name:p.name,heroes:p.heroes||[]})),
       strategy:cleanText,
       draft:currentDraft,
-      name:strategyName
+      name:strategyName,
+      wildcard:isWildcard
     })});
     currentMatchId=match.id;
 
     area.innerHTML=`
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-        <div><h2 style="font-family:Rajdhani,sans-serif;font-size:22px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em">${strategyName||"Draft Strategi"}</h2>
+        <div><h2 style="font-family:Rajdhani,sans-serif;font-size:22px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em">${strategyName||"Draft Strategi"} ${isWildcard?'<span style="font-size:14px;background:rgba(155,89,182,.2);border:1px solid #8e44ad88;color:#9b59b6;padding:2px 8px;border-radius:3px;vertical-align:middle;letter-spacing:.05em">🎲 WILD CARD</span>':''}</h2>
         <div style="color:var(--text-dim);font-size:13px;margin-top:2px">Spelare: ${active.map(p=>p.name).join(', ')}</div></div>
         <button class="btn btn-ghost" onclick="showPage('history')">Se historik →</button>
       </div>
@@ -696,7 +710,7 @@ async function loadHistory() {
       <div class="match-entry-date">${date}</div>
       <div style="flex:1">
         <div class="match-entry-players">${playerNames}</div>
-        ${m.name?`<div style="font-size:12px;color:var(--gold);font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-top:2px">${m.name}</div>`:""}
+        ${m.name?`<div style="font-size:12px;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-top:2px"><span style="color:${m.wildcard?'#9b59b6':'var(--gold)'}">${m.name}</span>${m.wildcard?' <span style="font-size:10px;background:rgba(155,89,182,.2);border:1px solid #8e44ad88;color:#9b59b6;padding:1px 6px;border-radius:3px;vertical-align:middle">🎲 WILD</span>':''}</div>`:""}
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">${(m.players||[]).map(p=>{const hero=(m.draft||{})[p.name];return hero?`<span style="font-size:11px;color:var(--text-dim)">${p.name}: <span style="color:var(--gold-light)">${hero}</span></span>`:`<span style="font-size:11px;color:var(--text-dim)">${p.name}</span>`;}).join('')}</div>
       </div>
       <span class="match-entry-badge ${hasItems?'badge-has-items':'badge-no-items'}">${hasItems?'Items klara':'Lägg till motståndare'}</span>

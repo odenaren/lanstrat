@@ -64,12 +64,13 @@ app.put('/api/players/:name/heroes', (req, res) => {
 app.get('/api/matches', (req, res) => res.json(read(MATCHES_FILE)));
 
 app.post('/api/matches', (req, res) => {
-  const { players, strategy, draft, name } = req.body;
+  const { players, strategy, draft, name, wildcard } = req.body;
   const matches = read(MATCHES_FILE);
   const match = {
     id: Date.now().toString(),
     createdAt: new Date().toISOString(),
     name: name||'',
+    wildcard: !!wildcard,
     players,
     strategy,
     draft,
