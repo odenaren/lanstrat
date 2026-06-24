@@ -436,11 +436,16 @@ const HERO_SLUGS = {
   135:"kez",136:"marci",137:"monkey_king",138:"snapfire",139:"techies",141:"void_spirit",143:"ringmaster"
 };
 // These 4 heroes have confirmed working URLs
+const CDN = 'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/';
 const HERO_IMG_OVERRIDES = {
-  13: 'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/kunkka.png',
-  35: 'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/undying.png',
-  90: 'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/enchantress.png',
-  99: 'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/lion.png',
+  6:  CDN+'rattletrap.png',
+  12: CDN+'wisp.png',
+  13: CDN+'kunkka.png',
+  15: CDN+'life_stealer.png',
+  17: CDN+'magnataur.png',
+  35: CDN+'undying.png',
+  90: CDN+'enchantress.png',
+  99: CDN+'lion.png',
 };
 function heroImg(id) {
   if(HERO_IMG_OVERRIDES[id]) return HERO_IMG_OVERRIDES[id];
