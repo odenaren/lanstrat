@@ -413,36 +413,32 @@ const HEROES = [
 const seenNames = new Set();
 const HERO_LIST = HEROES.filter(h => { if(seenNames.has(h.name))return false; seenNames.add(h.name); return true; }).sort((a,b)=>a.name.localeCompare(b.name));
 const HERO_SLUGS = {
-  1:"axe",2:"beastmaster",3:"brewmaster",4:"centaur",5:"chaos_knight",6:"clockwerk",
-  7:"dragon_knight",8:"earth_spirit",9:"earthshaker",10:"elder_titan",11:"huskar",12:"io",
-  13:"kunkka",14:"legion_commander",15:"lifestealer",16:"lycan",17:"magnus",18:"mars",
+  1:"axe",2:"beastmaster",3:"brewmaster",4:"centaur",5:"chaos_knight",6:"rattletrap",
+  7:"dragon_knight",8:"earth_spirit",9:"earthshaker",10:"elder_titan",11:"huskar",12:"wisp",
+  13:"kunkka",14:"legion_commander",15:"life_stealer",16:"lycan",17:"magnataur",18:"mars",
   19:"night_stalker",20:"ogre_magi",21:"omniknight",22:"phoenix",23:"primal_beast",24:"pudge",
-  25:"sand_king",26:"slardar",27:"spirit_breaker",28:"sven",29:"tidehunter",30:"timbersaw",
-  31:"tiny",32:"treant_protector",33:"tusk",34:"underlord",35:"undying",36:"wraith_king",37:"dawnbreaker",
+  25:"sand_king",26:"slardar",27:"spirit_breaker",28:"sven",29:"tidehunter",30:"shredder",
+  31:"tiny",32:"treant",33:"tusk",34:"abyssal_underlord",35:"undying",36:"skeleton_king",37:"dawnbreaker",
   40:"antimage",41:"arc_warden",42:"bloodseeker",43:"bounty_hunter",44:"bristleback",45:"clinkz",
   46:"drow_ranger",47:"ember_spirit",48:"faceless_void",49:"gyrocopter",50:"hoodwink",51:"juggernaut",
   52:"lone_druid",53:"luna",54:"medusa",55:"meepo",56:"mirana",57:"morphling",58:"naga_siren",
   59:"nyx_assassin",60:"pangolier",61:"phantom_assassin",62:"phantom_lancer",63:"razor",64:"riki",
-  65:"shadow_fiend",66:"slark",67:"sniper",68:"spectre",69:"templar_assassin",70:"terrorblade",
+  65:"nevermore",66:"slark",67:"sniper",68:"spectre",69:"templar_assassin",70:"terrorblade",
   71:"troll_warlord",72:"ursa",73:"viper",74:"visage",75:"weaver",
   80:"ancient_apparition",81:"bane",82:"batrider",83:"chen",84:"crystal_maiden",85:"dark_seer",
   86:"dark_willow",87:"dazzle",88:"death_prophet",89:"disruptor",90:"enchantress",91:"enigma",
   92:"grimstroke",93:"invoker",94:"jakiro",95:"keeper_of_the_light",96:"leshrac",97:"lich",
-  98:"lina",99:"lion",100:"muerta",101:"natures_prophet",102:"necrophos",105:"oracle",
-  106:"outworld_destroyer",107:"pugna",108:"queenofpain",109:"rubick",110:"shadow_demon",
+  98:"lina",99:"lion",100:"muerta",101:"furion",102:"necrolyte",105:"oracle",
+  106:"obsidian_destroyer",107:"pugna",108:"queenofpain",109:"rubick",110:"shadow_demon",
   111:"shadow_shaman",112:"silencer",113:"skywrath_mage",114:"storm_spirit",115:"tinker",
-  116:"vengeful_spirit",117:"venomancer",118:"warlock",119:"windranger",120:"winter_wyvern",
-  121:"witch_doctor",122:"zeus",130:"abaddon",131:"alchemist",132:"doom",
+  116:"vengefulspirit",117:"venomancer",118:"warlock",119:"windrunner",120:"winter_wyvern",
+  121:"witch_doctor",122:"zuus",130:"abaddon",131:"alchemist",132:"doom_bringer",
   135:"kez",136:"marci",137:"monkey_king",138:"snapfire",139:"techies",141:"void_spirit",143:"ringmaster"
 };
 // These 4 heroes have confirmed working URLs
 const CDN = 'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/';
 const HERO_IMG_OVERRIDES = {
-  6:  CDN+'rattletrap.png',
-  12: CDN+'wisp.png',
   13: CDN+'kunkka.png',
-  15: CDN+'life_stealer.png',
-  17: CDN+'magnataur.png',
   35: CDN+'undying.png',
   90: CDN+'enchantress.png',
   99: CDN+'lion.png',
