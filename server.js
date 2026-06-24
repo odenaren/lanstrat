@@ -151,13 +151,15 @@ app.get('/api/matches', async (req, res) => {
 });
 
 app.post('/api/matches', async (req, res) => {
-  const { players, strategy, draft, name, wildcard, style } = req.body;
+  const { players, strategy, briefing, captainNotes, draft, name, wildcard, style } = req.body;
   try {
     const matches = await readMatches();
     const match = {
       id: Date.now().toString(),
       createdAt: new Date().toISOString(),
       name: name || '',
+      briefing: briefing || '',
+      captainNotes: captainNotes || '',
       wildcard: !!wildcard,
       style: style || 'standard',
       players,
