@@ -5,786 +5,260 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Laneight Strategy</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500&display=swap');
-
-  :root {
-    --bg: #0a0b0d;
-    --surface: #12151a;
-    --surface2: #1a1f28;
-    --border: #252c38;
-    --gold: #c89b3c;
-    --gold-light: #e8c06a;
-    --gold-dim: #7a5c1e;
-    --text: #d4cfc7;
-    --text-dim: #7a7a7a;
-    --red: #c0392b;
-    --green: #27ae60;
-    --blue: #2980b9;
-    --purple: #8e44ad;
-    --teal: #16a085;
-  }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Inter', sans-serif;
-    font-size: 14px;
-    min-height: 100vh;
-  }
-
-  h1, h2, h3, .title-font {
-    font-family: 'Rajdhani', sans-serif;
-    letter-spacing: 0.05em;
-  }
-
-  /* NAV */
-  .nav {
-    background: var(--surface);
-    border-bottom: 1px solid var(--gold-dim);
-    padding: 0 24px;
-    display: flex;
-    align-items: center;
-    height: 56px;
-    gap: 24px;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-  .nav-logo {
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 22px;
-    font-weight: 700;
-    color: var(--gold);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    flex: 0 0 auto;
-  }
-  .nav-logo span { color: var(--text-dim); font-weight: 400; }
-  .nav-tabs { display: flex; gap: 4px; margin-left: auto; }
-  .nav-tab {
-    padding: 6px 16px;
-    background: none;
-    border: 1px solid transparent;
-    color: var(--text-dim);
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 15px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    cursor: pointer;
-    text-transform: uppercase;
-    transition: all 0.15s;
-    border-radius: 3px;
-  }
-  .nav-tab:hover { color: var(--text); border-color: var(--border); }
-  .nav-tab.active { color: var(--gold); border-color: var(--gold-dim); background: rgba(200,155,60,0.08); }
-
-  /* PAGES */
-  .page { display: none; padding: 28px 24px; max-width: 1400px; margin: 0 auto; }
-  .page.active { display: block; }
-
-  /* HOME PAGE */
-  .home-header {
-    text-align: center;
-    padding: 48px 0 40px;
-  }
-  .home-header h1 {
-    font-size: 48px;
-    font-weight: 700;
-    color: var(--gold);
-    text-transform: uppercase;
-    letter-spacing: 0.15em;
-    line-height: 1;
-  }
-  .home-header p {
-    color: var(--text-dim);
-    margin-top: 10px;
-    font-size: 15px;
-  }
-
-  .player-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 16px;
-    margin-top: 32px;
-  }
-
-  .player-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 20px;
-    cursor: pointer;
-    transition: all 0.15s;
-    position: relative;
-  }
-  .player-card:hover { border-color: var(--gold-dim); background: var(--surface2); }
-  .player-card-name {
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 22px;
-    font-weight: 700;
-    color: var(--text);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-  .player-card-count {
-    color: var(--text-dim);
-    font-size: 13px;
-    margin-top: 4px;
-  }
-  .player-card-count span { color: var(--gold); font-weight: 500; }
-  .player-card-roles {
-    margin-top: 12px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-  }
-  .role-pill {
-    padding: 2px 8px;
-    border-radius: 3px;
-    font-size: 11px;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-  }
-  .role-pill.carry { border-color: #c0392b55; color: #e74c3c; }
-  .role-pill.support { border-color: #2980b955; color: #3498db; }
-  .role-pill.mid { border-color: #8e44ad55; color: #9b59b6; }
-  .role-pill.offlane { border-color: #16a08555; color: #1abc9c; }
-  .role-pill.jungle { border-color: #27ae6055; color: #2ecc71; }
-
-  .player-card-btn {
-    margin-top: 16px;
-    width: 100%;
-    padding: 8px;
-    background: rgba(200,155,60,0.1);
-    border: 1px solid var(--gold-dim);
-    color: var(--gold);
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 14px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    cursor: pointer;
-    border-radius: 4px;
-    transition: all 0.15s;
-  }
-  .player-card-btn:hover { background: rgba(200,155,60,0.2); }
-
-  .add-player-card {
-    background: var(--surface);
-    border: 1px dashed var(--border);
-    border-radius: 6px;
-    padding: 20px;
-    cursor: pointer;
-    transition: all 0.15s;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 120px;
-    gap: 8px;
-    color: var(--text-dim);
-  }
-  .add-player-card:hover { border-color: var(--gold-dim); color: var(--gold); }
-  .add-player-card .plus { font-size: 32px; line-height: 1; }
-  .add-player-card span { font-family: 'Rajdhani', sans-serif; font-size: 14px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
-
-  /* HERO PICKER PAGE */
-  .picker-header {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-  }
-  .picker-header h2 {
-    font-size: 28px;
-    font-weight: 700;
-    text-transform: uppercase;
-    color: var(--gold);
-    letter-spacing: 0.1em;
-  }
-  .back-btn {
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    padding: 6px 12px;
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    cursor: pointer;
-    border-radius: 3px;
-    transition: all 0.15s;
-  }
-  .back-btn:hover { border-color: var(--gold-dim); color: var(--gold); }
-
-  .picker-controls {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    flex-wrap: wrap;
-    margin-bottom: 16px;
-  }
-  .quick-btn {
-    padding: 6px 14px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--text-dim);
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 13px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    cursor: pointer;
-    border-radius: 3px;
-    transition: all 0.15s;
-  }
-  .quick-btn:hover { border-color: var(--gold-dim); color: var(--gold); }
-  .quick-btn.danger:hover { border-color: #c0392b; color: #e74c3c; }
-
-  .search-input {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 6px 14px;
-    border-radius: 3px;
-    font-size: 14px;
-    font-family: 'Inter', sans-serif;
-    outline: none;
-    width: 200px;
-    transition: border-color 0.15s;
-  }
-  .search-input:focus { border-color: var(--gold-dim); }
-  .search-input::placeholder { color: var(--text-dim); }
-
-  .filter-row {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    margin-bottom: 16px;
-    align-items: center;
-  }
-  .filter-label { color: var(--text-dim); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 2px; }
-  .filter-btn {
-    padding: 4px 12px;
-    border: 1px solid var(--border);
-    background: none;
-    color: var(--text-dim);
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 13px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    cursor: pointer;
-    border-radius: 3px;
-    transition: all 0.15s;
-  }
-  .filter-btn:hover, .filter-btn.active { color: var(--gold); border-color: var(--gold-dim); background: rgba(200,155,60,0.08); }
-
-  .selected-count {
-    margin-left: auto;
-    font-size: 13px;
-    color: var(--text-dim);
-  }
-  .selected-count strong { color: var(--gold); }
-
-  /* outer container for attr-sections — block flow */
-  #hero-grid { display: block; }
-
-  /* inner grid inside each attr-section */
-  .hero-inner-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
-    gap: 6px;
-  }
-
-  .hero-card {
-    aspect-ratio: 16/9;
-    background: var(--surface2);
-    border: 2px solid transparent;
-    border-radius: 4px;
-    cursor: pointer;
-    position: relative;
-    overflow: hidden;
-    transition: all 0.12s;
-    display: flex;
-    align-items: flex-end;
-  }
-  .hero-card:hover { border-color: var(--gold-dim); transform: scale(1.04); z-index: 1; }
-  .hero-card.selected { border-color: var(--gold); }
-  .hero-card.selected::after {
-    content: '✓';
-    position: absolute;
-    top: 3px;
-    right: 4px;
-    color: var(--gold);
-    font-size: 12px;
-    font-weight: 700;
-    text-shadow: 0 0 4px #000;
-  }
-  .hero-card.dimmed { opacity: 0.25; }
-
-  .hero-bg {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, #1a2030, #252c3a);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 24px;
-  }
-  .hero-name {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    padding: 2px 4px;
-    background: linear-gradient(transparent, rgba(0,0,0,0.85));
-    font-size: 10px;
-    font-weight: 500;
-    color: #fff;
-    text-align: center;
-    line-height: 1.3;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  /* ATTR SECTION */
-  .attr-section { margin-bottom: 24px; }
-  .attr-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--border);
-  }
-  .attr-icon { font-size: 18px; }
-  .attr-label {
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 16px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-  .attr-label.str { color: #e74c3c; }
-  .attr-label.agi { color: #2ecc71; }
-  .attr-label.int { color: #3498db; }
-  .attr-label.uni { color: #9b59b6; }
-  .attr-count { color: var(--text-dim); font-size: 12px; margin-left: auto; }
-
-  .save-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: var(--surface);
-    border-top: 1px solid var(--gold-dim);
-    padding: 12px 24px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    z-index: 200;
-  }
-  .save-status { color: var(--text-dim); font-size: 13px; }
-  .save-status.saved { color: var(--green); }
-  .save-btn {
-    margin-left: auto;
-    padding: 8px 24px;
-    background: var(--gold);
-    border: none;
-    color: #0a0b0d;
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 15px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    cursor: pointer;
-    border-radius: 4px;
-    transition: all 0.15s;
-  }
-  .save-btn:hover { background: var(--gold-light); }
-
-  /* MATCH PAGE */
-  .match-layout {
-    display: grid;
-    grid-template-columns: 320px 1fr;
-    gap: 24px;
-    align-items: start;
-  }
-  @media (max-width: 800px) { .match-layout { grid-template-columns: 1fr; } }
-
-  .match-panel {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 20px;
-  }
-  .match-panel h3 {
-    font-size: 18px;
-    font-weight: 700;
-    text-transform: uppercase;
-    color: var(--gold);
-    letter-spacing: 0.08em;
-    margin-bottom: 16px;
-  }
-
-  .player-select-list { display: flex; flex-direction: column; gap: 8px; }
-  .player-toggle {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.15s;
-    user-select: none;
-  }
-  .player-toggle:hover { border-color: var(--gold-dim); }
-  .player-toggle.active { border-color: var(--gold); background: rgba(200,155,60,0.08); }
-  .player-toggle-name {
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 16px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    flex: 1;
-  }
-  .player-toggle-heroes { font-size: 12px; color: var(--text-dim); }
-  .player-toggle.active .player-toggle-heroes { color: var(--gold); }
-  .checkbox {
-    width: 18px;
-    height: 18px;
-    border: 2px solid var(--border);
-    border-radius: 3px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    transition: all 0.15s;
-  }
-  .player-toggle.active .checkbox { background: var(--gold); border-color: var(--gold); color: #000; }
-
-  .gen-btn {
-    width: 100%;
-    margin-top: 16px;
-    padding: 10px 12px;
-    background: linear-gradient(135deg, var(--gold-dim), var(--gold));
-    border: none;
-    color: #0a0b0d;
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 15px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    white-space: nowrap;
-    cursor: pointer;
-    border-radius: 4px;
-    transition: all 0.15s;
-  }
-  .gen-btn:hover { filter: brightness(1.1); }
-  .gen-btn:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
-
-  .strategy-area {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 24px;
-    min-height: 400px;
-  }
-  .strategy-placeholder {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 300px;
-    color: var(--text-dim);
-    text-align: center;
-    gap: 12px;
-  }
-  .strategy-placeholder .icon { font-size: 48px; opacity: 0.3; }
-  .strategy-placeholder p { font-size: 14px; }
-
-  .strategy-output h2 {
-    font-size: 26px;
-    color: var(--gold);
-    margin-bottom: 4px;
-  }
-  .strategy-output .sub {
-    color: var(--text-dim);
-    font-size: 13px;
-    margin-bottom: 20px;
-  }
-
-  .strategy-section { margin-bottom: 20px; }
-  .strategy-section h4 {
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 16px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--gold);
-    margin-bottom: 10px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .hero-lane-list { display: flex; flex-direction: column; gap: 8px; }
-  .hero-lane-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 10px 14px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-  }
-  .hero-lane-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
-  .hero-lane-detail {}
-  .hero-lane-name {
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--text);
-    letter-spacing: 0.04em;
-  }
-  .hero-lane-name .role-tag {
-    font-size: 11px;
-    color: var(--text-dim);
-    margin-left: 8px;
-    font-weight: 400;
-    letter-spacing: 0.03em;
-    font-family: 'Inter', sans-serif;
-    text-transform: none;
-  }
-  .hero-lane-desc { font-size: 12px; color: var(--text-dim); margin-top: 3px; line-height: 1.5; }
-
-  .strategy-prose { font-size: 14px; color: var(--text); line-height: 1.7; }
-  .strategy-prose p { margin-bottom: 10px; }
-
-  .thinking-indicator {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: var(--text-dim);
-    padding: 16px 0;
-    font-size: 14px;
-  }
-  .dots { display: inline-flex; gap: 4px; }
-  .dot {
-    width: 6px; height: 6px;
-    background: var(--gold);
-    border-radius: 50%;
-    animation: bounce 1.2s infinite;
-  }
-  .dot:nth-child(2) { animation-delay: 0.2s; }
-  .dot:nth-child(3) { animation-delay: 0.4s; }
-  @keyframes bounce {
-    0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
-    40% { transform: translateY(-6px); opacity: 1; }
-  }
-
-  /* ADD PLAYER MODAL */
-  .modal-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.75);
-    z-index: 500;
-    align-items: center;
-    justify-content: center;
-  }
-  .modal-overlay.open { display: flex; }
-  .modal {
-    background: var(--surface);
-    border: 1px solid var(--gold-dim);
-    border-radius: 8px;
-    padding: 28px;
-    width: 380px;
-    max-width: 95vw;
-  }
-  .modal h3 {
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 22px;
-    font-weight: 700;
-    text-transform: uppercase;
-    color: var(--gold);
-    letter-spacing: 0.08em;
-    margin-bottom: 16px;
-  }
-  .modal-input {
-    width: 100%;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 10px 14px;
-    border-radius: 4px;
-    font-size: 16px;
-    font-family: 'Rajdhani', sans-serif;
-    font-weight: 600;
-    outline: none;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    transition: border-color 0.15s;
-    margin-bottom: 16px;
-  }
-  .modal-input:focus { border-color: var(--gold-dim); }
-  .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
-  .modal-cancel {
-    padding: 8px 16px;
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 14px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    cursor: pointer;
-    border-radius: 3px;
-  }
-  .modal-confirm {
-    padding: 8px 20px;
-    background: var(--gold);
-    border: none;
-    color: #0a0b0d;
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 14px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    cursor: pointer;
-    border-radius: 3px;
-  }
-
-  .share-link-box {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 8px 12px;
-    font-size: 12px;
-    color: var(--text-dim);
-    word-break: break-all;
-    margin-top: 12px;
-    cursor: pointer;
-    transition: border-color 0.15s;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-  }
-  .share-link-box:hover { border-color: var(--gold-dim); }
-  .share-link-box .copy-hint { color: var(--text-dim); font-size: 11px; flex-shrink: 0; }
-
-  .strategy-raw {
-    font-size: 14px;
-    color: var(--text);
-    line-height: 1.7;
-    white-space: pre-wrap;
-  }
-
-  .strategy-raw h2, .strategy-raw h3 {
-    color: var(--gold);
-    font-family: 'Rajdhani', sans-serif;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    margin: 18px 0 8px;
-  }
-  .strategy-raw strong { color: var(--gold-light); }
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500&display=swap');
+:root {
+  --bg:#0a0b0d; --surface:#12151a; --surface2:#1a1f28; --border:#252c38;
+  --gold:#c89b3c; --gold-light:#e8c06a; --gold-dim:#7a5c1e;
+  --text:#d4cfc7; --text-dim:#7a7a7a; --green:#27ae60; --red:#e74c3c;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;min-height:100vh;}
+h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
+/* NAV */
+.nav{background:var(--surface);border-bottom:1px solid var(--gold-dim);padding:0 24px;display:flex;align-items:center;height:56px;gap:24px;position:sticky;top:0;z-index:100;}
+.nav-logo{font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--gold);letter-spacing:.12em;text-transform:uppercase;}
+.nav-logo span{color:var(--text-dim);font-weight:400;}
+.nav-tabs{display:flex;gap:4px;margin-left:auto;}
+.nav-tab{padding:6px 16px;background:none;border:1px solid transparent;color:var(--text-dim);font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:600;letter-spacing:.08em;cursor:pointer;text-transform:uppercase;transition:all .15s;border-radius:3px;}
+.nav-tab:hover{color:var(--text);border-color:var(--border);}
+.nav-tab.active{color:var(--gold);border-color:var(--gold-dim);background:rgba(200,155,60,.08);}
+/* PAGES */
+.page{display:none;padding:28px 24px;max-width:1400px;margin:0 auto;}
+.page.active{display:block;}
+/* BUTTONS */
+.btn{padding:8px 18px;border-radius:4px;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;transition:all .15s;border:none;}
+.btn-gold{background:var(--gold);color:#0a0b0d;} .btn-gold:hover{background:var(--gold-light);}
+.btn-ghost{background:none;border:1px solid var(--border);color:var(--text-dim);} .btn-ghost:hover{border-color:var(--gold-dim);color:var(--gold);}
+.btn-red{background:none;border:1px solid #c0392b44;color:var(--red);} .btn-red:hover{border-color:var(--red);}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+/* CARDS */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px;}
+/* HOME */
+.home-header{text-align:center;padding:40px 0 32px;}
+.home-header h1{font-size:48px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.15em;}
+.home-header p{color:var(--text-dim);margin-top:8px;}
+.player-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-top:24px;}
+.player-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px;transition:all .15s;}
+.player-card:hover{border-color:var(--gold-dim);}
+.player-card-name{font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.06em;}
+.player-card-count{color:var(--text-dim);font-size:13px;margin-top:4px;}
+.player-card-count span{color:var(--gold);font-weight:500;}
+.player-card-roles{margin-top:10px;display:flex;flex-wrap:wrap;gap:5px;}
+.role-pill{padding:2px 8px;border-radius:3px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);}
+.role-pill.carry{border-color:#c0392b55;color:#e74c3c;} .role-pill.support{border-color:#2980b955;color:#3498db;}
+.role-pill.mid{border-color:#8e44ad55;color:#9b59b6;} .role-pill.offlane{border-color:#16a08555;color:#1abc9c;}
+.player-card-btn{margin-top:14px;width:100%;padding:8px;background:rgba(200,155,60,.1);border:1px solid var(--gold-dim);color:var(--gold);font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-radius:4px;transition:all .15s;}
+.player-card-btn:hover{background:rgba(200,155,60,.2);}
+.add-card{background:var(--surface);border:1px dashed var(--border);border-radius:6px;padding:20px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:120px;gap:8px;color:var(--text-dim);transition:all .15s;}
+.add-card:hover{border-color:var(--gold-dim);color:var(--gold);}
+.add-card .plus{font-size:32px;line-height:1;}
+.add-card span{font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;}
+/* PICKER */
+.picker-header{display:flex;align-items:center;gap:16px;margin-bottom:20px;flex-wrap:wrap;}
+.picker-header h2{font-size:28px;font-weight:700;text-transform:uppercase;color:var(--gold);letter-spacing:.1em;}
+.picker-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;}
+.quick-btn{padding:6px 14px;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s;}
+.quick-btn:hover{border-color:var(--gold-dim);color:var(--gold);}
+.search-input{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 14px;border-radius:3px;font-size:14px;outline:none;width:200px;transition:border-color .15s;}
+.search-input:focus{border-color:var(--gold-dim);}
+.search-input::placeholder{color:var(--text-dim);}
+.filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center;}
+.filter-label{color:var(--text-dim);font-size:12px;text-transform:uppercase;letter-spacing:.06em;margin-right:2px;}
+.filter-btn{padding:4px 12px;border:1px solid var(--border);background:none;color:var(--text-dim);font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;border-radius:3px;transition:all .15s;}
+.filter-btn:hover,.filter-btn.active{color:var(--gold);border-color:var(--gold-dim);background:rgba(200,155,60,.08);}
+.selected-count{margin-left:auto;font-size:13px;color:var(--text-dim);}
+.selected-count strong{color:var(--gold);}
+#hero-grid{display:block;}
+.hero-inner-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(82px,1fr));gap:6px;}
+.hero-card{aspect-ratio:16/9;background:var(--surface2);border:2px solid transparent;border-radius:4px;cursor:pointer;position:relative;overflow:hidden;transition:all .12s;display:flex;align-items:flex-end;}
+.hero-card:hover{border-color:var(--gold-dim);transform:scale(1.04);z-index:1;}
+.hero-card.selected{border-color:var(--gold);}
+.hero-card.selected::after{content:'✓';position:absolute;top:3px;right:4px;color:var(--gold);font-size:12px;font-weight:700;text-shadow:0 0 4px #000;}
+.hero-bg{position:absolute;inset:0;background:linear-gradient(135deg,#1a2030,#252c3a);display:flex;align-items:center;justify-content:center;font-size:24px;}
+.hero-name{position:absolute;bottom:0;left:0;right:0;padding:2px 4px;background:linear-gradient(transparent,rgba(0,0,0,.85));font-size:10px;font-weight:500;color:#fff;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.attr-section{margin-bottom:24px;}
+.attr-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+.attr-label{font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;}
+.attr-label.str{color:#e74c3c;} .attr-label.agi{color:#2ecc71;} .attr-label.int{color:#3498db;} .attr-label.uni{color:#9b59b6;}
+.attr-count{color:var(--text-dim);font-size:12px;margin-left:auto;}
+.save-bar{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--gold-dim);padding:12px 24px;display:flex;align-items:center;gap:16px;z-index:200;}
+.save-status{color:var(--text-dim);font-size:13px;}
+.save-status.saved{color:var(--green);}
+/* MATCH PAGE */
+.match-layout{display:grid;grid-template-columns:300px 1fr;gap:24px;align-items:start;}
+@media(max-width:800px){.match-layout{grid-template-columns:1fr;}}
+.match-panel h3{font-size:18px;font-weight:700;text-transform:uppercase;color:var(--gold);letter-spacing:.08em;margin-bottom:16px;}
+.player-select-list{display:flex;flex-direction:column;gap:8px;}
+.player-toggle{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer;transition:all .15s;user-select:none;}
+.player-toggle:hover{border-color:var(--gold-dim);}
+.player-toggle.active{border-color:var(--gold);background:rgba(200,155,60,.08);}
+.player-toggle-name{font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;flex:1;}
+.player-toggle-heroes{font-size:12px;color:var(--text-dim);}
+.player-toggle.active .player-toggle-heroes{color:var(--gold);}
+.checkbox{width:18px;height:18px;border:2px solid var(--border);border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all .15s;}
+.player-toggle.active .checkbox{background:var(--gold);border-color:var(--gold);color:#000;}
+.gen-btn{width:100%;margin-top:16px;padding:10px 12px;background:linear-gradient(135deg,var(--gold-dim),var(--gold));border:none;color:#0a0b0d;font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;cursor:pointer;border-radius:4px;transition:all .15s;}
+.gen-btn:hover{filter:brightness(1.1);}
+.gen-btn:disabled{opacity:.4;cursor:not-allowed;filter:none;}
+.strategy-area{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:24px;min-height:400px;}
+.strategy-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;color:var(--text-dim);text-align:center;gap:12px;}
+.strategy-placeholder .icon{font-size:48px;opacity:.3;}
+.strategy-raw{font-size:14px;color:var(--text);line-height:1.7;white-space:pre-wrap;}
+.strategy-raw h2,.strategy-raw h3{color:var(--gold);font-family:'Rajdhani',sans-serif;letter-spacing:.06em;text-transform:uppercase;margin:18px 0 8px;}
+.strategy-raw strong{color:var(--gold-light);}
+.dots{display:inline-flex;gap:4px;}
+.dot{width:6px;height:6px;background:var(--gold);border-radius:50%;animation:bounce 1.2s infinite;}
+.dot:nth-child(2){animation-delay:.2s;} .dot:nth-child(3){animation-delay:.4s;}
+@keyframes bounce{0%,80%,100%{transform:translateY(0);opacity:.4;}40%{transform:translateY(-6px);opacity:1;}}
+.thinking{display:flex;align-items:center;gap:10px;color:var(--text-dim);padding:16px 0;font-size:14px;}
+/* HISTORY PAGE */
+.history-grid{display:flex;flex-direction:column;gap:12px;margin-top:20px;}
+.match-entry{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:18px;display:flex;align-items:center;gap:16px;cursor:pointer;transition:all .15s;}
+.match-entry:hover{border-color:var(--gold-dim);}
+.match-entry-date{color:var(--text-dim);font-size:12px;min-width:90px;}
+.match-entry-players{font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;flex:1;}
+.match-entry-badge{padding:3px 10px;border-radius:3px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;}
+.badge-has-items{background:rgba(39,174,96,.15);border:1px solid #27ae6055;color:#2ecc71;}
+.badge-no-items{background:rgba(200,155,60,.1);border:1px solid var(--gold-dim);color:var(--gold);}
+.match-entry-del{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px;padding:4px;opacity:.5;transition:opacity .15s;}
+.match-entry-del:hover{opacity:1;color:var(--red);}
+/* MATCH DETAIL PAGE */
+.detail-layout{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+@media(max-width:900px){.detail-layout{grid-template-columns:1fr;}}
+.section-title{font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;text-transform:uppercase;color:var(--gold);letter-spacing:.08em;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+.enemy-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:5px;max-height:300px;overflow-y:auto;margin-bottom:12px;}
+.selected-enemies{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;min-height:28px;}
+.enemy-tag{padding:3px 10px;background:rgba(231,76,60,.12);border:1px solid #c0392b55;color:var(--red);border-radius:3px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;}
+.enemy-tag button{background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;line-height:1;padding:0;}
+.items-output{display:flex;flex-direction:column;gap:12px;}
+.player-items{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:14px;}
+.player-items-name{font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);margin-bottom:6px;}
+.player-items-hero{font-size:12px;color:var(--text-dim);margin-bottom:8px;}
+.player-items-list{font-size:13px;color:var(--text);line-height:1.6;}
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--gold-dim);border-radius:8px;padding:28px;width:380px;max-width:95vw;}
+.modal h3{font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;text-transform:uppercase;color:var(--gold);letter-spacing:.08em;margin-bottom:16px;}
+.modal-input{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:4px;font-size:16px;font-family:'Rajdhani',sans-serif;font-weight:600;outline:none;text-transform:uppercase;letter-spacing:.05em;transition:border-color .15s;margin-bottom:16px;}
+.modal-input:focus{border-color:var(--gold-dim);}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;}
+.modal-cancel{padding:8px 16px;background:none;border:1px solid var(--border);color:var(--text-dim);font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;}
+.modal-confirm{padding:8px 20px;background:var(--gold);border:none;color:#0a0b0d;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;}
+.page-header{display:flex;align-items:center;gap:16px;margin-bottom:24px;flex-wrap:wrap;}
+.page-header h2{font-size:28px;font-weight:700;text-transform:uppercase;color:var(--gold);letter-spacing:.1em;}
+.tag{display:inline-block;padding:2px 10px;border-radius:3px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;}
+.tag-gold{background:rgba(200,155,60,.15);border:1px solid var(--gold-dim);color:var(--gold);}
 </style>
 </head>
 <body>
-
 <nav class="nav">
   <div class="nav-logo">Lane<span>ight</span></div>
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="showPage('home')">Spelare</button>
     <button class="nav-tab" onclick="showPage('match')">Matchen</button>
+    <button class="nav-tab" onclick="showPage('history')">Historik</button>
   </div>
 </nav>
 
-<!-- HOME PAGE -->
+<!-- HOME -->
 <div id="page-home" class="page active">
-  <div class="home-header">
-    <h1>Hero Pool Manager</h1>
-    <p>Varje spelare sparar sina hjältar — AI draftar strategin</p>
-  </div>
+  <div class="home-header"><h1>Hero Pool Manager</h1><p>Varje spelare sparar sina hjältar — AI draftar strategin</p></div>
   <div id="player-grid" class="player-grid"></div>
 </div>
 
-<!-- HERO PICKER PAGE -->
+<!-- PICKER -->
 <div id="page-picker" class="page">
   <div class="picker-header">
-    <button class="back-btn" onclick="showPage('home')">← Tillbaka</button>
+    <button class="btn btn-ghost" onclick="showPage('home')">← Tillbaka</button>
     <h2 id="picker-player-name">Spelare</h2>
   </div>
-
   <div class="picker-controls">
     <button class="quick-btn" onclick="selectAll()">Välj alla</button>
-    <button class="quick-btn" onclick="selectNone()" style="--hover-c:#e74c3c">Rensa alla</button>
+    <button class="quick-btn" onclick="selectNone()">Rensa alla</button>
     <button class="quick-btn" onclick="invertSelection()">Invertera</button>
     <input class="search-input" id="hero-search" placeholder="Sök hjälte..." oninput="filterHeroes()">
-    <span class="selected-count"><strong id="selected-num">0</strong> / <span id="total-num">124</span> valda</span>
+    <span class="selected-count"><strong id="selected-num">0</strong> / <span id="total-num">0</span> valda</span>
   </div>
-
   <div class="filter-row">
     <span class="filter-label">Roll:</span>
-    <button class="filter-btn active" data-filter="all" onclick="setFilter('all', this)">Alla</button>
-    <button class="filter-btn" data-filter="Carry" onclick="setFilter('Carry', this)">Carry</button>
-    <button class="filter-btn" data-filter="Mid" onclick="setFilter('Mid', this)">Mid</button>
-    <button class="filter-btn" data-filter="Offlane" onclick="setFilter('Offlane', this)">Offlane</button>
-    <button class="filter-btn" data-filter="Support" onclick="setFilter('Support', this)">Support</button>
-    <button class="filter-btn" data-filter="Jungle" onclick="setFilter('Jungle', this)">Jungle</button>
+    <button class="filter-btn active" data-filter="all" onclick="setFilter('all',this)">Alla</button>
+    <button class="filter-btn" data-filter="Carry" onclick="setFilter('Carry',this)">Carry</button>
+    <button class="filter-btn" data-filter="Mid" onclick="setFilter('Mid',this)">Mid</button>
+    <button class="filter-btn" data-filter="Offlane" onclick="setFilter('Offlane',this)">Offlane</button>
+    <button class="filter-btn" data-filter="Support" onclick="setFilter('Support',this)">Support</button>
+    <button class="filter-btn" data-filter="Jungle" onclick="setFilter('Jungle',this)">Jungle</button>
     <span class="filter-label" style="margin-left:12px">Attribut:</span>
-    <button class="filter-btn active" data-attr="all" onclick="setAttr('all', this)">Alla</button>
-    <button class="filter-btn" data-attr="str" onclick="setAttr('str', this)">💪 STR</button>
-    <button class="filter-btn" data-attr="agi" onclick="setAttr('agi', this)">⚡ AGI</button>
-    <button class="filter-btn" data-attr="int" onclick="setAttr('int', this)">🧠 INT</button>
-    <button class="filter-btn" data-attr="uni" onclick="setAttr('uni', this)">✨ UNI</button>
+    <button class="filter-btn active" data-attr="all" onclick="setAttr('all',this)">Alla</button>
+    <button class="filter-btn" data-attr="str" onclick="setAttr('str',this)">💪 STR</button>
+    <button class="filter-btn" data-attr="agi" onclick="setAttr('agi',this)">⚡ AGI</button>
+    <button class="filter-btn" data-attr="int" onclick="setAttr('int',this)">🧠 INT</button>
+    <button class="filter-btn" data-attr="uni" onclick="setAttr('uni',this)">✨ UNI</button>
   </div>
-
-  <div id="hero-grid" class="hero-grid"></div>
-
-  <div style="height: 68px;"></div>
+  <div id="hero-grid"></div>
+  <div style="height:68px"></div>
   <div class="save-bar">
-    <span class="save-status" id="save-status">Osparade ändringar</span>
-    <button class="save-btn" onclick="savePool()">Spara pool</button>
+    <span class="save-status" id="save-status">Inga ändringar</span>
+    <button class="btn btn-gold" onclick="savePool()">Spara pool</button>
   </div>
 </div>
 
-<!-- MATCH PAGE -->
+<!-- MATCH -->
 <div id="page-match" class="page">
-  <div style="padding-bottom: 20px;">
-    <h2 style="font-size: 28px; font-weight:700; text-transform:uppercase; color:var(--gold); letter-spacing:0.1em;">Matchstrategi</h2>
-    <p style="color:var(--text-dim); font-size:14px; margin-top:4px;">Välj vilka som spelar — AI tar fram en draft-strategi</p>
-  </div>
+  <div class="page-header"><h2>Matchstrategi</h2><p style="color:var(--text-dim);font-size:14px">Välj vilka som spelar — AI tar fram en draft-strategi</p></div>
   <div class="match-layout">
-    <div class="match-panel">
+    <div class="card">
       <h3>Spelare i matchen</h3>
       <div id="player-select-list" class="player-select-list"></div>
-      <button class="gen-btn" id="gen-btn" onclick="generateStrategy()">Generera strategi</button>
+      <button class="gen-btn" id="gen-btn" onclick="generateStrategy()">Välj minst 3 spelare</button>
     </div>
     <div class="strategy-area" id="strategy-area">
-      <div class="strategy-placeholder">
-        <div class="icon">⚔️</div>
-        <p>Välj spelare och klicka<br><strong style="color:var(--gold)">Generera strategi</strong></p>
+      <div class="strategy-placeholder"><div class="icon">⚔️</div><p>Välj spelare och klicka<br><strong style="color:var(--gold)">Generera strategi</strong></p></div>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY -->
+<div id="page-history" class="page">
+  <div class="page-header">
+    <h2>Matchhistorik</h2>
+    <span style="color:var(--text-dim);font-size:13px">Klicka på en match för att lägga till motståndare och få itemtips</span>
+  </div>
+  <div id="history-list" class="history-grid"></div>
+</div>
+
+<!-- MATCH DETAIL -->
+<div id="page-detail" class="page">
+  <div class="page-header">
+    <button class="btn btn-ghost" onclick="showPage('history')">← Historik</button>
+    <h2 id="detail-title">Match</h2>
+    <span id="detail-date" style="color:var(--text-dim);font-size:13px"></span>
+  </div>
+  <div class="detail-layout">
+    <!-- Left: strategy -->
+    <div>
+      <div class="card" style="margin-bottom:20px">
+        <div class="section-title">Draft &amp; Strategi</div>
+        <div id="detail-strategy" class="strategy-raw"></div>
+      </div>
+    </div>
+    <!-- Right: enemies + items -->
+    <div>
+      <div class="card" style="margin-bottom:20px">
+        <div class="section-title">Motståndarnas hjältar</div>
+        <div id="selected-enemies" class="selected-enemies"></div>
+        <div id="enemy-picker-grid" class="enemy-picker-grid"></div>
+        <button class="btn btn-gold" id="get-items-btn" onclick="generateItems()" style="width:100%;margin-top:8px" disabled>Hämta itemtips</button>
+      </div>
+      <div class="card" id="items-card" style="display:none">
+        <div class="section-title">Itemtips per spelare</div>
+        <div id="items-output" class="items-output"></div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ADD PLAYER MODAL -->
+<!-- MODAL -->
 <div id="modal-overlay" class="modal-overlay">
   <div class="modal">
     <h3>Lägg till spelare</h3>
@@ -799,7 +273,6 @@
 <script>
 // ===================== HERO DATA =====================
 const HEROES = [
-  // STRENGTH
   {id:1,name:"Axe",attr:"str",roles:["Offlane"]},
   {id:2,name:"Beastmaster",attr:"str",roles:["Offlane"]},
   {id:3,name:"Brewmaster",attr:"str",roles:["Offlane"]},
@@ -836,7 +309,7 @@ const HEROES = [
   {id:34,name:"Underlord",attr:"str",roles:["Offlane","Support"]},
   {id:35,name:"Undying",attr:"str",roles:["Support","Offlane"]},
   {id:36,name:"Wraith King",attr:"str",roles:["Carry","Offlane"]},
-  // AGILITY
+  {id:37,name:"Dawnbreaker",attr:"str",roles:["Offlane","Support"]},
   {id:40,name:"Anti-Mage",attr:"agi",roles:["Carry"]},
   {id:41,name:"Arc Warden",attr:"agi",roles:["Carry","Mid"]},
   {id:42,name:"Bloodseeker",attr:"agi",roles:["Carry","Jungle","Offlane"]},
@@ -873,7 +346,6 @@ const HEROES = [
   {id:73,name:"Viper",attr:"agi",roles:["Mid","Offlane"]},
   {id:74,name:"Visage",attr:"agi",roles:["Support","Offlane"]},
   {id:75,name:"Weaver",attr:"agi",roles:["Carry","Mid"]},
-  // INTELLIGENCE
   {id:80,name:"Ancient Apparition",attr:"int",roles:["Support"]},
   {id:81,name:"Bane",attr:"int",roles:["Support"]},
   {id:82,name:"Batrider",attr:"int",roles:["Offlane","Mid"]},
@@ -915,7 +387,6 @@ const HEROES = [
   {id:120,name:"Winter Wyvern",attr:"int",roles:["Support"]},
   {id:121,name:"Witch Doctor",attr:"int",roles:["Support"]},
   {id:122,name:"Zeus",attr:"int",roles:["Mid","Support","Carry"]},
-  // UNIVERSAL
   {id:130,name:"Abaddon",attr:"uni",roles:["Support","Carry"]},
   {id:131,name:"Alchemist",attr:"uni",roles:["Carry","Offlane"]},
   {id:132,name:"Doom",attr:"uni",roles:["Offlane","Jungle","Carry"]},
@@ -926,421 +397,382 @@ const HEROES = [
   {id:139,name:"Techies",attr:"int",roles:["Support","Mid"]},
   {id:141,name:"Void Spirit",attr:"uni",roles:["Mid","Offlane"]},
   {id:143,name:"Ringmaster",attr:"uni",roles:["Support"]},
-  {id:145,name:"Dawnbreaker",attr:"str",roles:["Offlane","Support"]},
 ];
-
-// Deduplicate by name
 const seenNames = new Set();
-const HERO_LIST = HEROES.filter(h => {
-  if (seenNames.has(h.name)) return false;
-  seenNames.add(h.name);
-  return true;
-}).sort((a,b) => a.name.localeCompare(b.name));
-
-const ATTR_ICONS = { str: '💪', agi: '⚡', int: '🧠', uni: '✨' };
-const ATTR_LABELS = { str: 'Strength', agi: 'Agility', int: 'Intelligence', uni: 'Universal' };
+const HERO_LIST = HEROES.filter(h => { if(seenNames.has(h.name))return false; seenNames.add(h.name); return true; }).sort((a,b)=>a.name.localeCompare(b.name));
+const ATTR_ICONS = {str:'💪',agi:'⚡',int:'🧠',uni:'✨'};
+const ATTR_LABELS = {str:'Strength',agi:'Agility',int:'Intelligence',uni:'Universal'};
+function heroName(id){ const h=HERO_LIST.find(x=>x.id===id); return h?h.name:null; }
 
 // ===================== STATE =====================
 const API = '/api';
 let players = [];
 let currentPlayer = null;
 let currentSelected = new Set();
-let currentFilter = 'all';
-let currentAttr = 'all';
+let currentFilter = 'all', currentAttr = 'all';
 let saveTimeout = null;
+let matchPlayers = new Set();
+let currentMatchId = null;
+let currentEnemies = new Set();
+let currentDraft = {};
 
-async function apiFetch(path, options = {}) {
-  const res = await fetch(API + path, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options
-  });
-  if (!res.ok) throw new Error(await res.text());
+async function apiFetch(path, options={}) {
+  const res = await fetch(API+path, {headers:{'Content-Type':'application/json'},...options});
+  if(!res.ok) throw new Error(await res.text());
   return res.json();
 }
-
-async function loadPlayers() {
-  players = await apiFetch('/players');
-  renderHome();
-}
+async function loadPlayers() { players = await apiFetch('/players'); renderHome(); }
 
 // ===================== NAV =====================
 function showPage(id) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('page-' + id).classList.add('active');
-  document.querySelectorAll('.nav-tab').forEach(t => {
-    if (t.textContent.toLowerCase().includes(id === 'home' ? 'spelare' : 'matchen')) t.classList.add('active');
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach(t=>{
+    const map={home:'spelare',match:'matchen',history:'historik'};
+    if(t.textContent.trim().toLowerCase()===map[id]) t.classList.add('active');
   });
-  if (id === 'home') loadPlayers();
-  if (id === 'match') loadPlayers().then(() => renderMatchPage());
+  if(id==='home') loadPlayers();
+  if(id==='match') loadPlayers().then(()=>renderMatchPage());
+  if(id==='history') loadHistory();
 }
 
 // ===================== HOME =====================
 function renderHome() {
   const grid = document.getElementById('player-grid');
   grid.innerHTML = '';
-  players.forEach((p, i) => {
+  players.forEach((p,i) => {
+    const count = (p.heroes||[]).length;
+    const roles = getTopRoles(p.heroes||[]);
     const card = document.createElement('div');
     card.className = 'player-card';
-    const count = (p.heroes || []).length;
-    const roles = getTopRoles(p.heroes || []);
     card.innerHTML = `
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
         <div class="player-card-name">${p.name}</div>
-        <button onclick="deletePlayer(event,'${p.name}')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px;padding:0;line-height:1;flex-shrink:0" title="Ta bort spelare">✕</button>
+        <button onclick="deletePlayer(event,'${p.name}')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px;padding:0;flex-shrink:0" title="Ta bort">✕</button>
       </div>
       <div class="player-card-count"><span>${count}</span> hjältar valda</div>
       <div class="player-card-roles">${roles.map(r=>`<span class="role-pill ${r.toLowerCase()}">${r}</span>`).join('')}</div>
-      <button class="player-card-btn" onclick="openPicker(${i})">Redigera pool</button>
-    `;
+      <button class="player-card-btn" onclick="openPicker(${i})">Redigera pool</button>`;
     grid.appendChild(card);
   });
-
-  // Add player button
-  const addCard = document.createElement('div');
-  addCard.className = 'add-player-card';
-  addCard.innerHTML = `<div class="plus">+</div><span>Lägg till spelare</span>`;
-  addCard.onclick = openAddModal;
-  grid.appendChild(addCard);
+  const add = document.createElement('div');
+  add.className = 'add-card';
+  add.innerHTML = `<div class="plus">+</div><span>Lägg till spelare</span>`;
+  add.onclick = ()=>document.getElementById('modal-overlay').classList.add('open');
+  grid.appendChild(add);
 }
-
-function getTopRoles(heroIds) {
-  const roleCount = {};
-  heroIds.forEach(id => {
-    const h = HERO_LIST.find(x => x.id === id);
-    if (!h) return;
-    h.roles.forEach(r => { roleCount[r] = (roleCount[r] || 0) + 1; });
-  });
-  return Object.entries(roleCount).sort((a,b)=>b[1]-a[1]).slice(0,3).map(e=>e[0]);
+function getTopRoles(ids) {
+  const rc={};
+  ids.forEach(id=>{const h=HERO_LIST.find(x=>x.id===id);if(!h)return;h.roles.forEach(r=>{rc[r]=(rc[r]||0)+1;});});
+  return Object.entries(rc).sort((a,b)=>b[1]-a[1]).slice(0,3).map(e=>e[0]);
 }
-
-function openAddModal() {
-  document.getElementById('modal-overlay').classList.add('open');
-  document.getElementById('new-player-name').value = '';
-  setTimeout(() => document.getElementById('new-player-name').focus(), 50);
-}
-
-function closeModal() {
-  document.getElementById('modal-overlay').classList.remove('open');
-}
-
-async function deletePlayer(event, name) {
+async function deletePlayer(event,name) {
   event.stopPropagation();
-  if (!confirm('Ta bort ' + name + '?')) return;
-  try {
-    players = await apiFetch('/players/' + encodeURIComponent(name), { method: 'DELETE' });
-    renderHome();
-  } catch (err) {
-    alert('Kunde inte ta bort spelare: ' + err.message);
-  }
+  if(!confirm('Ta bort '+name+'?'))return;
+  players = await apiFetch('/players/'+encodeURIComponent(name),{method:'DELETE'});
+  renderHome();
 }
-
 async function confirmAddPlayer() {
   const name = document.getElementById('new-player-name').value.trim().toUpperCase();
-  if (!name) return;
-  try {
-    players = await apiFetch('/players', {
-      method: 'POST',
-      body: JSON.stringify({ name })
-    });
-    closeModal();
-    renderHome();
-  } catch (err) {
-    alert('Kunde inte lägga till spelare: ' + err.message);
-  }
+  if(!name)return;
+  try { players = await apiFetch('/players',{method:'POST',body:JSON.stringify({name})}); closeModal(); renderHome(); }
+  catch(err){ alert('Kunde inte lägga till: '+err.message); }
 }
+function closeModal(){ document.getElementById('modal-overlay').classList.remove('open'); }
 
-async function savePlayers() {
-  // No-op: individual saves handled by savePool and addPlayer
-}
-
-// ===================== URL SHARING =====================
-function getPlayerLink(playerIndex) {
-  const url = new URL(window.location.href);
-  url.searchParams.set('player', playerIndex);
-  return url.toString();
-}
-
-// Check URL on load
-function checkUrlParams() {
-  const params = new URLSearchParams(window.location.search);
-  const pi = params.get('player');
-  if (pi !== null && players[parseInt(pi)]) {
-    openPicker(parseInt(pi));
-  }
-}
-
-// ===================== HERO PICKER =====================
-function openPicker(playerIndex) {
-  currentPlayer = playerIndex;
-  currentSelected = new Set(players[playerIndex].heroes || []);
-  document.getElementById('picker-player-name').textContent = players[playerIndex].name;
-  document.getElementById('hero-search').value = '';
-  currentFilter = 'all';
-  currentAttr = 'all';
-  document.querySelectorAll('.filter-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.filter === 'all' || b.dataset.attr === 'all');
-  });
-  document.getElementById('save-status').textContent = 'Inga ändringar';
-  document.getElementById('save-status').className = 'save-status saved';
-
-  // Show share link
+// ===================== PICKER =====================
+function openPicker(i) {
+  currentPlayer = i;
+  currentSelected = new Set(players[i].heroes||[]);
+  document.getElementById('picker-player-name').textContent = players[i].name;
+  document.getElementById('hero-search').value='';
+  currentFilter='all'; currentAttr='all';
+  document.querySelectorAll('[data-filter]').forEach(b=>b.classList.toggle('active',b.dataset.filter==='all'));
+  document.querySelectorAll('[data-attr]').forEach(b=>b.classList.toggle('active',b.dataset.attr==='all'));
+  document.getElementById('save-status').textContent='Inga ändringar';
+  document.getElementById('save-status').className='save-status saved';
   renderHeroGrid();
-  showPage('picker');
-
-  // Update URL
-  const url = new URL(window.location.href);
-  url.searchParams.set('player', playerIndex);
-  window.history.replaceState({}, '', url);
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-picker').classList.add('active');
 }
-
 function renderHeroGrid() {
   const grid = document.getElementById('hero-grid');
   const search = document.getElementById('hero-search').value.toLowerCase();
-  grid.innerHTML = '';
-
-  const filtered = HERO_LIST.filter(h => {
-    const matchSearch = !search || h.name.toLowerCase().includes(search);
-    const matchRole = currentFilter === 'all' || h.roles.includes(currentFilter);
-    const matchAttr = currentAttr === 'all' || h.attr === currentAttr;
-    return matchSearch && matchRole && matchAttr;
+  grid.innerHTML='';
+  const filtered = HERO_LIST.filter(h=>{
+    return (!search||h.name.toLowerCase().includes(search))
+      &&(currentFilter==='all'||h.roles.includes(currentFilter))
+      &&(currentAttr==='all'||h.attr===currentAttr);
   });
-
-  const byAttr = { str: [], agi: [], int: [], uni: [] };
-  filtered.forEach(h => byAttr[h.attr].push(h));
-
-  const attrOrder = ['str', 'agi', 'int', 'uni'];
-  attrOrder.forEach(attr => {
-    if (!byAttr[attr].length) return;
-    const section = document.createElement('div');
-    section.className = 'attr-section';
-    const header = document.createElement('div');
-    header.className = 'attr-header';
-    header.innerHTML = `<span class="attr-icon">${ATTR_ICONS[attr]}</span><span class="attr-label ${attr}">${ATTR_LABELS[attr]}</span><span class="attr-count">${byAttr[attr].length} hjältar</span>`;
-    section.appendChild(header);
-
-    const innerGrid = document.createElement('div');
-    innerGrid.className = 'hero-inner-grid';
-    byAttr[attr].forEach(h => {
-      const card = document.createElement('div');
-      card.className = 'hero-card' + (currentSelected.has(h.id) ? ' selected' : '');
-      card.innerHTML = `<div class="hero-bg">${ATTR_ICONS[h.attr]}</div><div class="hero-name">${h.name}</div>`;
-      card.onclick = () => toggleHero(h.id, card);
-      innerGrid.appendChild(card);
+  const byAttr={str:[],agi:[],int:[],uni:[]};
+  filtered.forEach(h=>byAttr[h.attr].push(h));
+  ['str','agi','int','uni'].forEach(attr=>{
+    if(!byAttr[attr].length)return;
+    const sec=document.createElement('div'); sec.className='attr-section';
+    sec.innerHTML=`<div class="attr-header"><span style="font-size:18px">${ATTR_ICONS[attr]}</span><span class="attr-label ${attr}">${ATTR_LABELS[attr]}</span><span class="attr-count">${byAttr[attr].length} hjältar</span></div>`;
+    const inner=document.createElement('div'); inner.className='hero-inner-grid';
+    byAttr[attr].forEach(h=>{
+      const c=document.createElement('div');
+      c.className='hero-card'+(currentSelected.has(h.id)?' selected':'');
+      c.innerHTML=`<div class="hero-bg">${ATTR_ICONS[h.attr]}</div><div class="hero-name">${h.name}</div>`;
+      c.onclick=()=>{
+        if(currentSelected.has(h.id)){currentSelected.delete(h.id);c.classList.remove('selected');}
+        else{currentSelected.add(h.id);c.classList.add('selected');}
+        markUnsaved(); updateCount();
+      };
+      inner.appendChild(c);
     });
-
-    section.appendChild(innerGrid);
-    grid.appendChild(section);
+    sec.appendChild(inner); grid.appendChild(sec);
   });
-
-  updateSelectedCount();
+  updateCount();
 }
-
-function toggleHero(id, card) {
-  if (currentSelected.has(id)) {
-    currentSelected.delete(id);
-    card.classList.remove('selected');
-  } else {
-    currentSelected.add(id);
-    card.classList.add('selected');
-  }
-  markUnsaved();
-  updateSelectedCount();
+function updateCount(){
+  document.getElementById('selected-num').textContent=currentSelected.size;
+  document.getElementById('total-num').textContent=HERO_LIST.length;
 }
-
-function updateSelectedCount() {
-  document.getElementById('selected-num').textContent = currentSelected.size;
-  document.getElementById('total-num').textContent = HERO_LIST.length;
+function markUnsaved(){
+  const el=document.getElementById('save-status');
+  el.textContent='Osparade ändringar'; el.className='save-status';
+  clearTimeout(saveTimeout); saveTimeout=setTimeout(savePool,2000);
 }
-
-function markUnsaved() {
-  const el = document.getElementById('save-status');
-  el.textContent = 'Osparade ändringar';
-  el.className = 'save-status';
-  // Auto-save after 2s
-  clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(savePool, 2000);
-}
-
 async function savePool() {
-  if (currentPlayer === null) return;
-  const player = players[currentPlayer];
-  player.heroes = [...currentSelected];
+  if(currentPlayer===null)return;
+  players[currentPlayer].heroes=[...currentSelected];
   try {
-    await apiFetch('/players/' + encodeURIComponent(player.name) + '/heroes', {
-      method: 'PUT',
-      body: JSON.stringify({ heroes: player.heroes })
-    });
-    const el = document.getElementById('save-status');
-    el.textContent = '✓ Sparat';
-    el.className = 'save-status saved';
-  } catch (err) {
-    const el = document.getElementById('save-status');
-    el.textContent = '⚠ Fel vid sparning';
-    el.className = 'save-status';
-  }
+    await apiFetch('/players/'+encodeURIComponent(players[currentPlayer].name)+'/heroes',{method:'PUT',body:JSON.stringify({heroes:players[currentPlayer].heroes})});
+    const el=document.getElementById('save-status'); el.textContent='✓ Sparat'; el.className='save-status saved';
+  } catch(err){ document.getElementById('save-status').textContent='⚠ Fel vid sparning'; }
 }
-
-function selectAll() {
-  const search = document.getElementById('hero-search').value.toLowerCase();
-  HERO_LIST.filter(h => {
-    const matchSearch = !search || h.name.toLowerCase().includes(search);
-    const matchRole = currentFilter === 'all' || h.roles.includes(currentFilter);
-    const matchAttr = currentAttr === 'all' || h.attr === currentAttr;
-    return matchSearch && matchRole && matchAttr;
-  }).forEach(h => currentSelected.add(h.id));
-  renderHeroGrid();
-  markUnsaved();
+function selectAll(){ HERO_LIST.filter(h=>visibleHero(h)).forEach(h=>currentSelected.add(h.id)); renderHeroGrid(); markUnsaved(); }
+function selectNone(){ HERO_LIST.filter(h=>visibleHero(h)).forEach(h=>currentSelected.delete(h.id)); renderHeroGrid(); markUnsaved(); }
+function invertSelection(){ HERO_LIST.filter(h=>visibleHero(h)).forEach(h=>{if(currentSelected.has(h.id))currentSelected.delete(h.id);else currentSelected.add(h.id);}); renderHeroGrid(); markUnsaved(); }
+function visibleHero(h){
+  const s=document.getElementById('hero-search').value.toLowerCase();
+  return(!s||h.name.toLowerCase().includes(s))&&(currentFilter==='all'||h.roles.includes(currentFilter))&&(currentAttr==='all'||h.attr===currentAttr);
 }
+function filterHeroes(){ renderHeroGrid(); }
+function setFilter(f,btn){ currentFilter=f; document.querySelectorAll('[data-filter]').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderHeroGrid(); }
+function setAttr(a,btn){ currentAttr=a; document.querySelectorAll('[data-attr]').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderHeroGrid(); }
 
-function selectNone() {
-  const search = document.getElementById('hero-search').value.toLowerCase();
-  HERO_LIST.filter(h => {
-    const matchSearch = !search || h.name.toLowerCase().includes(search);
-    const matchRole = currentFilter === 'all' || h.roles.includes(currentFilter);
-    const matchAttr = currentAttr === 'all' || h.attr === currentAttr;
-    return matchSearch && matchRole && matchAttr;
-  }).forEach(h => currentSelected.delete(h.id));
-  renderHeroGrid();
-  markUnsaved();
-}
-
-function invertSelection() {
-  const search = document.getElementById('hero-search').value.toLowerCase();
-  HERO_LIST.filter(h => {
-    const matchSearch = !search || h.name.toLowerCase().includes(search);
-    const matchRole = currentFilter === 'all' || h.roles.includes(currentFilter);
-    const matchAttr = currentAttr === 'all' || h.attr === currentAttr;
-    return matchSearch && matchRole && matchAttr;
-  }).forEach(h => {
-    if (currentSelected.has(h.id)) currentSelected.delete(h.id);
-    else currentSelected.add(h.id);
-  });
-  renderHeroGrid();
-  markUnsaved();
-}
-
-function filterHeroes() { renderHeroGrid(); }
-
-function setFilter(f, btn) {
-  currentFilter = f;
-  document.querySelectorAll('[data-filter]').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  renderHeroGrid();
-}
-
-function setAttr(a, btn) {
-  currentAttr = a;
-  document.querySelectorAll('[data-attr]').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  renderHeroGrid();
-}
-
-// ===================== MATCH PAGE =====================
-let matchPlayers = new Set();
-
+// ===================== MATCH =====================
 function renderMatchPage() {
-  const list = document.getElementById('player-select-list');
-  list.innerHTML = '';
-  players.forEach((p, i) => {
-    const item = document.createElement('div');
-    item.className = 'player-toggle' + (matchPlayers.has(i) ? ' active' : '');
-    item.innerHTML = `
-      <div class="checkbox">${matchPlayers.has(i) ? '✓' : ''}</div>
-      <div style="flex:1">
-        <div class="player-toggle-name">${p.name}</div>
-        <div class="player-toggle-heroes">${(p.heroes||[]).length} hjältar i poolen</div>
-      </div>
-    `;
-    item.onclick = () => {
-      if (matchPlayers.has(i)) matchPlayers.delete(i);
-      else matchPlayers.add(i);
-      renderMatchPage();
-    };
+  const list=document.getElementById('player-select-list');
+  list.innerHTML='';
+  players.forEach((p,i)=>{
+    const item=document.createElement('div');
+    item.className='player-toggle'+(matchPlayers.has(i)?' active':'');
+    item.innerHTML=`<div class="checkbox">${matchPlayers.has(i)?'✓':''}</div><div style="flex:1"><div class="player-toggle-name">${p.name}</div><div class="player-toggle-heroes">${(p.heroes||[]).length} hjältar i poolen</div></div>`;
+    item.onclick=()=>{ if(matchPlayers.has(i))matchPlayers.delete(i);else matchPlayers.add(i); renderMatchPage(); };
     list.appendChild(item);
   });
-
-  const count = matchPlayers.size;
-  const genBtn = document.getElementById('gen-btn');
-  const valid = count >= 3 && count <= 5;
-  genBtn.disabled = !valid;
-  genBtn.textContent = valid
-    ? `Generera strategi (${count} spelare)`
-    : count < 3 ? 'Välj minst 3 spelare' : 'Max 5 spelare';
+  const n=matchPlayers.size, btn=document.getElementById('gen-btn');
+  const valid=n>=3&&n<=5;
+  btn.disabled=!valid;
+  btn.textContent=valid?`Generera strategi (${n} spelare)`:n<3?'Välj minst 3 spelare':'Max 5 spelare';
 }
 
-function getLaningContext(n) {
-  if (n === 5) return 'Ni är ett fullt lag (5v5). Tilldela alla fem roller: Carry (safe lane pos 1), Mid (pos 2), Offlaner (pos 3), Support 4 (soft support), Support 5 (hard support).';
-  if (n === 4) return 'Ni är 4 spelare. Tilldela fyra roller. Förslag: Carry (pos 1), Mid (pos 2), Offlaner (pos 3), och en flexibel Support/roamer (pos 4 eller 5). Anpassa för att klara er utan en femte spelare i early game — välj gärna en hjälte som ensam klarar lane 4 eller 5.';
-  if (n === 3) return 'Ni är 3 spelare. Tilldela tre kärnroller. Prioritera solo-starka hjältar. Förslag: Carry (pos 1), Mid (pos 2), och en flexibel tredje roll (Offlaner eller roaming Support). De två okända lagkamraterna kan fylla resterande roller.';
-  return '';
+function getLaningCtx(n){
+  if(n===5)return'Ni är ett fullt lag (5v5). Tilldela alla fem roller: Carry (safe lane pos 1), Mid (pos 2), Offlaner (pos 3), Support 4, Support 5.';
+  if(n===4)return'Ni är 4 spelare. Förslag: Carry (pos 1), Mid (pos 2), Offlaner (pos 3), flex Support/roamer. Välj solo-starka hjältar.';
+  if(n===3)return'Ni är 3 spelare. Tilldela tre kärnroller (Carry, Mid, flex). Prioritera solo-starka hjältar.';
+  return'';
 }
 
 async function generateStrategy() {
-  const active = [...matchPlayers].map(i => players[i]);
-  const n = active.length;
-  if (n < 3 || n > 5) return;
+  const active=[...matchPlayers].map(i=>players[i]);
+  const n=active.length;
+  if(n<3||n>5)return;
+  const area=document.getElementById('strategy-area');
+  area.innerHTML=`<div class="thinking"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div> Genererar strategi för ${n} spelare...</div>`;
 
-  const area = document.getElementById('strategy-area');
-  area.innerHTML = `<div class="thinking-indicator"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div> AI analyserar hero pools och genererar strategi för ${n} spelare...</div>`;
-
-  const poolSummary = active.map(p => {
-    const heroNames = (p.heroes || []).map(id => {
-      const h = HERO_LIST.find(x => x.id === id);
-      return h ? h.name + ' (' + h.roles.join('/') + ')' : null;
-    }).filter(Boolean);
-    return p.name + ': ' + (heroNames.join(', ') || 'Inga hjältar valda');
+  const poolSummary=active.map(p=>{
+    const names=(p.heroes||[]).map(id=>{ const h=HERO_LIST.find(x=>x.id===id); return h?h.name+' ('+h.roles.join('/')+')':null; }).filter(Boolean);
+    return p.name+': '+(names.join(', ')||'Inga hjältar valda');
   }).join('\n\n');
 
-  const laningCtx = getLaningContext(n);
-
-  const prompt = 'Du är en Dota 2 draft-expert. ' + n + ' spelare ska spela en match. Ta fram en optimal draft-strategi baserat på deras hero pools.\n\nHERO POOLS:\n' + poolSummary + '\n\nLANING-KONTEXT:\n' + laningCtx + '\n\nGe en konkret matchstrategi med:\n1. **Rekommenderad draft** – vilken hjälte varje spelare bör spela och varför (välj alltid från deras pool, namnge spelaren)\n2. **Laning setup** – vem spelar vilken roll/lane (anpassat för ' + n + ' spelare)\n3. **Spelstil och gameplan** – early/mid/late-game strategi\n4. **Nyckelsynergier** – vilka kombos som är starka ihop\n5. **Win condition** – vad ni ska sikta på för att vinna\n\nVar konkret och specifik. Använd svenska. Formatera med tydliga rubriker.';
+  const prompt='Du är en Dota 2 draft-expert. '+n+' spelare ska spela en match.\n\nHERO POOLS:\n'+poolSummary+'\n\nLANING-KONTEXT:\n'+getLaningCtx(n)+'\n\nGe en konkret matchstrategi med:\n1. **Rekommenderad draft** – vilken hjälte varje spelare bör spela och varför (namnge spelaren, välj från deras pool)\n2. **Laning setup** – vem spelar vilken roll/lane\n3. **Spelstil och gameplan** – early/mid/late-game\n4. **Nyckelsynergier** – starka kombos\n5. **Win condition**\n\nVar konkret. Använd svenska. Tydliga rubriker.';
 
   try {
-    const resp = await fetch('/api/strategy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt })
-    });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-    const text = data.text;
+    const resp=await fetch('/api/strategy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
+    const data=await resp.json();
+    if(data.error)throw new Error(data.error);
+    const text=data.text;
 
-    area.innerHTML = `<div class="strategy-output">
-      <h2>DRAFT STRATEGI</h2>
-      <div class="sub">Spelare: ${active.map(p=>p.name).join(', ')}</div>
-      <div class="strategy-raw">${markdownToHtml(text)}</div>
-    </div>`;
-  } catch (err) {
-    area.innerHTML = `<div class="strategy-placeholder"><div class="icon">⚠️</div><p>Fel vid AI-anrop: ${err.message}</p></div>`;
+    // Parse draft from strategy text to store player->hero mapping
+    currentDraft={};
+    active.forEach(p=>{
+      const regex=new RegExp(p.name+'[^\\n]*?([A-Z][a-z]+(?:\\s[A-Z][a-z]+)*)','i');
+      // We'll store the full strategy and let AI handle items later
+    });
+
+    // Save match to server
+    const match=await apiFetch('/matches',{method:'POST',body:JSON.stringify({
+      players:active.map(p=>({name:p.name,heroes:p.heroes||[]})),
+      strategy:text,
+      draft:currentDraft
+    })});
+    currentMatchId=match.id;
+
+    area.innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div><h2 style="font-family:Rajdhani,sans-serif;font-size:22px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em">Draft Strategi</h2>
+        <div style="color:var(--text-dim);font-size:13px;margin-top:2px">Spelare: ${active.map(p=>p.name).join(', ')}</div></div>
+        <button class="btn btn-ghost" onclick="showPage('history')">Se historik →</button>
+      </div>
+      <div class="strategy-raw">${mdToHtml(text)}</div>`;
+  } catch(err){
+    area.innerHTML=`<div class="strategy-placeholder"><div class="icon">⚠️</div><p>Fel: ${err.message}</p></div>`;
   }
 }
 
-function markdownToHtml(md) {
+// ===================== HISTORY =====================
+async function loadHistory() {
+  const matches=await apiFetch('/matches');
+  const list=document.getElementById('history-list');
+  if(!matches.length){
+    list.innerHTML='<div style="color:var(--text-dim);text-align:center;padding:48px">Inga matcherinspelade ännu</div>';
+    return;
+  }
+  list.innerHTML='';
+  matches.forEach(m=>{
+    const date=new Date(m.createdAt).toLocaleString('sv-SE',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    const playerNames=(m.players||[]).map(p=>p.name).join(', ');
+    const hasItems=!!m.items;
+    const el=document.createElement('div');
+    el.className='match-entry';
+    el.innerHTML=`
+      <div class="match-entry-date">${date}</div>
+      <div class="match-entry-players">${playerNames}</div>
+      <span class="match-entry-badge ${hasItems?'badge-has-items':'badge-no-items'}">${hasItems?'Items klara':'Lägg till motståndare'}</span>
+      <button class="match-entry-del" onclick="deleteMatch(event,'${m.id}')" title="Ta bort">✕</button>`;
+    el.onclick=(e)=>{ if(e.target.classList.contains('match-entry-del'))return; openDetail(m.id); };
+    list.appendChild(el);
+  });
+}
+async function deleteMatch(e,id){
+  e.stopPropagation();
+  if(!confirm('Ta bort denna match?'))return;
+  await apiFetch('/matches/'+id,{method:'DELETE'});
+  loadHistory();
+}
+
+// ===================== DETAIL =====================
+async function openDetail(id) {
+  const m=await apiFetch('/matches/'+id);
+  currentMatchId=id;
+  currentEnemies=new Set(m.enemies||[]);
+  const date=new Date(m.createdAt).toLocaleString('sv-SE',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  document.getElementById('detail-title').textContent=(m.players||[]).map(p=>p.name).join(' · ');
+  document.getElementById('detail-date').textContent=date;
+  document.getElementById('detail-strategy').innerHTML=mdToHtml(m.strategy||'');
+
+  // Enemy picker
+  renderEnemyPicker();
+
+  // Items
+  if(m.items){
+    renderItems(m.items, m.players||[]);
+    document.getElementById('items-card').style.display='block';
+  } else {
+    document.getElementById('items-card').style.display='none';
+    document.getElementById('items-output').innerHTML='';
+  }
+
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-detail').classList.add('active');
+}
+
+function renderEnemyPicker() {
+  // Selected tags
+  const selEl=document.getElementById('selected-enemies');
+  selEl.innerHTML='';
+  currentEnemies.forEach(name=>{
+    const tag=document.createElement('div'); tag.className='enemy-tag';
+    tag.innerHTML=`${name} <button onclick="removeEnemy('${name}')">✕</button>`;
+    selEl.appendChild(tag);
+  });
+
+  // Grid
+  const grid=document.getElementById('enemy-picker-grid');
+  grid.innerHTML='';
+  const search='';
+  HERO_LIST.forEach(h=>{
+    if(currentEnemies.has(h.name))return;
+    const c=document.createElement('div');
+    c.className='hero-card';
+    c.style.cursor='pointer';
+    c.innerHTML=`<div class="hero-bg">${ATTR_ICONS[h.attr]}</div><div class="hero-name">${h.name}</div>`;
+    c.onclick=()=>addEnemy(h.name);
+    grid.appendChild(c);
+  });
+
+  const btn=document.getElementById('get-items-btn');
+  btn.disabled=currentEnemies.size===0;
+  btn.textContent=currentEnemies.size>0?`Hämta itemtips mot ${currentEnemies.size} hjältar`:'Välj motståndarhjältar';
+}
+
+async function addEnemy(name) {
+  currentEnemies.add(name);
+  await apiFetch('/matches/'+currentMatchId+'/enemies',{method:'PUT',body:JSON.stringify({enemies:[...currentEnemies]})});
+  renderEnemyPicker();
+}
+async function removeEnemy(name) {
+  currentEnemies.delete(name);
+  await apiFetch('/matches/'+currentMatchId+'/enemies',{method:'PUT',body:JSON.stringify({enemies:[...currentEnemies]})});
+  renderEnemyPicker();
+}
+
+async function generateItems() {
+  const m=await apiFetch('/matches/'+currentMatchId);
+  const enemyList=[...currentEnemies].join(', ');
+  const ourDraft=m.players.map(p=>{
+    // Extract hero from strategy text - just use pool summary
+    const names=(p.heroes||[]).map(id=>heroName(id)).filter(Boolean);
+    return p.name+' (pool: '+names.slice(0,5).join(', ')+(names.length>5?'...':'')+')';
+  }).join('\n');
+
+  const prompt='Du är en Dota 2 item-expert. Vi har precis genererat en draft-strategi och ska nu möta dessa motståndare.\n\nVÅR DRAFT-STRATEGI:\n'+m.strategy+'\n\nMOTSTÅNDARNA SPELAR:\n'+enemyList+'\n\nGe konkreta itemtips per spelare i vårt lag. Fokusera på 3-5 nyckelitems per spelare som är extra viktiga MOT just dessa motståndare. Format:\n\n**[SPELARNNAMN] ([HJÄLTE])**\nKärnitems: item1, item2, item3\nExtra mot detta lag: item4, item5\nFörklaring: en mening varför\n\nAnvänd svenska. Var specifik och konkret.';
+
+  const btn=document.getElementById('get-items-btn');
+  btn.disabled=true; btn.textContent='Hämtar itemtips...';
+
+  try {
+    const resp=await fetch('/api/items',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
+    const data=await resp.json();
+    if(data.error)throw new Error(data.error);
+
+    await apiFetch('/matches/'+currentMatchId+'/items',{method:'PUT',body:JSON.stringify({items:data.text})});
+    renderItems(data.text, m.players);
+    document.getElementById('items-card').style.display='block';
+    btn.textContent='Uppdatera itemtips';
+    btn.disabled=false;
+  } catch(err){
+    btn.textContent='Fel — försök igen';
+    btn.disabled=false;
+    alert('Fel: '+err.message);
+  }
+}
+
+function renderItems(text, players) {
+  document.getElementById('items-output').innerHTML=`<div class="strategy-raw">${mdToHtml(text)}</div>`;
+}
+
+// ===================== UTILS =====================
+function mdToHtml(md){
   return md
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h2>$1</h2>')
-    .replace(/\n\n/g, '<br><br>')
-    .replace(/\n/g, '<br>');
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,'<h2>$1</h2>')
+    .replace(/^# (.+)$/gm,'<h2>$1</h2>')
+    .replace(/\n\n/g,'<br><br>')
+    .replace(/\n/g,'<br>');
 }
 
 // ===================== INIT =====================
-loadPlayers().then(() => checkUrlParams());
-
-// Close modal on overlay click
-document.getElementById('modal-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('modal-overlay')) closeModal();
-});
-
-// Keyboard shortcut: save with Ctrl+S
-document.addEventListener('keydown', e => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-    e.preventDefault();
-    if (currentPlayer !== null) savePool();
-  }
-});
+loadPlayers();
+document.getElementById('modal-overlay').addEventListener('click',e=>{ if(e.target===document.getElementById('modal-overlay'))closeModal(); });
+document.addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();if(currentPlayer!==null)savePool();} });
 </script>
 </body>
 </html>
