@@ -82,16 +82,16 @@ async function initBins() {
       BIN_IDS[key] = envId;
       console.log(`Using existing ${key} bin: ${envId}`);
     } else {
-      const initial = key === 'players' ? [] : [];
+      const initial = { data: [] };
       await createBin(key, initial);
     }
   }
 }
 
-async function readPlayers() { return (await getBin('players')) || []; }
-async function writePlayers(data) { await setBin('players', data); }
-async function readMatches() { return (await getBin('matches')) || []; }
-async function writeMatches(data) { await setBin('matches', data); }
+async function readPlayers() { const r = await getBin('players'); return (r && r.data) ? r.data : []; }
+async function writePlayers(data) { await setBin('players', { data }); }
+async function readMatches() { const r = await getBin('matches'); return (r && r.data) ? r.data : []; }
+async function writeMatches(data) { await setBin('matches', { data }); }
 
 // ── PLAYERS ──────────────────────────────────────────
 app.get('/api/players', async (req, res) => {
