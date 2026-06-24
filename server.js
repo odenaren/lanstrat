@@ -97,6 +97,15 @@ app.put('/api/matches/:id/enemies', (req, res) => {
   res.json(match);
 });
 
+app.put('/api/matches/:id/memory', (req, res) => {
+  const matches = read(MATCHES_FILE);
+  const match = matches.find(m => m.id === req.params.id);
+  if(!match) return res.status(404).json({ error: 'Not found' });
+  match.excludeFromMemory = !!req.body.excludeFromMemory;
+  write(MATCHES_FILE, matches);
+  res.json(match);
+});
+
 app.put('/api/matches/:id/items', (req, res) => {
   const matches = read(MATCHES_FILE);
   const match = matches.find(m => m.id === req.params.id);

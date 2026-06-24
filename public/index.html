@@ -223,7 +223,8 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 <div id="page-history" class="page">
   <div class="page-header">
     <h2>Matchhistorik</h2>
-    <span style="color:var(--text-dim);font-size:13px">Klicka på en match för att lägga till motståndare och få itemtips</span>
+    <span style="color:var(--text-dim);font-size:13px">Klicka på en match för detaljer &amp; itemtips</span>
+    <button onclick="clearAllMemory()" style="margin-left:auto;padding:6px 14px;background:none;border:1px solid #c0392b44;color:var(--red);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='#c0392b44'">Rensa minne</button>
   </div>
   <div id="history-list" class="history-grid"></div>
 </div>
@@ -644,14 +645,32 @@ async function generateStrategy() {
   const area=document.getElementById('strategy-area');
   area.innerHTML=`<div class="thinking"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div> ${isWildcard?'🎲 Slumpar en vild strategi...':'Genererar strategi för '+n+' spelare...'}</div>`;
 
+  // Fetch recent matches to build cooldown context
+  let recentMatches = [];
+  try { recentMatches = await apiFetch('/matches'); } catch(e){}
+  // Only use matches included in memory
+  const memoryMatches = recentMatches.filter(m => !m.excludeFromMemory);
+  const recentlyPlayed = {};
+  active.forEach(p => {
+    const played = [];
+    memoryMatches.forEach(m => {
+      if(!m.draft) return;
+      const hero = m.draft[p.name];
+      if(hero) played.push(hero);
+    });
+    recentlyPlayed[p.name] = played.slice(0, 3);
+  });
+
   const poolSummary=active.map(p=>{
     const names=(p.heroes||[]).map(id=>{ const h=HERO_LIST.find(x=>x.id===id); return h?h.name+' ('+h.roles.join('/')+')':null; }).filter(Boolean);
-    return p.name+': '+(names.join(', ')||'Inga hjältar valda');
+    const recent = recentlyPlayed[p.name]||[];
+    const recentStr = recent.length ? ' | Nyligen spelat (undvik): '+recent.join(', ') : '';
+    return p.name+': '+(names.join(', ')||'Inga hjältar valda')+recentStr;
   }).join('\n\n');
 
   const draftNames = active.map(p=>p.name).join(', ');
   const wildcardInstruction = isWildcard ? '\n\nDETTA ÄR EN WILD CARD-STRATEGI: Välj något oortodox, oväntat och lite galet som ändå kan funka på ett LAN bland vänner. Kanske en ovanlig rolltilldelning, en hjälte som normalt inte passar rollen men kan överraska, eller en extrem spelstil. Ha kul med det men det ska fortfarande vara spelbart. Markera i strateginamnet att det är wild card, t.ex. med 🎲 eller ordet WILD.' : '';
-  const prompt='Du är en Dota 2 draft-expert. '+n+' spelare ska spela en match.'+wildcardInstruction+'\n\nHERO POOLS:\n'+poolSummary+'\n\nLANING-KONTEXT:\n'+getLaningCtx(n)+'\n\nSvara i exakt detta format — börja med JSON-blocket, sedan strategin:\n\nDRAFT_JSON_START\n{"name":"Kort strateginamn på svenska (max 4 ord, t.ex. Splitpush eller Tidig aggression)","draft":{"SPELARNNAMN":"Hjältenamn",...}}\nDRAFT_JSON_END\n\nSedan strategitexten med dessa rubriker:\n1. **Rekommenderad draft** – vilken hjälte varje spelare bör spela och varför\n2. **Laning setup** – vem spelar vilken roll/lane\n3. **Spelstil och gameplan** – early/mid/late-game\n4. **Nyckelsynergier** – starka kombos\n5. **Win condition**\n\nSpelarna heter: '+draftNames+'\nVar konkret. Använd svenska. Tydliga rubriker.';
+  const prompt='Du är en Dota 2 draft-expert. '+n+' spelare ska spela en match.'+wildcardInstruction+'\n\nHERO POOLS:\n'+poolSummary+'\n\nLANING-KONTEXT:\n'+getLaningCtx(n)+'\n\nVIKTIG REGEL: Varje spelare har en lista med nyligen spelade hjältar. Undvik dessa om möjligt — rotera gärna så att spelarna får prova olika hjältar ur sin pool. Om poolen är liten och det inte går att undvika är det okej, men prioritera variation.\n\nSvara i exakt detta format — börja med JSON-blocket, sedan strategin:\n\nDRAFT_JSON_START\n{"name":"Kort strateginamn på svenska (max 4 ord, t.ex. Splitpush eller Tidig aggression)","draft":{"SPELARNNAMN":"Hjältenamn",...}}\nDRAFT_JSON_END\n\nSedan strategitexten med dessa rubriker:\n1. **Rekommenderad draft** – vilken hjälte varje spelare bör spela och varför\n2. **Laning setup** – vem spelar vilken roll/lane\n3. **Spelstil och gameplan** – early/mid/late-game\n4. **Nyckelsynergier** – starka kombos\n5. **Win condition**\n\nSpelarna heter: '+draftNames+'\nVar konkret. Använd svenska. Tydliga rubriker.';
 
   try {
     const resp=await fetch('/api/strategy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
@@ -714,11 +733,25 @@ async function loadHistory() {
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">${(m.players||[]).map(p=>{const hero=(m.draft||{})[p.name];return hero?`<span style="font-size:11px;color:var(--text-dim)">${p.name}: <span style="color:var(--gold-light)">${hero}</span></span>`:`<span style="font-size:11px;color:var(--text-dim)">${p.name}</span>`;}).join('')}</div>
       </div>
       <span class="match-entry-badge ${hasItems?'badge-has-items':'badge-no-items'}">${hasItems?'Items klara':'Lägg till motståndare'}</span>
+      <button onclick="toggleMemory(event,'${m.id}',${!m.excludeFromMemory})" title="${m.excludeFromMemory?'Inkludera i minne':'Exkludera från minne'}" style="background:none;border:1px solid ${m.excludeFromMemory?'var(--border)':'var(--gold-dim)'};color:${m.excludeFromMemory?'var(--text-dim)':'var(--gold)'};cursor:pointer;font-size:12px;padding:3px 8px;border-radius:3px;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.04em;white-space:nowrap;transition:all .15s">${m.excludeFromMemory?'● Ej minne':'● Minne'}</button>
       <button class="match-entry-del" onclick="deleteMatch(event,'${m.id}')" title="Ta bort">✕</button>`;
     el.onclick=(e)=>{ if(e.target.classList.contains('match-entry-del'))return; openDetail(m.id); };
     list.appendChild(el);
   });
 }
+async function toggleMemory(e, id, exclude) {
+  e.stopPropagation();
+  await apiFetch('/matches/'+id+'/memory', {method:'PUT', body:JSON.stringify({excludeFromMemory: exclude})});
+  loadHistory();
+}
+
+async function clearAllMemory() {
+  if(!confirm('Rensa minnet? Alla matcher exkluderas från hjälteval-historiken (matcherna finns kvar).')) return;
+  const matches = await apiFetch('/matches');
+  await Promise.all(matches.map(m => apiFetch('/matches/'+m.id+'/memory', {method:'PUT', body:JSON.stringify({excludeFromMemory:true})})));
+  loadHistory();
+}
+
 async function deleteMatch(e,id){
   e.stopPropagation();
   if(!confirm('Ta bort denna match?'))return;
