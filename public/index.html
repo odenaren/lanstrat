@@ -971,7 +971,8 @@ function showPage(id) {
   document.querySelectorAll('.nav-tab').forEach(t => {
     if (t.textContent.toLowerCase().includes(id === 'home' ? 'spelare' : 'matchen')) t.classList.add('active');
   });
-  if (id === 'match') renderMatchPage();
+  if (id === 'home') loadPlayers();
+  if (id === 'match') loadPlayers().then(() => renderMatchPage());
 }
 
 // ===================== HOME =====================
@@ -1296,17 +1297,14 @@ async function generateStrategy() {
   const prompt = 'Du är en Dota 2 draft-expert. ' + n + ' spelare ska spela en match. Ta fram en optimal draft-strategi baserat på deras hero pools.\n\nHERO POOLS:\n' + poolSummary + '\n\nLANING-KONTEXT:\n' + laningCtx + '\n\nGe en konkret matchstrategi med:\n1. **Rekommenderad draft** – vilken hjälte varje spelare bör spela och varför (välj alltid från deras pool, namnge spelaren)\n2. **Laning setup** – vem spelar vilken roll/lane (anpassat för ' + n + ' spelare)\n3. **Spelstil och gameplan** – early/mid/late-game strategi\n4. **Nyckelsynergier** – vilka kombos som är starka ihop\n5. **Win condition** – vad ni ska sikta på för att vinna\n\nVar konkret och specifik. Använd svenska. Formatera med tydliga rubriker.';
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('/api/strategy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }]
-      })
+      body: JSON.stringify({ prompt })
     });
     const data = await resp.json();
-    const text = data.content.map(c => c.text || '').join('');
+    if (data.error) throw new Error(data.error);
+    const text = data.text;
 
     area.innerHTML = `<div class="strategy-output">
       <h2>DRAFT STRATEGI</h2>
