@@ -444,8 +444,8 @@ const HERO_IMG_OVERRIDES = {
   99: CDN+'lion.png',
 };
 function heroImg(id) {
-  if(HERO_IMG_OVERRIDES[id]) return HERO_IMG_OVERRIDES[id];
-  const slug = HERO_SLUGS[id];
+  if(HERO_IMG_OVERRIDES[+id]) return HERO_IMG_OVERRIDES[+id];
+  const slug = HERO_SLUGS[+id];
   if(!slug) return null;
   return 'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/'+slug+'.png';
 }
