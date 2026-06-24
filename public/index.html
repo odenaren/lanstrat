@@ -210,7 +210,14 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
     <div class="card">
       <h3>Spelare i matchen</h3>
       <div id="player-select-list" class="player-select-list"></div>
-      <button onclick="invertMatchPlayers()" style="width:100%;margin-top:8px;padding:7px;background:none;border:1px solid var(--border);color:var(--text-dim);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:4px;transition:all .15s" onmouseover="this.style.borderColor='var(--gold-dim)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">Invertera val</button>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface2);border:1px solid ${ignoreAllPools?'#8e44ad88':'var(--border)'};border-radius:4px;cursor:pointer" onclick="toggleIgnoreAll()">
+        <div style="width:18px;height:18px;border:2px solid ${ignoreAllPools?'#8e44ad':'var(--border)'};border-radius:3px;display:flex;align-items:center;justify-content:center;background:${ignoreAllPools?'#8e44ad22':'none'};flex-shrink:0;font-size:12px;color:#9b59b6">${ignoreAllPools?'🎲':''}</div>
+        <div style="flex:1">
+          <div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:${ignoreAllPools?'#9b59b6':'var(--text-dim)'}">Ignorera alla pooler</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:1px">AI väljer hjältar fritt</div>
+        </div>
+      </div>
+      <button onclick="invertMatchPlayers()"  style="width:100%;margin-top:8px;padding:7px;background:none;border:1px solid var(--border);color:var(--text-dim);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:4px;transition:all .15s" onmouseover="this.style.borderColor='var(--gold-dim)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">Invertera val</button>
       <div style="margin-top:14px">
         <div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);margin-bottom:6px">Kaptenens instruktioner</div>
         <textarea id="captain-notes" placeholder="Valfritt — t.ex. 'Pax vill inte spela support', 'vi vill ha snabb match'..." style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:4px;font-size:13px;font-family:Inter,sans-serif;outline:none;resize:vertical;min-height:70px;transition:border-color .15s;line-height:1.5" onfocus="this.style.borderColor='var(--gold-dim)'" onblur="this.style.borderColor='var(--border)'"></textarea>
@@ -460,6 +467,8 @@ let currentSelected = new Set();
 let currentFilter = 'all', currentAttr = 'all';
 let saveTimeout = null;
 let matchPlayers = new Set();
+let ignoreAllPools = false;
+let ignorePlayerPools = new Set(); // player indexes
 let currentMatchId = null;
 let currentEnemies = new Set();
 let currentDraft = {};
@@ -659,14 +668,38 @@ function renderMatchPage() {
   players.forEach((p,i)=>{
     const item=document.createElement('div');
     item.className='player-toggle'+(matchPlayers.has(i)?' active':'');
-    item.innerHTML=`<div class="checkbox">${matchPlayers.has(i)?'✓':''}</div><div style="flex:1"><div class="player-toggle-name">${p.name}</div><div class="player-toggle-heroes">${(p.heroes||[]).length} hjältar i poolen</div></div>`;
-    item.onclick=()=>{ if(matchPlayers.has(i))matchPlayers.delete(i);else matchPlayers.add(i); renderMatchPage(); };
+    const poolIgnored = ignorePlayerPools.has(i);
+    item.innerHTML=`
+      <div class="checkbox">${matchPlayers.has(i)?'✓':''}</div>
+      <div style="flex:1">
+        <div class="player-toggle-name">${p.name}</div>
+        <div class="player-toggle-heroes">${poolIgnored?`<span style="text-decoration:line-through;opacity:.5">${(p.heroes||[]).length} hjältar</span> <span style="color:#9b59b6;font-size:11px">🎲 FRITT</span>`:`${(p.heroes||[]).length} hjältar i poolen`}</div>
+      </div>
+      ${matchPlayers.has(i)?`<button onclick="togglePlayerPool(event,${i})" title="${poolIgnored?'Aktivera pool':'Ignorera pool'}" style="background:none;border:1px solid ${poolIgnored?'#8e44ad88':'var(--border)'};color:${poolIgnored?'#9b59b6':'var(--text-dim)'};font-size:11px;padding:3px 8px;border-radius:3px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.04em;white-space:nowrap">${poolIgnored?'🎲 FRITT':'📋 POOL'}</button>`:''}
+    `;
+    item.onclick=(e)=>{ if(e.target.tagName==='BUTTON')return; if(matchPlayers.has(i)){matchPlayers.delete(i);ignorePlayerPools.delete(i);}else matchPlayers.add(i); renderMatchPage(); };
     list.appendChild(item);
   });
   const n=matchPlayers.size, btn=document.getElementById('gen-btn');
   const valid=n>=3&&n<=5;
   btn.disabled=!valid;
   btn.textContent=valid?`Generera strategi (${n} spelare)`:n<3?'Välj minst 3 spelare':'Max 5 spelare';
+}
+
+function togglePlayerPool(e, i) {
+  e.stopPropagation();
+  if(ignorePlayerPools.has(i)) ignorePlayerPools.delete(i);
+  else ignorePlayerPools.add(i);
+  renderMatchPage();
+}
+
+function toggleIgnoreAll() {
+  ignoreAllPools = !ignoreAllPools;
+  if(ignoreAllPools) {
+    // Clear individual overrides when ignoring all
+    ignorePlayerPools.clear();
+  }
+  renderMatchPage();
 }
 
 function invertMatchPlayers() {
@@ -712,6 +745,9 @@ async function generateStrategy() {
   });
 
   const poolSummary=active.map(p=>{
+    const playerIdx = players.indexOf(p);
+    const ignored = ignoreAllPools || ignorePlayerPools.has(active.indexOf(p));
+    if(ignored) return p.name+': Välj fritt — ignorera denna spelares pool och välj bästa möjliga hjälte för laget';
     const names=(p.heroes||[]).map(id=>{ const h=HERO_LIST.find(x=>x.id===id); return h?h.name+' ('+h.roles.join('/')+')':null; }).filter(Boolean);
     const recent = recentlyPlayed[p.name]||[];
     const recentStr = recent.length ? ' | Nyligen spelat (undvik): '+recent.join(', ') : '';
