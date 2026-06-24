@@ -846,7 +846,10 @@ async function loadHistory() {
           </div>`;
         }).join('')}</div>
       </div>
-      ${m.result==='win'?'<span class="match-entry-badge" style="background:rgba(39,174,96,.15);border:1px solid #27ae6055;color:#2ecc71">✓ VINST</span>':m.result==='loss'?'<span class="match-entry-badge" style="background:rgba(231,76,60,.12);border:1px solid #c0392b55;color:#e74c3c">✗ FÖRLUST</span>':''}
+      <div style="display:flex;gap:5px;align-items:center" onclick="event.stopPropagation()">
+        <button onclick="setMatchResult('${m.id}','win')" style="padding:3px 10px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:all .15s;border:1px solid #27ae6055;background:${m.result==='win'?'rgba(39,174,96,.3)':'none'};color:${m.result==='win'?'#2ecc71':'#27ae6088'}">✓</button>
+        <button onclick="setMatchResult('${m.id}','loss')" style="padding:3px 10px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:all .15s;border:1px solid #c0392b55;background:${m.result==='loss'?'rgba(231,76,60,.2)':'none'};color:${m.result==='loss'?'#e74c3c':'#c0392b88'}">✗</button>
+      </div>
       <span class="match-entry-badge ${hasItems?'badge-has-items':'badge-no-items'}">${hasItems?'Items klara':'Lägg till motståndare'}</span>
       <button onclick="toggleMemory(event,'${m.id}',${!m.excludeFromMemory})" title="${m.excludeFromMemory?'Inkludera i minne':'Exkludera från minne'}" style="background:none;border:1px solid ${m.excludeFromMemory?'var(--border)':'var(--gold-dim)'};color:${m.excludeFromMemory?'var(--text-dim)':'var(--gold)'};cursor:pointer;font-size:12px;padding:3px 8px;border-radius:3px;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.04em;white-space:nowrap;transition:all .15s">${m.excludeFromMemory?'● Ej minne':'● Minne'}</button>
       <button class="match-entry-del" onclick="deleteMatch(event,'${m.id}')" title="Ta bort">✕</button>`;
@@ -856,8 +859,9 @@ async function loadHistory() {
 }
 async function setMatchResult(id, result) {
   await apiFetch('/matches/'+id+'/result', {method:'PUT', body:JSON.stringify({result})});
-  openDetail(id);
   loadHistory();
+  // If detail page is open for this match, refresh it too
+  if(currentMatchId === id) openDetail(id);
 }
 
 async function toggleMemory(e, id, exclude) {
