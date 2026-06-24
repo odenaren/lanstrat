@@ -211,6 +211,10 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
       <h3>Spelare i matchen</h3>
       <div id="player-select-list" class="player-select-list"></div>
       <button onclick="invertMatchPlayers()" style="width:100%;margin-top:8px;padding:7px;background:none;border:1px solid var(--border);color:var(--text-dim);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:4px;transition:all .15s" onmouseover="this.style.borderColor='var(--gold-dim)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">Invertera val</button>
+      <div style="margin-top:14px">
+        <div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);margin-bottom:6px">Kaptenens instruktioner</div>
+        <textarea id="captain-notes" placeholder="Valfritt — t.ex. 'Pax vill inte spela support', 'vi vill ha snabb match'..." style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:4px;font-size:13px;font-family:Inter,sans-serif;outline:none;resize:vertical;min-height:70px;transition:border-color .15s;line-height:1.5" onfocus="this.style.borderColor='var(--gold-dim)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+      </div>
       <button class="gen-btn" id="gen-btn" onclick="generateStrategy()">Välj minst 3 spelare</button>
     </div>
     <div class="strategy-area" id="strategy-area">
@@ -690,6 +694,7 @@ async function generateStrategy() {
   const area=document.getElementById('strategy-area');
   area.innerHTML=`<div class="thinking"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div> ${isWildcard?'🎲 Slumpar en vild strategi...':'Genererar strategi för '+n+' spelare...'}</div>`;
 
+  const captainNotes = document.getElementById('captain-notes').value.trim();
   // Fetch recent matches to build cooldown context
   let recentMatches = [];
   try { recentMatches = await apiFetch('/matches'); } catch(e){}
@@ -760,7 +765,7 @@ async function generateStrategy() {
   const chosenStyle = isWildcard ? STYLES[0] : STYLES[Math.floor(Math.random() * STYLES.length)];
 
   const wildcardInstruction = isWildcard ? '\n\nDETTA ÄR EN WILD CARD-STRATEGI: Välj något oortodox, oväntat och lite galet som ändå kan funka på ett LAN bland vänner. Kanske en ovanlig rolltilldelning, en hjälte som normalt inte passar rollen men kan överraska, eller en extrem spelstil. Ha kul med det men det ska fortfarande vara spelbart. Markera i strateginamnet att det är wild card, t.ex. med 🎲 eller ordet WILD.' : '';
-  const prompt='Du är en Dota 2 draft-expert. '+n+' spelare ska spela en match.'+wildcardInstruction+'\n\nHERO POOLS:\n'+poolSummary+'\n\nLANING-KONTEXT:\n'+getLaningCtx(n)+'\n\nPRESENTATIONSSTIL: '+chosenStyle.instruction+'\n\nVIKTIG REGEL: Varje spelare har en lista med nyligen spelade hjältar. Undvik dessa om möjligt — rotera gärna så att spelarna får prova olika hjältar ur sin pool. Om poolen är liten och det inte går att undvika är det okej, men prioritera variation.\n\nSvara i exakt detta format — börja med JSON-blocket, sedan strategin:\n\nDRAFT_JSON_START\n{"name":"Kort strateginamn på svenska (max 4 ord, t.ex. Splitpush eller Tidig aggression)","draft":{"SPELARNNAMN":"Hjältenamn",...}}\nDRAFT_JSON_END\n\nSedan strategitexten med dessa rubriker:\n1. **Rekommenderad draft** – vilken hjälte varje spelare bör spela och varför\n2. **Laning setup** – vem spelar vilken roll/lane\n3. **Spelstil och gameplan** – early/mid/late-game\n4. **Nyckelsynergier** – starka kombos\n5. **Win condition**\n\nSpelarna heter: '+draftNames+'\nVar konkret. Använd svenska. Tydliga rubriker.';
+  const prompt='Du är en Dota 2 draft-expert. '+n+' spelare ska spela en match.'+wildcardInstruction+'\n\nHERO POOLS:\n'+poolSummary+'\n\nLANING-KONTEXT:\n'+getLaningCtx(n)+'\n\nPRESENTATIONSSTIL: '+chosenStyle.instruction+'\n\nVIKTIG REGEL: Varje spelare har en lista med nyligen spelade hjältar. Undvik dessa om möjligt — rotera gärna så att spelarna får prova olika hjältar ur sin pool. Om poolen är liten och det inte går att undvika är det okej, men prioritera variation.\n\nSvara i exakt detta format — börja med JSON-blocket, sedan strategin:\n\nDRAFT_JSON_START\n{"name":"Kort strateginamn på svenska (max 4 ord, t.ex. Splitpush eller Tidig aggression)","draft":{"SPELARNNAMN":"Hjältenamn",...}}\nDRAFT_JSON_END\n\nSedan strategitexten med dessa rubriker:\n1. **Rekommenderad draft** – vilken hjälte varje spelare bör spela och varför\n2. **Laning setup** – vem spelar vilken roll/lane\n3. **Spelstil och gameplan** – early/mid/late-game\n4. **Nyckelsynergier** – starka kombos\n5. **Win condition**\n\nSpelarna heter: '+draftNames+(captainNotes ? '\n\nKAPTENENS EXTRA INSTRUKTIONER (viktigt att ta hänsyn till):\n'+captainNotes : '')+'\n\nSvara i EXAKT detta format med dessa markörer:\n\nDRAFT_JSON_START\n{...}\nDRAFT_JSON_END\n\nKAPTENSBRIEFING_START\n[Max 6 meningar. Kaptenen läser detta högt för laget i soffan innan matchen. Skriv: vem spelar vad, hur laning ser ut, spelstil, win condition. Enkelt utan jargong.]\nKAPTENSBRIEFING_END\n\n[Sedan fullständig strategi med rubriker och detaljer för spelarna att läsa vid datorn]\n\nVar konkret. Använd svenska. Tydliga rubriker.';
 
   try {
     const resp=await fetch('/api/strategy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
@@ -777,11 +782,20 @@ async function generateStrategy() {
       try{ const parsed=JSON.parse(jsonMatch[1]); currentDraft=parsed.draft||{}; strategyName=parsed.name||""; }catch(e){}
       cleanText=text.replace(/DRAFT_JSON_START[\s\S]*?DRAFT_JSON_END\s*/,'').trim();
     }
+    // Extract captain briefing
+    let briefing='';
+    const briefMatch=cleanText.match(/KAPTENSBRIEFING_START\s*([\s\S]*?)\s*KAPTENSBRIEFING_END/);
+    if(briefMatch){
+      briefing=briefMatch[1].trim();
+      cleanText=cleanText.replace(/KAPTENSBRIEFING_START[\s\S]*?KAPTENSBRIEFING_END\s*/,'').trim();
+    }
 
     // Save match to server
     const match=await apiFetch('/matches',{method:'POST',body:JSON.stringify({
       players:active.map(p=>({name:p.name,heroes:p.heroes||[]})),
       strategy:cleanText,
+      briefing:briefing,
+      captainNotes:captainNotes,
       draft:currentDraft,
       name:strategyName,
       wildcard:isWildcard,
@@ -795,6 +809,10 @@ async function generateStrategy() {
         <div style="color:var(--text-dim);font-size:13px;margin-top:2px">Spelare: ${active.map(p=>p.name).join(', ')}</div></div>
         <button class="btn btn-ghost" onclick="showPage('history')">Se historik →</button>
       </div>
+      ${briefing?`<div style="background:rgba(200,155,60,.08);border:1px solid var(--gold-dim);border-radius:6px;padding:18px 20px;margin-bottom:20px">
+        <div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:10px">⚔️ Kaptensbriefing — läs högt för laget</div>
+        <div style="font-size:15px;line-height:1.8;color:var(--text)">${briefing.replace(/\n/g,'<br>')}</div>
+      </div>`:''}
       <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px">
         ${active.map(p => {
           const heroName = currentDraft[p.name];
@@ -902,7 +920,9 @@ async function openDetail(id) {
     `;
   }
   document.getElementById('detail-date').textContent=date;
-  document.getElementById('detail-strategy').innerHTML=mdToHtml(m.strategy||'');
+  const notesHtml = m.captainNotes ? `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:12px 14px;margin-bottom:16px"><div style="font-family:Rajdhani,sans-serif;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--text-dim);margin-bottom:5px">📋 Kaptenens instruktioner</div><div style="font-size:13px;color:var(--text);line-height:1.6">${m.captainNotes}</div></div>` : '';
+  const briefingHtml = m.briefing ? `<div style="background:rgba(200,155,60,.08);border:1px solid var(--gold-dim);border-radius:6px;padding:18px 20px;margin-bottom:20px"><div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:10px">⚔️ Kaptensbriefing — läs högt för laget</div><div style="font-size:15px;line-height:1.8;color:var(--text)">${m.briefing.replace(/\n/g,'<br>')}</div></div>` : '';
+  document.getElementById('detail-strategy').innerHTML=notesHtml+briefingHtml+mdToHtml(m.strategy||'');
 
   // Enemy picker
   renderEnemyPicker();
