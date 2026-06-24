@@ -11,6 +11,17 @@ const MATCHES_FILE = path.join(DATA_DIR, 'matches.json');
 
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy',
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline'; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "font-src https://fonts.gstatic.com; " +
+    "img-src 'self' https://cdn.dota2.com https://cdn.cloudflare.steamstatic.com https://steamcdn-a.akamaihd.net data:; " +
+    "connect-src 'self'"
+  );
+  next();
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
@@ -64,13 +75,14 @@ app.put('/api/players/:name/heroes', (req, res) => {
 app.get('/api/matches', (req, res) => res.json(read(MATCHES_FILE)));
 
 app.post('/api/matches', (req, res) => {
-  const { players, strategy, draft, name, wildcard } = req.body;
+  const { players, strategy, draft, name, wildcard, style } = req.body;
   const matches = read(MATCHES_FILE);
   const match = {
     id: Date.now().toString(),
     createdAt: new Date().toISOString(),
     name: name||'',
     wildcard: !!wildcard,
+    style: style||'standard',
     players,
     strategy,
     draft,

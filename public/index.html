@@ -427,6 +427,12 @@ const HERO_SLUGS = {
 };
 function heroImg(id) {
   const slug = HERO_SLUGS[id];
+  if(!slug) return null;
+  // Modern Dota 2 React CDN - higher quality portraits
+  return 'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/'+slug+'.png';
+}
+function heroImgFallback(id) {
+  const slug = HERO_SLUGS[id];
   return slug ? 'https://cdn.dota2.com/apps/dota2/images/heroes/'+slug+'_full.png' : null;
 }
 function heroImgByName(name) {
@@ -596,7 +602,7 @@ function renderHeroGrid() {
       c.className='hero-card'+(currentSelected.has(h.id)?' selected':'');
       const img = heroImg(h.id);
       c.innerHTML=img
-        ? `<img src="${img}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top" loading="lazy" onerror="this.style.display='none'"><div class="hero-name" style="background:linear-gradient(transparent,rgba(0,0,0,.9))">${h.name}</div>`
+        ? `<img src="${img}" data-fallback="${heroImgFallback(h.id)||''}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top" loading="lazy" onerror="this.src=this.dataset.fallback;this.onerror=null;"><div class="hero-name" style="background:linear-gradient(transparent,rgba(0,0,0,.9))">${h.name}</div>`
         : `<div class="hero-bg">${ATTR_ICONS[h.attr]}</div><div class="hero-name">${h.name}</div>`;
       c.onclick=()=>{
         if(currentSelected.has(h.id)){currentSelected.delete(h.id);c.classList.remove('selected');}
@@ -910,7 +916,7 @@ function renderEnemyPicker() {
     c.style.cursor='pointer';
     const eimg = heroImg(h.id);
     c.innerHTML=eimg
-      ? `<img src="${eimg}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top" loading="lazy" onerror="this.style.display='none'"><div class="hero-name" style="background:linear-gradient(transparent,rgba(0,0,0,.9))">${h.name}</div>`
+      ? `<img src="${eimg}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top" loading="lazy" onerror="this.src=this.dataset.fallback||'';"><div class="hero-name" style="background:linear-gradient(transparent,rgba(0,0,0,.9))">${h.name}</div>`
       : `<div class="hero-bg">${ATTR_ICONS[h.attr]}</div><div class="hero-name">${h.name}</div>`;
     c.onclick=()=>addEnemy(h.name);
     grid.appendChild(c);
