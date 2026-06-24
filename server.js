@@ -33,6 +33,18 @@ app.post('/api/players', (req, res) => {
   res.json(players);
 });
 
+app.put('/api/players/:name/rename', (req, res) => {
+  const { newName } = req.body;
+  if(!newName) return res.status(400).json({ error: 'newName required' });
+  const players = read(PLAYERS_FILE);
+  const p = players.find(p => p.name === req.params.name);
+  if(!p) return res.status(404).json({ error: 'Player not found' });
+  if(players.find(p => p.name === newName)) return res.status(409).json({ error: 'Name taken' });
+  p.name = newName;
+  write(PLAYERS_FILE, players);
+  res.json(players);
+});
+
 app.delete('/api/players/:name', (req, res) => {
   const players = read(PLAYERS_FILE).filter(p => p.name !== req.params.name);
   write(PLAYERS_FILE, players);
@@ -52,14 +64,15 @@ app.put('/api/players/:name/heroes', (req, res) => {
 app.get('/api/matches', (req, res) => res.json(read(MATCHES_FILE)));
 
 app.post('/api/matches', (req, res) => {
-  const { players, strategy, draft } = req.body;
+  const { players, strategy, draft, name } = req.body;
   const matches = read(MATCHES_FILE);
   const match = {
     id: Date.now().toString(),
     createdAt: new Date().toISOString(),
-    players,   // [{ name, hero }]
-    strategy,  // full strategy text
-    draft,     // { playerName: heroName }
+    name: name||'',
+    players,
+    strategy,
+    draft,
     enemies: [],
     items: null
   };
