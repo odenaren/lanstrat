@@ -205,28 +205,6 @@ app.put('/api/matches/:id/items', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.put('/api/matches/:id/banned', async (req, res) => {
-  try {
-    const matches = await readMatches();
-    const match = matches.find(m => m.id === req.params.id);
-    if(!match) return res.status(404).json({ error: 'Not found' });
-    match.banned = req.body.banned || [];
-    await writeMatches(matches);
-    res.json(match);
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
-
-app.put('/api/matches/:id/strategy', async (req, res) => {
-  try {
-    const matches = await readMatches();
-    const match = matches.find(m => m.id === req.params.id);
-    if(!match) return res.status(404).json({ error: 'Not found' });
-    match.currentStrategy = req.body.strategy;
-    await writeMatches(matches);
-    res.json(match);
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
-
 app.put('/api/matches/:id/result', async (req, res) => {
   try {
     const matches = await readMatches();
