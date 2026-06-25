@@ -674,14 +674,18 @@ function renderMatchPage() {
     const item=document.createElement('div');
     item.className='player-toggle'+(matchPlayers.has(i)?' active':'');
     const poolIgnored = ignorePlayerPools.has(i);
-    item.innerHTML=`
-      <div class="checkbox">${matchPlayers.has(i)?'✓':''}</div>
-      <div style="flex:1">
-        <div class="player-toggle-name">${p.name}</div>
-        <div class="player-toggle-heroes">${poolIgnored?`<span style="text-decoration:line-through;opacity:.5">${(p.heroes||[]).length} hjältar</span> <span style="color:#9b59b6;font-size:11px">🎲 FRITT</span>`:`${(p.heroes||[]).length} hjältar i poolen`}</div>
-      </div>
-      ${matchPlayers.has(i)?`<button onclick="togglePlayerPool(event,${i})" title="${poolIgnored?'Aktivera pool':'Ignorera pool'}" style="background:none;border:1px solid ${poolIgnored?'#8e44ad88':'var(--border)'};color:${poolIgnored?'#9b59b6':'var(--text-dim)'};font-size:11px;padding:3px 8px;border-radius:3px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.04em;white-space:nowrap">${poolIgnored?'🎲 FRITT':'📋 POOL'}</button>`:''}
-    `;
+    const heroesText = poolIgnored
+      ? '<span style="text-decoration:line-through;opacity:.5">'+(p.heroes||[]).length+' hjältar</span> <span style="color:#9b59b6;font-size:11px">🎲 FRITT</span>'
+      : (p.heroes||[]).length+' hjältar i poolen';
+    const poolBtn = matchPlayers.has(i)
+      ? '<button onclick="togglePlayerPool(event,'+i+')" style="background:none;border:1px solid '+(poolIgnored?'#8e44ad88':'var(--border)')+';color:'+(poolIgnored?'#9b59b6':'var(--text-dim)')+';font-size:11px;padding:3px 8px;border-radius:3px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.04em;white-space:nowrap">'+(poolIgnored?'🎲 FRITT':'📋 POOL')+'</button>'
+      : '';
+    item.innerHTML = '<div class="checkbox">'+(matchPlayers.has(i)?'✓':'')+'</div>'
+      + '<div style="flex:1">'
+      + '<div class="player-toggle-name">'+p.name+'</div>'
+      + '<div class="player-toggle-heroes">'+heroesText+'</div>'
+      + '</div>'
+      + poolBtn;
     item.onclick=(e)=>{ if(e.target.tagName==='BUTTON')return; if(matchPlayers.has(i)){matchPlayers.delete(i);ignorePlayerPools.delete(i);}else matchPlayers.add(i); renderMatchPage(); };
     list.appendChild(item);
   });
@@ -872,7 +876,7 @@ async function generateStrategy() {
           const img = h ? heroImg(h.id) : null;
           return `<div style="text-align:center;width:72px">
             <div style="width:72px;height:40px;border-radius:4px;overflow:hidden;background:var(--surface2);border:1px solid var(--border)">
-              ${img ? `<img src="${img}" style="width:100%;height:100%;object-fit:cover;object-position:center top">` : `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:18px">${h?ATTR_ICONS[h.attr]:'?'}</div>`}
+              '+(img ? '<img src="'+img+'" style="width:100%;height:100%;object-fit:cover;object-position:center top">' : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:18px">'+(h?ATTR_ICONS[h.attr]:'?')+'</div>')+'
             </div>
             <div style="font-size:10px;color:var(--gold);font-weight:600;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${heroName||'?'}</div>
             <div style="font-size:9px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
@@ -910,7 +914,7 @@ async function loadHistory() {
           const img=hero?heroImgByName(hero):null;
           return `<div style="text-align:center;width:44px">
             <div style="width:44px;height:25px;border-radius:3px;overflow:hidden;background:var(--surface2);border:1px solid var(--border)">
-              ${img?`<img src="${img}" style="width:100%;height:100%;object-fit:cover;object-position:center top" loading="lazy">`:`<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:11px">?</div>`}
+              '+(img?'<img src="'+img+'" style="width:100%;height:100%;object-fit:cover;object-position:center top" loading="lazy">':'<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:11px">?</div>')+'
             </div>
             <div style="font-size:9px;color:var(--text-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
           </div>`;
