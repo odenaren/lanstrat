@@ -799,7 +799,9 @@ async function generateStrategy() {
     },
   ];
   // Track recent styles with 4-match cooldown
-  if(!window.recentStyles) window.recentStyles = [];
+  if(!window.recentStyles) {
+    try { window.recentStyles = JSON.parse(sessionStorage.getItem('recentStyles')||'[]'); } catch(e) { window.recentStyles = []; }
+  }
   let chosenStyle;
   if(isWildcard) {
     chosenStyle = STYLES[0];
@@ -819,6 +821,7 @@ async function generateStrategy() {
   }
   window.recentStyles.push(chosenStyle.name);
   if(window.recentStyles.length > 8) window.recentStyles.shift();
+  try { sessionStorage.setItem('recentStyles', JSON.stringify(window.recentStyles)); } catch(e) {}
 
   const wildcardInstruction = isWildcard ? '\n\nDETTA ÄR EN WILD CARD-STRATEGI: Välj något oortodox, oväntat och lite galet som ändå kan funka på ett LAN bland vänner. Kanske en ovanlig rolltilldelning, en hjälte som normalt inte passar rollen men kan överraska, eller en extrem spelstil. Ha kul med det men det ska fortfarande vara spelbart. Markera i strateginamnet att det är wild card, t.ex. med 🎲 eller ordet WILD.' : '';
   const prompt='Du är en Dota 2 draft-expert. '+n+' spelare ska spela en match.'+wildcardInstruction+'\n\nHERO POOLS:\n'+poolSummary+'\n\nLANING-KONTEXT:\n'+getLaningCtx(n)+'\n\nPRESENTATIONSSTIL: '+chosenStyle.instruction+'\n\nVIKTIG REGEL: Varje spelare har en lista med nyligen spelade hjältar. Undvik dessa om möjligt — rotera gärna så att spelarna får prova olika hjältar ur sin pool. Om poolen är liten och det inte går att undvika är det okej, men prioritera variation.\n\nSvara i exakt detta format — börja med JSON-blocket, sedan strategin:\n\nDRAFT_JSON_START\n{"name":"Kort strateginamn på svenska (max 4 ord, t.ex. Splitpush eller Tidig aggression)","draft":{"SPELARNNAMN":"Hjältenamn",...}}\nDRAFT_JSON_END\n\nSedan strategitexten med dessa rubriker:\n1. **Rekommenderad draft** – vilken hjälte varje spelare bör spela och varför\n2. **Laning setup** – vem spelar vilken roll/lane\n3. **Spelstil och gameplan** – early/mid/late-game\n4. **Nyckelsynergier** – starka kombos\n5. **Win condition**\n\nSpelarna heter: '+draftNames+(captainNotes ? '\n\nKAPTENENS EXTRA INSTRUKTIONER (viktigt att ta hänsyn till):\n'+captainNotes : '')+'\n\nSvara i EXAKT detta format med dessa markörer:\n\nDRAFT_JSON_START\n{...}\nDRAFT_JSON_END\n\nKAPTENSBRIEFING_START\n[Max 6 meningar. Kaptenen läser detta högt för laget i soffan innan matchen. Skriv: vem spelar vad, hur laning ser ut, spelstil, win condition. Enkelt utan jargong.]\nKAPTENSBRIEFING_END\n\n[Sedan fullständig strategi med rubriker och detaljer för spelarna att läsa vid datorn]\n\nVar konkret. Använd svenska. Tydliga rubriker.';
@@ -859,33 +862,101 @@ async function generateStrategy() {
     })});
     currentMatchId=match.id;
 
-    area.innerHTML=`
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-        <div><h2 style="font-family:Rajdhani,sans-serif;font-size:22px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em">${strategyName||"Draft Strategi"} ${isWildcard?'<span style="font-size:14px;background:rgba(155,89,182,.2);border:1px solid #8e44ad88;color:#9b59b6;padding:2px 8px;border-radius:3px;vertical-align:middle;letter-spacing:.05em">🎲 WILD CARD</span>':''} ${chosenStyle.name!=='standard'?'<span style="font-size:12px;background:rgba(200,155,60,.1);border:1px solid var(--gold-dim);color:var(--gold);padding:2px 8px;border-radius:3px;vertical-align:middle;letter-spacing:.04em;text-transform:uppercase">'+chosenStyle.name+'</span>':''}</h2>
-        <div style="color:var(--text-dim);font-size:13px;margin-top:2px">Spelare: ${active.map(p=>p.name).join(', ')}</div></div>
-        <button class="btn btn-ghost" onclick="showPage('history')">Se historik →</button>
-      </div>
-      ${briefing?`<div style="background:rgba(200,155,60,.08);border:1px solid var(--gold-dim);border-radius:6px;padding:18px 20px;margin-bottom:20px">
-        <div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:10px">⚔️ Kaptensbriefing — läs högt för laget</div>
-        <div style="font-size:15px;line-height:1.8;color:var(--text)">${briefing.replace(/\n/g,'<br>')}</div>
-      </div>`:''}
-      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px">
-        ${active.map(p => {
-          const heroName = currentDraft[p.name];
-          const h = heroName ? HERO_LIST.find(x => x.name === heroName) : null;
-          const img = h ? heroImg(h.id) : null;
-          return `<div style="text-align:center;width:72px">
-            <div style="width:72px;height:40px;border-radius:4px;overflow:hidden;background:var(--surface2);border:1px solid var(--border)">
-              '+(img ? '<img src="'+img+'" style="width:100%;height:100%;object-fit:cover;object-position:center top">' : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:18px">'+(h?ATTR_ICONS[h.attr]:'?')+'</div>')+'
-            </div>
-            <div style="font-size:10px;color:var(--gold);font-weight:600;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${heroName||'?'}</div>
-            <div style="font-size:9px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
-          </div>`;
-        }).join('')}
-      </div>
-      <div class="strategy-raw">${mdToHtml(cleanText)}</div>`;
+    // Build strategy output via DOM to avoid quote/backtick issues
+    var areaDiv = document.createElement('div');
+
+    // Header row
+    var headerRow = document.createElement('div');
+    headerRow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px';
+    var titleWrap = document.createElement('div');
+    var titleEl = document.createElement('h2');
+    titleEl.style.cssText = 'font-family:Rajdhani,sans-serif;font-size:22px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em';
+    titleEl.textContent = strategyName || 'Draft Strategi';
+    if(isWildcard) {
+      var wcBadge = document.createElement('span');
+      wcBadge.style.cssText = 'font-size:14px;background:rgba(155,89,182,.2);border:1px solid #8e44ad88;color:#9b59b6;padding:2px 8px;border-radius:3px;vertical-align:middle;letter-spacing:.05em;margin-left:8px';
+      wcBadge.textContent = '🎲 WILD CARD';
+      titleEl.appendChild(wcBadge);
+    }
+    if(chosenStyle.name !== 'standard') {
+      var styleBadge = document.createElement('span');
+      styleBadge.style.cssText = 'font-size:12px;background:rgba(200,155,60,.1);border:1px solid var(--gold-dim);color:var(--gold);padding:2px 8px;border-radius:3px;vertical-align:middle;letter-spacing:.04em;text-transform:uppercase;margin-left:8px';
+      styleBadge.textContent = chosenStyle.name;
+      titleEl.appendChild(styleBadge);
+    }
+    var subEl = document.createElement('div');
+    subEl.style.cssText = 'color:var(--text-dim);font-size:13px;margin-top:2px';
+    subEl.textContent = 'Spelare: ' + active.map(function(p){return p.name;}).join(', ');
+    titleWrap.appendChild(titleEl);
+    titleWrap.appendChild(subEl);
+    var histBtn = document.createElement('button');
+    histBtn.className = 'btn btn-ghost';
+    histBtn.textContent = 'Se historik →';
+    histBtn.onclick = function(){ showPage('history'); };
+    headerRow.appendChild(titleWrap);
+    headerRow.appendChild(histBtn);
+    areaDiv.appendChild(headerRow);
+
+    // Briefing
+    if(briefing) {
+      var briefDiv = document.createElement('div');
+      briefDiv.style.cssText = 'background:rgba(200,155,60,.08);border:1px solid var(--gold-dim);border-radius:6px;padding:18px 20px;margin-bottom:20px';
+      var briefTitle = document.createElement('div');
+      briefTitle.style.cssText = 'font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:10px';
+      briefTitle.textContent = 'Kaptensbriefing - las hogt for laget';
+      var briefText = document.createElement('div');
+      briefText.style.cssText = 'font-size:15px;line-height:1.8;color:var(--text)';
+      briefText.innerHTML = briefing.split('\n').join('<br>');
+      briefDiv.appendChild(briefTitle);
+      briefDiv.appendChild(briefText);
+      areaDiv.appendChild(briefDiv);
+    }
+
+    // Draft portraits
+    var portraitRow = document.createElement('div');
+    portraitRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px';
+    active.forEach(function(p) {
+      var heroName = currentDraft[p.name];
+      var h = heroName ? HERO_LIST.find(function(x){ return x.name===heroName; }) : null;
+      var img = h ? heroImg(h.id) : null;
+      var pWrap = document.createElement('div');
+      pWrap.style.cssText = 'text-align:center;width:72px';
+      var imgBox = document.createElement('div');
+      imgBox.style.cssText = 'width:72px;height:40px;border-radius:4px;overflow:hidden;background:var(--surface2);border:1px solid var(--border)';
+      if(img) {
+        var imgEl = document.createElement('img');
+        imgEl.src = img;
+        imgEl.style.cssText = 'width:100%;height:100%;object-fit:cover;object-position:center top';
+        imgBox.appendChild(imgEl);
+      } else {
+        var fallback = document.createElement('div');
+        fallback.style.cssText = 'display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:18px';
+        fallback.textContent = h ? ATTR_ICONS[h.attr] : '?';
+        imgBox.appendChild(fallback);
+      }
+      var heroNameEl = document.createElement('div');
+      heroNameEl.style.cssText = 'font-size:10px;color:var(--gold);font-weight:600;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+      heroNameEl.textContent = heroName || '?';
+      var playerNameEl = document.createElement('div');
+      playerNameEl.style.cssText = 'font-size:9px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+      playerNameEl.textContent = p.name;
+      pWrap.appendChild(imgBox);
+      pWrap.appendChild(heroNameEl);
+      pWrap.appendChild(playerNameEl);
+      portraitRow.appendChild(pWrap);
+    });
+    areaDiv.appendChild(portraitRow);
+
+    // Strategy text
+    var stratDiv = document.createElement('div');
+    stratDiv.className = 'strategy-raw';
+    stratDiv.innerHTML = mdToHtml(cleanText);
+    areaDiv.appendChild(stratDiv);
+
+    area.innerHTML = '';
+    area.appendChild(areaDiv);
   } catch(err){
-    area.innerHTML=`<div class="strategy-placeholder"><div class="icon">⚠️</div><p>Fel: ${err.message}</p></div>`;
+    area.innerHTML='<div class="strategy-placeholder"><div class="icon">&#9888;</div><p>Fel: '+err.message+'</p></div>';
   }
 }
 
