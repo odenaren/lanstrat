@@ -1094,6 +1094,98 @@ async function replaceAllBanned() {
 }
 
 
+// ===================== ENEMY PICKER =====================
+function renderEnemyPicker() {
+  var selEl = document.getElementById('selected-enemies');
+  if(!selEl) return;
+  selEl.innerHTML = '';
+  currentEnemies.forEach(function(name) {
+    var tag = document.createElement('div');
+    tag.className = 'enemy-tag';
+    tag.innerHTML = name + ' <button onclick="removeEnemy(\'' + name.replace(/'/g,"\\'") + '\')">x</button>';
+    selEl.appendChild(tag);
+  });
+  var grid = document.getElementById('enemy-picker-grid');
+  if(!grid) return;
+  grid.innerHTML = '';
+  HERO_LIST.forEach(function(h) {
+    if(currentEnemies.has(h.name)) return;
+    var c = document.createElement('div');
+    c.className = 'hero-card';
+    c.style.cursor = 'pointer';
+    var img = heroImg(h.id);
+    if(img) {
+      c.innerHTML = '<img src="'+img+'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top" loading="lazy"><div class="hero-name">'+h.name+'</div>';
+    } else {
+      c.innerHTML = '<div class="hero-bg">'+ATTR_ICONS[h.attr]+'</div><div class="hero-name">'+h.name+'</div>';
+    }
+    c.onclick = (function(hn){ return function(){ addEnemy(hn); }; })(h.name);
+    grid.appendChild(c);
+  });
+  var btn = document.getElementById('get-items-btn');
+  if(btn) {
+    btn.disabled = currentEnemies.size === 0;
+    btn.textContent = currentEnemies.size > 0 ? 'Hamta itemtips mot '+currentEnemies.size+' hjaltar' : 'Valj motstandarhjaltar';
+  }
+}
+
+async function addEnemy(name) {
+  currentEnemies.add(name);
+  await apiFetch('/matches/'+currentMatchId+'/enemies', {method:'PUT', body:JSON.stringify({enemies:[...currentEnemies]})});
+  renderEnemyPicker();
+}
+async function removeEnemy(name) {
+  currentEnemies.delete(name);
+  await apiFetch('/matches/'+currentMatchId+'/enemies', {method:'PUT', body:JSON.stringify({enemies:[...currentEnemies]})});
+  renderEnemyPicker();
+}
+
+async function generateItems() {
+  var m = await apiFetch('/matches/'+currentMatchId);
+  var enemyList = [...currentEnemies].join(', ');
+  var prompt = 'Du ar en Dota 2 item-expert. Vi har precis genererat en draft-strategi och ska nu mota dessa motstandare.\n\nVAR DRAFT-STRATEGI:\n'+(m.currentStrategy||m.strategy||'')+'\n\nMOTSTANDARRNA SPELAR:\n'+enemyList+'\n\nGe konkreta itemtips per spelare i vart lag. Fokusera pa 3-5 nyckelitems per spelare som ar extra viktiga MOT just dessa motstandare.\n\nAnvand svenska. Var specifik.';
+  var btn = document.getElementById('get-items-btn');
+  if(btn) { btn.disabled = true; btn.textContent = 'Hamtar itemtips...'; }
+  try {
+    var resp = await fetch('/api/items', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({prompt:prompt})});
+    var data = await resp.json();
+    if(data.error) throw new Error(data.error);
+    await apiFetch('/matches/'+currentMatchId+'/items', {method:'PUT', body:JSON.stringify({items:data.text})});
+    renderItems(data.text);
+    document.getElementById('items-card').style.display = 'block';
+    if(btn) { btn.textContent = 'Uppdatera itemtips'; btn.disabled = false; }
+  } catch(err) {
+    if(btn) { btn.textContent = 'Fel - forsok igen'; btn.disabled = false; }
+    alert('Fel: '+err.message);
+  }
+}
+
+function renderItems(text) {
+  var el = document.getElementById('items-output');
+  if(el) el.innerHTML = '<div class="strategy-raw">'+mdToHtml(text)+'</div>';
+}
+
+// ===================== HISTORY ACTIONS =====================
+async function setMatchResult(id, result) {
+  await apiFetch('/matches/'+id+'/result', {method:'PUT', body:JSON.stringify({result:result})});
+  loadHistory();
+  if(currentMatchId === id) openDetail(id);
+}
+
+async function deleteMatch(e, id) {
+  e.stopPropagation();
+  if(!confirm('Ta bort denna match?')) return;
+  await apiFetch('/matches/'+id, {method:'DELETE'});
+  loadHistory();
+}
+
+async function toggleMemory(e, id, exclude) {
+  e.stopPropagation();
+  await apiFetch('/matches/'+id+'/memory', {method:'PUT', body:JSON.stringify({excludeFromMemory:exclude})});
+  loadHistory();
+}
+
+
 // ===================== URL PARAMS =====================
 function checkUrlParams() {
   const params = new URLSearchParams(window.location.search);
@@ -1148,7 +1240,13 @@ async function clearAllMemory() {
 
 // ===================== DETAIL PAGE =====================
 async function openDetail(id) {
-  var m = await apiFetch('/matches/'+id);
+  var m;
+  try {
+    m = await apiFetch('/matches/'+id);
+  } catch(err) {
+    alert('Fel vid laddning av match: ' + err.message);
+    return;
+  }
   currentMatchId = id;
   currentMatchData = m;
   currentBanned = new Set(m.banned||[]);
