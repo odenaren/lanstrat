@@ -1094,7 +1094,29 @@ async function replaceAllBanned() {
 }
 
 
+function mdToHtml(md) {
+  if(!md) return '';
+  return md
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+    .replace(/\n\n/g, '<br><br>')
+    .replace(/\n/g, '<br>');
+}
 
+// INIT
+ensureDefaultPlayers().then(function(){ checkUrlParams(); });
+
+document.getElementById('modal-overlay').addEventListener('click', function(e){
+  if(e.target===document.getElementById('modal-overlay')) closeModal();
+});
+document.getElementById('lan-modal-overlay').addEventListener('click', function(e){
+  if(e.target===document.getElementById('lan-modal-overlay')) closeLanModal();
+});
+document.addEventListener('keydown', function(e){
+  if((e.ctrlKey||e.metaKey)&&e.key==='s'){ e.preventDefault(); if(currentPlayer!==null) savePool(); }
+});
 </script>
 </body>
 </html>
