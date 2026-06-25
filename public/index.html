@@ -1094,6 +1094,167 @@ async function replaceAllBanned() {
 }
 
 
+// ===================== URL PARAMS =====================
+function checkUrlParams() {
+  const params = new URLSearchParams(window.location.search);
+  const pi = params.get('player');
+  if(pi !== null && players[parseInt(pi)]) {
+    openPicker(parseInt(pi));
+  }
+}
+
+// ===================== LAN MODAL =====================
+function openLanModal() {
+  document.getElementById('lan-clear-history').checked = false;
+  document.getElementById('lan-clear-memory').checked = false;
+  document.getElementById('lan-confirm-input').value = '';
+  var btn = document.getElementById('lan-confirm-btn');
+  btn.disabled = true;
+  btn.style.cssText = 'padding:8px 20px;background:#555;border:none;color:#888;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:not-allowed;border-radius:3px';
+  document.getElementById('lan-modal-overlay').classList.add('open');
+}
+function closeLanModal() {
+  document.getElementById('lan-modal-overlay').classList.remove('open');
+}
+function checkLanConfirm() {
+  var val = document.getElementById('lan-confirm-input').value.trim().toUpperCase();
+  var anyChecked = document.getElementById('lan-clear-history').checked || document.getElementById('lan-clear-memory').checked;
+  var ok = val === 'STARTA' && anyChecked;
+  var btn = document.getElementById('lan-confirm-btn');
+  btn.disabled = !ok;
+  btn.style.cssText = ok
+    ? 'padding:8px 20px;background:var(--gold);border:none;color:#0a0b0d;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px'
+    : 'padding:8px 20px;background:#555;border:none;color:#888;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:not-allowed;border-radius:3px';
+}
+async function executeLanReset() {
+  var clearHistory = document.getElementById('lan-clear-history').checked;
+  var clearMemory = document.getElementById('lan-clear-memory').checked;
+  closeLanModal();
+  if(clearHistory) {
+    await apiFetch('/matches', {method:'DELETE'});
+  }
+  if(clearMemory && !clearHistory) {
+    var matches = await apiFetch('/matches');
+    await Promise.all(matches.map(function(m){ return apiFetch('/matches/'+m.id+'/memory', {method:'PUT', body:JSON.stringify({excludeFromMemory:true})}); }));
+  }
+  loadHistory();
+}
+async function clearAllMemory() {
+  if(!confirm('Rensa minnet?')) return;
+  var matches = await apiFetch('/matches');
+  await Promise.all(matches.map(function(m){ return apiFetch('/matches/'+m.id+'/memory', {method:'PUT', body:JSON.stringify({excludeFromMemory:true})}); }));
+  loadHistory();
+}
+
+// ===================== DETAIL PAGE =====================
+async function openDetail(id) {
+  var m = await apiFetch('/matches/'+id);
+  currentMatchId = id;
+  currentMatchData = m;
+  currentBanned = new Set(m.banned||[]);
+  currentEnemies = new Set(m.enemies||[]);
+  var date = new Date(m.createdAt).toLocaleString('sv-SE',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  document.getElementById('detail-title').textContent = m.name||(m.players||[]).map(function(p){return p.name;}).join(' / ');
+  document.getElementById('detail-date').textContent = date;
+
+  // Result buttons
+  var resultEl = document.getElementById('match-result-btns');
+  if(resultEl) {
+    resultEl.innerHTML = '';
+    var winBtn = document.createElement('button');
+    winBtn.style.cssText = 'padding:7px 18px;border-radius:4px;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;border:1px solid #27ae6055;background:'+(m.result==='win'?'rgba(39,174,96,.3)':'none')+';color:'+(m.result==='win'?'#2ecc71':'#27ae60');
+    winBtn.textContent = 'Vinst';
+    winBtn.onclick = (function(mid){ return function(){ setMatchResult(mid,'win'); }; })(id);
+    var lossBtn = document.createElement('button');
+    lossBtn.style.cssText = 'padding:7px 18px;border-radius:4px;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;border:1px solid #c0392b55;background:'+(m.result==='loss'?'rgba(231,76,60,.2)':'none')+';color:'+(m.result==='loss'?'#e74c3c':'#c0392b');
+    lossBtn.textContent = 'Forlust';
+    lossBtn.onclick = (function(mid){ return function(){ setMatchResult(mid,'loss'); }; })(id);
+    resultEl.appendChild(winBtn);
+    resultEl.appendChild(lossBtn);
+    if(m.result) {
+      var clearBtn = document.createElement('button');
+      clearBtn.style.cssText = 'padding:7px 12px;border-radius:4px;font-family:Rajdhani,sans-serif;font-size:13px;cursor:pointer;border:1px solid var(--border);background:none;color:var(--text-dim)';
+      clearBtn.textContent = 'Rensa';
+      clearBtn.onclick = (function(mid){ return function(){ setMatchResult(mid,null); }; })(id);
+      resultEl.appendChild(clearBtn);
+    }
+  }
+
+  // Notes and briefing html
+  var notesHtml = m.captainNotes ? '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:12px 14px;margin-bottom:16px"><div style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-dim);margin-bottom:5px">Kaptenens instruktioner</div><div style="font-size:13px;color:var(--text)">'+m.captainNotes+'</div></div>' : '';
+  var briefingHtml = m.briefing ? '<div style="background:rgba(200,155,60,.08);border:1px solid var(--gold-dim);border-radius:6px;padding:18px 20px;margin-bottom:20px"><div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;color:var(--gold);margin-bottom:10px">Kaptensbriefing</div><div style="font-size:15px;line-height:1.8;color:var(--text)">'+m.briefing.split('\n').join('<br>')+'</div></div>' : '';
+
+  // Build draft portraits
+  var draftContainer = document.createElement('div');
+  draftContainer.style.cssText = 'margin-bottom:20px';
+  var draftLabel = document.createElement('div');
+  draftLabel.style.cssText = 'font-family:Rajdhani,sans-serif;font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px';
+  draftLabel.textContent = 'Klicka hjalte for att markera som bannlyst';
+  var draftRow = document.createElement('div');
+  draftRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px';
+  draftContainer.appendChild(draftLabel);
+  draftContainer.appendChild(draftRow);
+  (m.players||[]).forEach(function(p) {
+    var heroName = (m.currentDraft||m.draft||{})[p.name] || '';
+    var h = heroName ? HERO_LIST.find(function(x){ return x.name===heroName; }) : null;
+    var img = h ? heroImg(h.id) : null;
+    var banned = currentBanned.has(heroName);
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'text-align:center;width:80px';
+    var imgBox = document.createElement('div');
+    imgBox.style.cssText = 'width:80px;height:45px;border-radius:4px;overflow:hidden;background:var(--surface2);border:2px solid '+(banned?'#e74c3c':'var(--border)')+';cursor:pointer;position:relative';
+    imgBox.setAttribute('data-hero', heroName);
+    imgBox.onclick = (function(hn){ return function(){ toggleBan(hn); }; })(heroName);
+    if(img) {
+      var imgEl = document.createElement('img');
+      imgEl.src = img;
+      imgEl.style.cssText = 'width:100%;height:100%;object-fit:cover;object-position:center top'+(banned?';filter:grayscale(1) brightness(0.4)':'');
+      imgBox.appendChild(imgEl);
+    }
+    if(banned) {
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px';
+      overlay.textContent = 'X';
+      imgBox.appendChild(overlay);
+    }
+    var nameEl = document.createElement('div');
+    nameEl.style.cssText = 'font-size:10px;color:'+(banned?'#e74c3c':'var(--gold)')+';font-weight:600;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    nameEl.textContent = heroName||'?';
+    var playerEl = document.createElement('div');
+    playerEl.style.cssText = 'font-size:9px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    playerEl.textContent = p.name;
+    wrap.appendChild(imgBox);
+    wrap.appendChild(nameEl);
+    wrap.appendChild(playerEl);
+    draftRow.appendChild(wrap);
+  });
+  var bannedInDraft = (m.players||[]).filter(function(p){
+    var hn = (m.currentDraft||m.draft||{})[p.name];
+    return hn && currentBanned.has(hn);
+  });
+  if(bannedInDraft.length > 0) {
+    var replaceAllBtn = document.createElement('button');
+    replaceAllBtn.style.cssText = 'margin-top:10px;padding:8px 16px;background:rgba(231,76,60,.15);border:1px solid #e74c3c88;color:#e74c3c;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;cursor:pointer;border-radius:4px;width:100%';
+    replaceAllBtn.textContent = 'Ersatt '+bannedInDraft.length+' bannlyst'+(bannedInDraft.length>1?'a hjaltar':' hjalte');
+    replaceAllBtn.onclick = function(){ replaceAllBanned(); };
+    draftContainer.appendChild(replaceAllBtn);
+  }
+
+  var detailEl = document.getElementById('detail-strategy');
+  detailEl.innerHTML = notesHtml+briefingHtml+mdToHtml(m.currentStrategy||m.strategy||'');
+  detailEl.insertBefore(draftContainer, detailEl.firstChild);
+
+  renderEnemyPicker();
+  if(m.items) {
+    renderItems(m.items);
+    document.getElementById('items-card').style.display='block';
+  } else {
+    document.getElementById('items-card').style.display='none';
+  }
+  document.querySelectorAll('.page').forEach(function(pg){ pg.classList.remove('active'); });
+  document.getElementById('page-detail').classList.add('active');
+}
+
 function mdToHtml(md) {
   if(!md) return '';
   return md
