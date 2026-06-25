@@ -282,6 +282,38 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
   </div>
 </div>
 
+<!-- LAN START MODAL -->
+<div id="lan-modal-overlay" class="modal-overlay">
+  <div class="modal" style="width:440px">
+    <h3>Infor lanet</h3>
+    <p style="color:var(--text-dim);font-size:13px;margin-bottom:20px;line-height:1.6">Valj vad du vill nullstalla. Spelarpooler paverkas aldrig.</p>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">
+      <label style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer">
+        <input type="checkbox" id="lan-clear-history" style="width:16px;height:16px;accent-color:var(--gold)">
+        <div>
+          <div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Rensa matchhistorik</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-top:2px">Alla sparade matcher tas bort permanent</div>
+        </div>
+      </label>
+      <label style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer">
+        <input type="checkbox" id="lan-clear-memory" style="width:16px;height:16px;accent-color:var(--gold)">
+        <div>
+          <div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Rensa hjalttminne</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-top:2px">AI slutar undvika nyligen spelade hjaltar</div>
+        </div>
+      </label>
+    </div>
+    <div style="margin-bottom:16px">
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Bekrafta genom att skriva STARTA</div>
+      <input id="lan-confirm-input" class="modal-input" placeholder="STARTA" style="margin-bottom:0" oninput="checkLanConfirm()">
+    </div>
+    <div class="modal-btns">
+      <button class="modal-cancel" onclick="closeLanModal()">Avbryt</button>
+      <button id="lan-confirm-btn" onclick="executeLanReset()" disabled style="padding:8px 20px;background:#555;border:none;color:#888;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:not-allowed;border-radius:3px">Kor igang</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ===================== HERO DATA =====================
 const HEROES = [
@@ -1072,7 +1104,8 @@ async function replaceAllBanned() {
     // Update currentDraft with new heroes if we can parse them
     // Simple pattern: look for "SPELARNNAMN: HJALTNAMN" in response
     bannedPlayers.forEach(function(bp) {
-      var regex = new RegExp(bp.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'[^\n]*?:\s*([A-Za-z\'\- ]+)', 'i');
+      var escaped = bp.name.replace(/[.*+?^${}()|\[\]\\]/g,'\\$&');
+      var regex = new RegExp(escaped+'[^\\n]*?:\\s*([A-Za-z\\- ]+)', 'i');
       var match = data.text.match(regex);
       if(match) {
         var newHero = match[1].trim().replace(/\*+/g,'').split(' - ')[0].split('(')[0].trim();
