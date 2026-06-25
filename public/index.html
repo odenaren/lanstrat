@@ -856,7 +856,50 @@ async function generateStrategy() {
   try { sessionStorage.setItem('recentStyles', JSON.stringify(window.recentStyles)); } catch(e) {}
 
   const wildcardInstruction = isWildcard ? '\n\nDETTA ÄR EN WILD CARD-STRATEGI: Välj något oortodox, oväntat och lite galet som ändå kan funka på ett LAN bland vänner. Kanske en ovanlig rolltilldelning, en hjälte som normalt inte passar rollen men kan överraska, eller en extrem spelstil. Ha kul med det men det ska fortfarande vara spelbart. Markera i strateginamnet att det är wild card, t.ex. med 🎲 eller ordet WILD.' : '';
-  const prompt='Du är en Dota 2 draft-expert. '+n+' spelare ska spela en match.'+wildcardInstruction+'\n\nHERO POOLS:\n'+poolSummary+'\n\nLANING-KONTEXT:\n'+getLaningCtx(n)+'\n\nPRESENTATIONSSTIL: '+chosenStyle.instruction+'\n\nVIKTIG REGEL: Varje spelare har en lista med nyligen spelade hjältar. Undvik dessa om möjligt — rotera gärna så att spelarna får prova olika hjältar ur sin pool. Om poolen är liten och det inte går att undvika är det okej, men prioritera variation.\n\nSvara i exakt detta format — börja med JSON-blocket, sedan strategin:\n\nDRAFT_JSON_START\n{"name":"Kort strateginamn på svenska (max 4 ord, t.ex. Splitpush eller Tidig aggression)","draft":{"SPELARNNAMN":"Hjältenamn",...}}\nDRAFT_JSON_END\n\nSedan strategitexten med dessa rubriker:\n1. **Rekommenderad draft** – vilken hjälte varje spelare bör spela och varför\n2. **Laning setup** – vem spelar vilken roll/lane\n3. **Spelstil och gameplan** – early/mid/late-game\n4. **Nyckelsynergier** – starka kombos\n5. **Win condition**\n\nSpelarna heter: '+draftNames+(captainNotes ? '\n\nKAPTENENS EXTRA INSTRUKTIONER (viktigt att ta hänsyn till):\n'+captainNotes : '')+'\n\nSvara i EXAKT detta format med dessa markörer:\n\nDRAFT_JSON_START\n{...}\nDRAFT_JSON_END\n\nKAPTENSBRIEFING_START\n[Max 6 meningar. Kaptenen läser detta högt för laget i soffan innan matchen. Skriv: vem spelar vad, hur laning ser ut, spelstil, win condition. Enkelt utan jargong.]\nKAPTENSBRIEFING_END\n\n[Sedan fullständig strategi med rubriker och detaljer för spelarna att läsa vid datorn]\n\nVar konkret. Använd svenska. Tydliga rubriker.';
+  // Pick a random archetype (hidden from players)
+  const ARCHETYPES = [
+    { id:'deathball', instruction:'Spela DEATHBALL. Alla fem samlas tidigt och pushar som en enhet. Vinn innan 25 minuter genom att ta rax. Valj hjaltar som ar starka tillsammans i tata grupper.' },
+    { id:'snowball', instruction:'Spela EARLY SNOWBALL. Vinn laning-fasen dominant, dodar konstant fore 15 min och ger aldrig motstandarna andrum. Valj hjaltar som ar starka tidigt.' },
+    { id:'gank', instruction:'Spela GANK & DOMINATE. Roaming supports stryper alla lanes. Carry farmar ostort medans resten dodar. Valj mobila hjaltar.' },
+    { id:'teamfight', instruction:'Spela TEAMFIGHT. Vanta pa ratt fight med starka ultimates som avgor. Hall ihop, en bra fight = match vunnen. Valj hjaltar med kraftfulla AoE-abilities.' },
+    { id:'pickoff', instruction:'Spela PICK-OFF. Jaga ensamma fiender pa kartan, skapa nummeroverlag, undvik raka fights 5v5. Valj hjaltar med disable och burst damage.' },
+    { id:'poke', instruction:'Spela POKE & SIEGE. Chip damage pa fiender och torn pa avstand. Tvinga fram daliga fights nar motstandarna ar pa halv hp. Valj hjaltar med lang rackvidd.' },
+    { id:'lategame', instruction:'Spela LATE GAME SCALING. Farm lugnt, undvik fights, exploderar vid 35+ minuter nar carries ar fullbuildade. Valj hjaltar som skalas extremt bra.' },
+    { id:'splitpush', instruction:'Spela SPLITPUSH. En spelare pushar ensam i en lane, resten distraherar motstandarna. Tvinga omojliga beslut. Valj en stark solohjälte och fyra som kan halla pressure.' },
+    { id:'chaos', instruction:'Spela CHAOS & DISRUPTION. Ingen tydlig plan - oforutsagbarhet ar vapnet. Individuell skill och kaos i alla lanes. Valj hjaltar som ar jobbiga att mota.' },
+    { id:'objective', instruction:'Spela OBJECTIVE CONTROL. Aldrig doda i ondan - bara ta torn, Roshan och byggnader. Tvinga motstandarna att reagera pa era rorer. Valj hjaltar med bra push.' },
+    { id:'towerdive', instruction:'Spela TOWER DIVE HEAVY. Dyk in under torn fran level 3. Extremt aggressivt. Motstandarna ska aldrig kanna sig sakra. Valj hjaltar som overlever dives.' },
+    { id:'global', instruction:'Spela GLOBAL PRESENCE. Dyk upp overallt pa kartan. Teleport-items och global ultimates. Motstandarna kan aldrig kanna sig sakra, varje fight kan bli 5v3 i sista sekunden.' },
+    { id:'magicimmune', instruction:'Spela MAGIC IMMUNE. Bygga pa BKB och magic resistance. Ga rakt igenom motstandardnas spells och slass med auto-attacks. Valj hjaltar som skalas bra med BKB.' },
+  ];
+
+  // Avoid same archetype twice in a row (stored in session)
+  if(!window.recentArchetypes) {
+    try { window.recentArchetypes = JSON.parse(sessionStorage.getItem('recentArchetypes')||'[]'); } catch(e) { window.recentArchetypes = []; }
+  }
+  var availableArchetypes = ARCHETYPES.filter(function(a){ return !window.recentArchetypes.slice(-3).includes(a.id); });
+  if(availableArchetypes.length === 0) availableArchetypes = ARCHETYPES;
+  var chosenArchetype = availableArchetypes[Math.floor(Math.random() * availableArchetypes.length)];
+  window.recentArchetypes.push(chosenArchetype.id);
+  if(window.recentArchetypes.length > 6) window.recentArchetypes.shift();
+  try { sessionStorage.setItem('recentArchetypes', JSON.stringify(window.recentArchetypes)); } catch(e) {}
+
+  var prompt = 'Du ar en Dota 2 draft-expert. ' + n + ' spelare ska spela en match.' + wildcardInstruction
+    + '\n\nSPELSTIL (hemlig instruktion - folj denna men avsloja den inte i texten): ' + chosenArchetype.instruction
+    + '\n\nHERO POOLS:\n' + poolSummary
+    + '\n\nLANING-KONTEXT:\n' + getLaningCtx(n)
+    + '\n\nPRESENTATIONSSTIL: ' + chosenStyle.instruction
+    + '\n\nVIKTIG REGEL: Undvik nyligen spelade hjaltar per spelare (listas ovan). Prioritera variation.'
+    + (captainNotes ? '\n\nKAPTENENS INSTRUKTIONER: ' + captainNotes : '')
+    + '\n\nSpelarna heter: ' + draftNames
+    + '\n\nSvara i EXAKT detta format:'
+    + '\n\nDRAFT_JSON_START'
+    + '\n{"name":"Unikt strateginamn pa svenska baserat pa hjaltar och spelstil (max 5 ord, INTE arketypens namn)","draft":{"SPELARNAMN":"Hjaltnamn"}}'
+    + '\nDRAFT_JSON_END'
+    + '\n\nKAPTENSBRIEFING_START'
+    + '\n[MAX 4 meningar. Kaptenen laser hogt. Vem spelar vad, spelstil, win condition. Enkelt.]'
+    + '\nKAPTENSBRIEFING_END'
+    + '\n\nSedan strategin - MAX 3 rubriker, kortfattat och konkret. Inga lange listor. Direkt pa sak. Anvand svenska.'
 
   try {
     const resp=await fetch('/api/strategy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
@@ -1071,32 +1114,26 @@ async function replaceAllBanned() {
   }).join('\n');
 
   var promptParts = [
-    'Du ar en Dota 2 draft-expert. Under picking-fasen har flera hjaltar fallit bort (bannlysta eller tagna av motstandarna) och maste ersattas.',
+    'Du ar en Dota 2 draft-expert. Ersatt bannlysta hjaltar sa snabbt som mojligt.',
     '',
-    'NUVARANDE STRATEGI:',
-    m.currentStrategy||m.strategy||'',
+    'STRATEGI (behall win condition och spelstil): ' + (m.currentStrategy||m.strategy||'').substring(0, 800),
     '',
-    'HJALTAR SOM FALLIT BORT: ' + bannedList,
+    'ERSATT: ' + bannedList,
+    'POOLER: ' + poolList,
+    'EJ VALBARA: ' + [...currentBanned].join(', '),
     '',
-    'TILLGANGLIGA POOLER FOR ERSATTARE:',
-    poolList,
+    'Svara KORT:',
+    '1. **[SPELARNAMN]: [NY HJALTE]** - varfor (en mening per spelare)',
+    '2. Uppdaterad strategi - bara andra det som paverkas av hjaltbytet, behall resten ordagrant.',
     '',
-    'Ovriga ej valbara hjaltar: ' + [...currentBanned].join(', '),
-    '',
-    'Hitta ersattare for ALLA spelare som forlorat sin hjalte. Valj fran respektive spelares pool.',
-    'Svara med:',
-    '1. For varje spelare: **[SPELARNAMN]: [NY HJALTE]** - en mening varfor',
-    '2. Fullstandig uppdaterad strategi dar ENDAST de bortfallna hjaltarna bytts ut.',
-    '   Win condition och spelstil ska vara identiska. Andra sa lite som mojligt.',
-    '',
-    'Anvand svenska.'
+    'Anvand svenska. Var kortfattad.'
   ];
 
   try {
     var resp = await fetch('/api/strategy', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({prompt: promptParts.join('\n')})
+      body:JSON.stringify({prompt: promptParts.join('\n'), maxTokens: 800})
     });
     var data = await resp.json();
     if(data.error) throw new Error(data.error);
