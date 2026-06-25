@@ -222,6 +222,7 @@ app.put('/api/matches/:id/strategy', async (req, res) => {
     const match = matches.find(m => m.id === req.params.id);
     if(!match) return res.status(404).json({ error: 'Not found' });
     match.currentStrategy = req.body.strategy;
+    if(req.body.draft) match.currentDraft = req.body.draft;
     await writeMatches(matches);
     res.json(match);
   } catch(e) { res.status(500).json({ error: e.message }); }
