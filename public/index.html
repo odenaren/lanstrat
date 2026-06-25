@@ -950,28 +950,9 @@ async function replaceHero(playerName, bannedHero) {
   }).filter(Boolean);
   var availablePool = poolNames.filter(function(h){ return !currentBanned.has(h); });
   var area = document.getElementById('detail-strategy');
-  area.innerHTML = '<div style="padding:20px;color:var(--text-dim)">Hittar ersättare för '+bannedHero+'...</div>';
-  var prompt = 'Du är en Dota 2 draft-expert. Under picking-fasen har en hjälte blivit bannlyst och måste ersättas. Ändra strategin så lite som möjligt — win condition och spelstil ska vara identiska.
-
-'
-    + 'ORIGINAL STRATEGI:
-' + (m.currentStrategy||m.strategy||'') + '
-
-'
-    + 'BANNLYST: ' + bannedHero + ' (spelades av ' + playerName + ')
-
-'
-    + 'TILLGÄNGLIG POOL FÖR ' + playerName + ': ' + (availablePool.join(', ')||'Tom pool — välj bästa möjliga alternativ') + '
-
-'
-    + 'Övriga bannlysta: ' + [...currentBanned].filter(function(h){ return h !== bannedHero; }).join(', ') + '
-
-'
-    + 'Svara med:
-1. **Ersättare: [HJÄLTNAMN]** — en mening varför
-2. Fullständig uppdaterad strategi där ENDAST ' + bannedHero + ' bytts ut. Behåll allt annat identiskt.
-
-Använd svenska.';
+  area.innerHTML = '<div style="padding:20px;color:var(--text-dim)">Hittar ersättare för ' + bannedHero + '...</div>';
+  var promptParts = ['Du ar en Dota 2 draft-expert. Under picking-fasen har en hjalte blivit bannlyst och maste ersattas. Andra strategin sa lite som mojligt.','','ORIGINAL STRATEGI:',m.currentStrategy||m.strategy||'','','BANNLYST: '+bannedHero+' (spelades av '+playerName+')','','TILLGANGLIG POOL FOR '+playerName+': '+(availablePool.join(', ')||'Tom pool'),'','Ovriga bannlysta: '+[...currentBanned].filter(function(h){ return h !== bannedHero; }).join(', '),'','Svara med:','1. Ersattare: [HJALTNAMN] - en mening varfor','2. Fullstandig uppdaterad strategi dar ENDAST '+bannedHero+' bytts ut. Behall allt annat identiskt.','','Anvand svenska.'];
+  var prompt = promptParts.join('\n');
   try {
     var resp = await fetch('/api/strategy', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({prompt:prompt})});
     var data = await resp.json();
@@ -1035,30 +1016,62 @@ async function openDetail(id) {
   const notesHtml = m.captainNotes ? `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:12px 14px;margin-bottom:16px"><div style="font-family:Rajdhani,sans-serif;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--text-dim);margin-bottom:5px">📋 Kaptenens instruktioner</div><div style="font-size:13px;color:var(--text);line-height:1.6">${m.captainNotes}</div></div>` : '';
   const briefingHtml = m.briefing ? `<div style="background:rgba(200,155,60,.08);border:1px solid var(--gold-dim);border-radius:6px;padding:18px 20px;margin-bottom:20px"><div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:10px">⚔️ Kaptensbriefing — läs högt för laget</div><div style="font-size:15px;line-height:1.8;color:var(--text)">${m.briefing.replace(/\n/g,'<br>')}</div></div>` : '';
 
-  // Build draft portraits with ban toggles - NO nested backticks
-  var draftHtml = '<div style="margin-bottom:20px">';
-  draftHtml += '<div style="font-family:Rajdhani,sans-serif;font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Klicka hjälte för att markera som bannlyst</div>';
-  draftHtml += '<div style="display:flex;flex-wrap:wrap;gap:10px">';
+  // Build draft portraits using DOM elements to avoid quote escaping
+  var draftContainer = document.createElement('div');
+  draftContainer.style.cssText = 'margin-bottom:20px';
+  var draftLabel = document.createElement('div');
+  draftLabel.style.cssText = 'font-family:Rajdhani,sans-serif;font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px';
+  draftLabel.textContent = 'Klicka hjalte for att markera som bannlyst';
+  var draftRow = document.createElement('div');
+  draftRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px';
+  draftContainer.appendChild(draftLabel);
+  draftContainer.appendChild(draftRow);
   (m.players||[]).forEach(function(p) {
     var heroName = (m.draft||{})[p.name] || '';
     var h = heroName ? HERO_LIST.find(function(x){ return x.name===heroName; }) : null;
     var img = h ? heroImg(h.id) : null;
     var banned = currentBanned.has(heroName);
-    var borderColor = banned ? '#e74c3c' : 'var(--border)';
-    var nameColor = banned ? '#e74c3c' : 'var(--gold)';
-    var imgFilter = banned ? 'width:100%;height:100%;object-fit:cover;object-position:center top;filter:grayscale(1) brightness(0.4)' : 'width:100%;height:100%;object-fit:cover;object-position:center top';
-    var imgHtml = img ? '<img src="'+img+'" style="'+imgFilter+'">' : '';
-    var banOverlay = banned ? '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px">🚫</div>' : '';
-    var replaceBtn = banned ? '<button onclick="replaceHero(''+p.name+'',''+heroName+'')" style="margin-top:4px;width:100%;padding:3px;background:rgba(231,76,60,.15);border:1px solid #e74c3c88;color:#e74c3c;font-family:Rajdhani,sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;cursor:pointer;border-radius:3px">Ersätt</button>' : '';
-    draftHtml += '<div style="text-align:center;width:80px">';
-    draftHtml += '<div onclick="toggleBan(''+heroName+'')" style="width:80px;height:45px;border-radius:4px;overflow:hidden;background:var(--surface2);border:2px solid '+borderColor+';cursor:pointer;position:relative">';
-    draftHtml += imgHtml + banOverlay + '</div>';
-    draftHtml += '<div style="font-size:10px;color:'+nameColor+';font-weight:600;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(heroName||'?')+'</div>';
-    draftHtml += '<div style="font-size:9px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+p.name+'</div>';
-    draftHtml += replaceBtn + '</div>';
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'text-align:center;width:80px';
+    var imgBox = document.createElement('div');
+    imgBox.style.cssText = 'width:80px;height:45px;border-radius:4px;overflow:hidden;background:var(--surface2);border:2px solid '+(banned?'#e74c3c':'var(--border)')+';cursor:pointer;position:relative';
+    imgBox.setAttribute('data-hero', heroName);
+    imgBox.onclick = function(){ toggleBan(this.getAttribute('data-hero')); };
+    if(img) {
+      var imgEl = document.createElement('img');
+      imgEl.src = img;
+      imgEl.style.cssText = 'width:100%;height:100%;object-fit:cover;object-position:center top'+(banned?';filter:grayscale(1) brightness(0.4)':'');
+      imgBox.appendChild(imgEl);
+    }
+    if(banned) {
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px';
+      overlay.textContent = '🚫';
+      imgBox.appendChild(overlay);
+    }
+    var nameEl = document.createElement('div');
+    nameEl.style.cssText = 'font-size:10px;color:'+(banned?'#e74c3c':'var(--gold)')+';font-weight:600;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    nameEl.textContent = heroName||'?';
+    var playerEl = document.createElement('div');
+    playerEl.style.cssText = 'font-size:9px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    playerEl.textContent = p.name;
+    wrap.appendChild(imgBox);
+    wrap.appendChild(nameEl);
+    wrap.appendChild(playerEl);
+    if(banned) {
+      var btn = document.createElement('button');
+      btn.style.cssText = 'margin-top:4px;width:100%;padding:3px;background:rgba(231,76,60,.15);border:1px solid #e74c3c88;color:#e74c3c;font-family:Rajdhani,sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;cursor:pointer;border-radius:3px';
+      btn.textContent = 'Ersatt';
+      btn.setAttribute('data-player', p.name);
+      btn.setAttribute('data-hero', heroName);
+      btn.onclick = function(){ replaceHero(this.getAttribute('data-player'), this.getAttribute('data-hero')); };
+      wrap.appendChild(btn);
+    }
+    draftRow.appendChild(wrap);
   });
-  draftHtml += '</div></div>';
-  document.getElementById('detail-strategy').innerHTML=draftHtml+notesHtml+briefingHtml+mdToHtml(m.currentStrategy||m.strategy||'');
+  var detailEl = document.getElementById('detail-strategy');
+  detailEl.innerHTML = notesHtml+briefingHtml+mdToHtml(m.currentStrategy||m.strategy||'');
+  detailEl.insertBefore(draftContainer, detailEl.firstChild);
 
   // Enemy picker
   renderEnemyPicker();
