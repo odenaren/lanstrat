@@ -475,6 +475,8 @@ let ignorePlayerPools = new Set(); // player indexes
 let currentMatchId = null;
 let currentEnemies = new Set();
 let currentDraft = {};
+let currentBanned = new Set(); // hero names banned in current match
+let currentMatchData = null; // full match object
 
 async function apiFetch(path, options={}) {
   const res = await fetch(API+path, {headers:{'Content-Type':'application/json'},...options});
@@ -925,6 +927,75 @@ async function loadHistory() {
     list.appendChild(el);
   });
 }
+async function toggleBan(heroName, playerName) {
+  if(!heroName || heroName === '?') return;
+  if(currentBanned.has(heroName)) currentBanned.delete(heroName);
+  else currentBanned.add(heroName);
+  // Save to server
+  await apiFetch('/matches/'+currentMatchId+'/banned', {method:'PUT', body:JSON.stringify({banned:[...currentBanned]})});
+  openDetail(currentMatchId);
+}
+
+async function replaceHero(playerName, bannedHero) {
+  const m = currentMatchData;
+  if(!m) return;
+
+  // Find player's hero pool
+  const playerData = (m.players||[]).find(p => p.name === playerName);
+  if(!playerData) return;
+
+  const poolNames = (playerData.heroes||[]).map(id => {
+    const h = HERO_LIST.find(x => x.id === id);
+    return h ? h.name : null;
+  }).filter(Boolean);
+
+  // Remove banned heroes from pool
+  const availablePool = poolNames.filter(h => !currentBanned.has(h));
+
+  const area = document.getElementById('detail-strategy');
+  const oldContent = area.innerHTML;
+  area.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:20px;color:var(--text-dim)"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div> Hittar ersättare för ${bannedHero}...</div>`;
+
+  const prompt = 'Du är en Dota 2 draft-expert. Under picking-fasen har en hjälte blivit bannlyst och måste ersättas. Det är viktigt att strategin ändras så lite som möjligt — win condition och spelstil ska vara densamma.
+
+'
+    + 'ORIGINAL STRATEGI:
+' + (m.currentStrategy||m.strategy||'') + '
+
+'
+    + 'BANNLYST: ' + bannedHero + ' (spelades av ' + playerName + ')
+
+'
+    + 'TILLGÄNGLIG POOL FÖR ' + playerName + ': ' + (availablePool.join(', ')||'Tom pool — välj bästa möjliga alternativ') + '
+
+'
+    + 'Övriga bannlysta hjältar (ej valbara): ' + [...currentBanned].join(', ') + '
+
+'
+    + 'Välj en ersättare från ' + playerName + 's pool som passar bäst in i strategin. Svara med:
+'
+    + '1. **Ersättare: [HJÄLTNAMN]** — en mening varför
+'
+    + '2. Den fullständiga uppdaterade strategin där du bara ändrat det som påverkas av hjältbytet. Behåll rubriker, win condition och spelstil identiska. Byt bara ut ' + bannedHero + ' mot den nya hjälten.
+
+'
+    + 'Använd svenska.';
+
+  try {
+    const resp = await fetch('/api/strategy', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({prompt})});
+    const data = await resp.json();
+    if(data.error) throw new Error(data.error);
+
+    // Save updated strategy
+    await apiFetch('/matches/'+currentMatchId+'/strategy', {method:'PUT', body:JSON.stringify({strategy:data.text})});
+    currentMatchData.currentStrategy = data.text;
+    openDetail(currentMatchId);
+  } catch(err) {
+    area.innerHTML = oldContent;
+    alert('Fel: ' + err.message);
+  }
+}
+
 async function setMatchResult(id, result) {
   await apiFetch('/matches/'+id+'/result', {method:'PUT', body:JSON.stringify({result})});
   loadHistory();
@@ -956,6 +1027,8 @@ async function deleteMatch(e,id){
 async function openDetail(id) {
   const m=await apiFetch('/matches/'+id);
   currentMatchId=id;
+  currentMatchData=m;
+  currentBanned=new Set(m.banned||[]);
   currentEnemies=new Set(m.enemies||[]);
   const date=new Date(m.createdAt).toLocaleString('sv-SE',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
   document.getElementById('detail-title').textContent=m.name||(m.players||[]).map(p=>p.name).join(' · ');
@@ -972,7 +1045,30 @@ async function openDetail(id) {
   document.getElementById('detail-date').textContent=date;
   const notesHtml = m.captainNotes ? `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:12px 14px;margin-bottom:16px"><div style="font-family:Rajdhani,sans-serif;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--text-dim);margin-bottom:5px">📋 Kaptenens instruktioner</div><div style="font-size:13px;color:var(--text);line-height:1.6">${m.captainNotes}</div></div>` : '';
   const briefingHtml = m.briefing ? `<div style="background:rgba(200,155,60,.08);border:1px solid var(--gold-dim);border-radius:6px;padding:18px 20px;margin-bottom:20px"><div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:10px">⚔️ Kaptensbriefing — läs högt för laget</div><div style="font-size:15px;line-height:1.8;color:var(--text)">${m.briefing.replace(/\n/g,'<br>')}</div></div>` : '';
-  document.getElementById('detail-strategy').innerHTML=notesHtml+briefingHtml+mdToHtml(m.strategy||'');
+
+  // Draft portraits with ban toggle
+  const draftPortraitsHtml = (m.players||[]).map(p => {
+    const heroName = (m.draft||{})[p.name];
+    const h = heroName ? HERO_LIST.find(x => x.name === heroName) : null;
+    const img = h ? heroImg(h.id) : null;
+    const isBanned = currentBanned.has(heroName);
+    return `<div style="text-align:center;width:80px">
+      <div onclick="toggleBan('${heroName}','${p.name}')" style="width:80px;height:45px;border-radius:4px;overflow:hidden;background:var(--surface2);border:2px solid ${isBanned?'#e74c3c':'var(--border)'};cursor:pointer;position:relative;transition:all .15s">
+        ${img?`<img src="${img}" style="width:100%;height:100%;object-fit:cover;object-position:center top;${isBanned?'filter:grayscale(1) brightness(0.4)':''}">`:'' }
+        ${isBanned?`<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px">🚫</div>`:''}
+      </div>
+      <div style="font-size:10px;color:${isBanned?'#e74c3c':'var(--gold)'};font-weight:600;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${heroName||'?'}</div>
+      <div style="font-size:9px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
+      ${isBanned?`<button onclick="replaceHero('${p.name}','${heroName}')" style="margin-top:4px;width:100%;padding:3px;background:rgba(231,76,60,.15);border:1px solid #e74c3c88;color:#e74c3c;font-family:Rajdhani,sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;cursor:pointer;border-radius:3px">Ersätt</button>`:''}
+    </div>`;
+  }).join('');
+
+  document.getElementById('detail-strategy').innerHTML=
+    `<div style="margin-bottom:20px">
+      <div style="font-family:Rajdhani,sans-serif;font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Klicka hjälte för att markera som bannlyst</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px">${draftPortraitsHtml}</div>
+    </div>`
+    +notesHtml+briefingHtml+mdToHtml(m.currentStrategy||m.strategy||'');
 
   // Enemy picker
   renderEnemyPicker();
