@@ -277,7 +277,7 @@ async function callClaude(prompt, maxTokens = 1500) {
 }
 
 app.post('/api/strategy', async (req, res) => {
-  try { res.json({ text: await callClaude(req.body.prompt, 1500) }); }
+  try { res.json({ text: await callClaude(req.body.prompt, 2500) }); }
   catch(e) { res.status(500).json({ error: e.message }); }
 });
 
