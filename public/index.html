@@ -550,7 +550,7 @@ function renderHome() {
       </div>
       <div class="player-card-count"><span>${count}</span> hjältar valda</div>
       <div class="player-card-roles">${roles.map(r=>`<span class="role-pill ${r.toLowerCase()}">${r}</span>`).join('')}</div>
-      <button class="player-card-btn" onclick="openPicker(${i})">Redigera pool</button>`;
+      <button class="player-card-btn" onclick="openPicker(${i})">${poolOnlyMode?"Valj mina hjaltar":"Redigera pool"}</button>`;
     grid.appendChild(card);
   });
   const add = document.createElement('div');
@@ -911,9 +911,26 @@ async function generateStrategy() {
     currentDraft={};
     let cleanText=text;
     let strategyName="";
-    const jsonMatch=text.match(/DRAFT_JSON_START\s*({[\s\S]*?})\s*DRAFT_JSON_END/);
+    const jsonMatch=text.match(/DRAFT_JSON_START[\s\S]*?({[\s\S]*?})[\s\S]*?DRAFT_JSON_END/);
     if(jsonMatch){
-      try{ const parsed=JSON.parse(jsonMatch[1]); currentDraft=parsed.draft||{}; strategyName=parsed.name||""; }catch(e){}
+      try{
+        // Clean up JSON before parsing - remove any markdown or extra chars
+        var rawJson = jsonMatch[1].trim();
+        var parsed=JSON.parse(rawJson);
+        currentDraft=parsed.draft||{};
+        strategyName=parsed.name||"";
+      }catch(e){
+        // Try extracting name and draft separately if JSON parse fails
+        try {
+          var nameMatch = text.match(/"name"\s*:\s*"([^"]+)"/);
+          if(nameMatch) strategyName = nameMatch[1];
+          var draftSection = text.match(/"draft"\s*:\s*({[^}]+})/);
+          if(draftSection) {
+            var draftParsed = JSON.parse(draftSection[1]);
+            currentDraft = draftParsed;
+          }
+        } catch(e2){}
+      }
       cleanText=text.replace(/DRAFT_JSON_START[\s\S]*?DRAFT_JSON_END\s*/,'').trim();
     }
     // Extract captain briefing
@@ -1058,12 +1075,8 @@ async function loadHistory() {
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${(m.players||[]).map(p=>{
           const hero=(m.draft||{})[p.name];
           const img=hero?heroImgByName(hero):null;
-          return `<div style="text-align:center;width:44px">
-            <div style="width:44px;height:25px;border-radius:3px;overflow:hidden;background:var(--surface2);border:1px solid var(--border)">
-              '+(img?'<img src="'+img+'" style="width:100%;height:100%;object-fit:cover;object-position:center top" loading="lazy">':'<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:11px">?</div>')+'
-            </div>
-            <div style="font-size:9px;color:var(--text-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
-          </div>`;
+          var imgHtml2 = img ? '<img src="'+img+'" style="width:100%;height:100%;object-fit:cover;object-position:center top" loading="lazy">' : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:11px">?</div>';
+          return '<div style="text-align:center;width:44px"><div style="width:44px;height:25px;border-radius:3px;overflow:hidden;background:var(--surface2);border:1px solid var(--border)">'+imgHtml2+'</div><div style="font-size:9px;color:var(--text-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+p.name+'</div></div>';
         }).join('')}</div>
       </div>
       <div style="display:flex;gap:5px;align-items:center" onclick="event.stopPropagation()">
@@ -1258,11 +1271,16 @@ async function toggleMemory(e, id, exclude) {
 
 // ===================== URL PARAMS =====================
 function checkUrlParams() {
-  const params = new URLSearchParams(window.location.search);
-  const pi = params.get('player');
+  var params = new URLSearchParams(window.location.search);
+  var pi = params.get('player');
   if(pi !== null && players[parseInt(pi)]) {
     openPicker(parseInt(pi));
   }
+}
+
+function getShareUrl(playerIndex) {
+  var base = window.location.origin + window.location.pathname;
+  return base + '?mode=pool&player=' + playerIndex;
 }
 
 // ===================== LAN MODAL =====================
@@ -1435,6 +1453,24 @@ function mdToHtml(md) {
 }
 
 // INIT
+// Check if pool-only mode
+var urlParams = new URLSearchParams(window.location.search);
+var poolOnlyMode = urlParams.get('mode') === 'pool';
+
+if(poolOnlyMode) {
+  // Hide match and history tabs
+  document.querySelectorAll('.nav-tab').forEach(function(t){
+    if(t.textContent.trim().toLowerCase() !== 'spelare') {
+      t.style.display = 'none';
+    }
+  });
+  // Update home header
+  var homeHeader = document.querySelector('.home-header h1');
+  if(homeHeader) homeHeader.textContent = 'Valj dina hjaltar';
+  var homeSubtitle = document.querySelector('.home-header p');
+  if(homeSubtitle) homeSubtitle.textContent = 'Klicka pa ditt namn och bocka i hjaltarna du vill spela pa lanet';
+}
+
 ensureDefaultPlayers().then(function(){ checkUrlParams(); });
 
 document.getElementById('modal-overlay').addEventListener('click', function(e){
