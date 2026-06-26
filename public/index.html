@@ -806,26 +806,19 @@ async function generateStrategy() {
   let chosenStyle;
   if(isWildcard) {
     // Wild card gets a fun style, never standard
-    const funStyles = STYLES.filter(s => s.name !== 'standard');
-    chosenStyle = funStyles[Math.floor(Math.random() * funStyles.length)];
+    const funStylesWC = STYLES.filter(s => s.name !== 'standard');
+    chosenStyle = funStylesWC[Math.floor(Math.random() * funStylesWC.length)];
   } else {
-    // Standard has 1-match cooldown, others have 4-match cooldown
-    const recentNonStandard = window.recentStyles.slice(-4);
-    const lastStyle = window.recentStyles.slice(-1)[0];
-    const onCooldown = new Set(recentNonStandard);
-    // Standard only blocked if it was the LAST match
-    let pool = STYLES.filter(s => {
-      if(s.name === 'standard') return lastStyle !== 'standard';
-      return !onCooldown.has(s.name);
-    });
-    if(pool.length === 0) pool = STYLES;
-    // Weight standard 3x
-    const weighted = [];
-    pool.forEach(s => {
-      weighted.push(s);
-      if(s.name === 'standard') { weighted.push(s); weighted.push(s); }
-    });
-    chosenStyle = weighted[Math.floor(Math.random() * weighted.length)];
+    // 50% chans for standard, 50% for en rolig stil
+    if(Math.random() < 0.5) {
+      chosenStyle = STYLES.find(s => s.name === 'standard');
+    } else {
+      // Roliga stilar har 4-match cooldown for variation
+      const onCooldown = new Set(window.recentStyles.slice(-4));
+      const funStyles = STYLES.filter(s => s.name !== 'standard' && !onCooldown.has(s.name));
+      const funPool = funStyles.length > 0 ? funStyles : STYLES.filter(s => s.name !== 'standard');
+      chosenStyle = funPool[Math.floor(Math.random() * funPool.length)];
+    }
   }
   window.recentStyles.push(chosenStyle.name);
   if(window.recentStyles.length > 8) window.recentStyles.shift();
