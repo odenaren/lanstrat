@@ -789,47 +789,16 @@ async function generateStrategy() {
   const draftNames = active.map(p=>p.name).join(', ');
   // Pick a random presentation style
   const STYLES = [
-    {
-      name: 'militärbrief',
-      instruction: 'Presentera strategin som en militär operationsbrief. Använd militärt språk och terminologi (flanker, frontlinje, retirera, förband osv). Ge operationen ett kodnamn. Kaptenen kallas "Befälhavare". Strukturera som: OPERATION [NAMN], SITUATIONSANALYS, UPPDRAG, GENOMFÖRANDE, SLUTMÅL.'
-    },
-    {
-      name: 'sportkommentator',
-      instruction: 'Presentera strategin som en entusiastisk sportkommentator som förbereder publiken inför en viktig match. Använd energisk, dramatisk ton. Lyft fram varje spelares styrkor som om du presenterar dem för en stor publik. Ha med en förväntad "match-höjdpunkt" som kommentator.'
-    },
-    {
-      name: 'standard',
-      instruction: 'Presentera strategin på ett tydligt och professionellt sätt med rubriker och struktur.'
-    },
-    {
-      name: 'managerbrev',
-      instruction: 'Skriv strategin som ett brev från lagets manager/coach till spelarna inför matchen. Personlig ton, adressera varje spelare vid namn med individuella instruktioner. Avsluta med ett motiverande slutord. Börja med "Kära lag,"'
-    },
-    {
-      name: 'standard',
-      instruction: 'Presentera strategin på ett tydligt och professionellt sätt med rubriker och struktur.'
-    },
-    {
-      name: 'spelarkort',
-      instruction: 'Presentera strategin som om varje spelare har ett eget spelarkort med stats och roll. Format per spelare: [NAMN] — [HJÄLTE] | Roll: X | Styrka: Y | Uppdrag: Z. Avsluta med en kort teamanalys och win condition.'
-    },
-    {
-      name: 'kriminaldrama',
-      instruction: 'Presentera strategin som en rånarplan i stil med Ocean\'s Eleven. Varje spelare har ett "jobbtitel" (The Muscle, The Brains, The Distraction osv). Målet är "jobbet". Motståndarna är "vakterna". Använd mystisk, cool ton. Kaptenen är "The Boss".'
-    },
-    {
-      name: 'standard',
-      instruction: 'Presentera strategin på ett tydligt och professionellt sätt med rubriker och struktur.'
-    },
-    {
-      name: 'telegram',
-      instruction: 'Skriv strategin som ett gammaldags telegram med STOP istället för punkt. Korta meningar. All caps för hjältnamn och roller. Avskalat och direkt. Exempel: RUTIGASKJORTAN SPELAR AXE STOP HÅLLER FRONTLINJEN STOP INVÄNTA SIGNAL STOP'
-    },
-    {
-      name: 'naturprogram',
-      instruction: 'Presentera strategin som ett naturprogram där spelarna är djur i sin naturliga miljö. Varje hjälte beskrivs som ett djur med sina beteenden och jaktstrategier. Narratorn (kaptenen) observerar och guidar. Använd David Attenborough-ton.'
-    },
+    { name: 'standard', instruction: 'Presentera strategin på ett tydligt och professionellt sätt med rubriker och struktur.' },
+    { name: 'militärbrief', instruction: 'Presentera strategin som en militär operationsbrief. Använd militärt språk och terminologi. Ge operationen ett kodnamn. Kaptenen kallas Befälhavare. Strukturera som: OPERATION, SITUATIONSANALYS, UPPDRAG, GENOMFÖRANDE, SLUTMÅL.' },
+    { name: 'sportkommentator', instruction: 'Presentera strategin som en entusiastisk sportkommentator. Energisk, dramatisk ton. Lyft fram varje spelares styrkor. Ha med en förväntad match-höjdpunkt.' },
+    { name: 'managerbrev', instruction: 'Skriv strategin som ett brev från lagets coach. Personlig ton, adressera varje spelare vid namn. Avsluta med ett motiverande slutord. Börja med Kära lag,' },
+    { name: 'spelarkort', instruction: 'Presentera som spelarkort per spelare: [NAMN] — [HJÄLTE] | Roll: X | Styrka: Y | Uppdrag: Z. Avsluta med teamanalys och win condition.' },
+    { name: 'kriminaldrama', instruction: 'Presentera som en rånarplan Ocean Eleven-stil. Varje spelare har en jobbtitel. Målet är jobbet, motståndarna är vakterna. Kaptenen är The Boss.' },
+    { name: 'telegram', instruction: 'Skriv som ett gammaldags telegram med STOP istället för punkt. Korta meningar. All caps för hjältnamn och roller.' },
+    { name: 'naturprogram', instruction: 'Presentera som ett naturprogram där spelarna är djur. Varje hjälte beskrivs med beteenden och jaktstrategier. David Attenborough-ton.' },
   ];
+  // Standard har 3x högre chans än övriga stilar
   // Track recent styles with 4-match cooldown
   if(!window.recentStyles) {
     try { window.recentStyles = JSON.parse(sessionStorage.getItem('recentStyles')||'[]'); } catch(e) { window.recentStyles = []; }
