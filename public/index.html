@@ -587,7 +587,7 @@ function startRename(i) {
 
 async function ensureDefaultPlayers() {
   const existing = await apiFetch('/players');
-  if(existing.length > 0) return; // Already has players, skip
+  if(existing.length > 0) { players = existing; renderHome(); return; }
   const defaults = [
     {name:"Rutigaskjortan",heroes:[88,15,4,101,36]},
     {name:"Elsa",heroes:[32,29,18,101,14]},
@@ -778,7 +778,7 @@ async function generateStrategy() {
 
   const poolSummary=active.map(p=>{
     const playerIdx = players.indexOf(p);
-    const ignored = ignoreAllPools || ignorePlayerPools.has(playerIdx);
+    const ignored = ignoreAllPools || ignorePlayerPools.has(active.indexOf(p));
     if(ignored) return p.name+': Välj fritt — ignorera denna spelares pool och välj bästa möjliga hjälte för laget';
     const names=(p.heroes||[]).map(id=>{ const h=HERO_LIST.find(x=>x.id===id); return h?h.name+' ('+h.roles.join('/')+')':null; }).filter(Boolean);
     const recent = recentlyPlayed[p.name]||[];
@@ -846,8 +846,7 @@ async function generateStrategy() {
   if(!window.recentArchetypes) {
     try { window.recentArchetypes = JSON.parse(sessionStorage.getItem('recentArchetypes')||'[]'); } catch(e) { window.recentArchetypes = []; }
   }
-  var lastArchetype = window.recentArchetypes.length > 0 ? window.recentArchetypes[window.recentArchetypes.length-1] : null;
-  var availableArchetypes = ARCHETYPES.filter(function(a){ return a.id !== lastArchetype; });
+  var availableArchetypes = ARCHETYPES.filter(function(a){ return !window.recentArchetypes.slice(-3).includes(a.id); });
   if(availableArchetypes.length === 0) availableArchetypes = ARCHETYPES;
   var chosenArchetype = availableArchetypes[Math.floor(Math.random() * availableArchetypes.length)];
   window.recentArchetypes.push(chosenArchetype.id);
@@ -894,7 +893,7 @@ async function generateStrategy() {
         try {
           var nameMatch = text.match(/"name"\s*:\s*"([^"]+)"/);
           if(nameMatch) strategyName = nameMatch[1];
-          var draftSection = text.match(/"draft"\s*:\s*({[\s\S]*?})/);
+          var draftSection = text.match(/"draft"\s*:\s*({[^}]+})/);
           if(draftSection) {
             var draftParsed = JSON.parse(draftSection[1]);
             currentDraft = draftParsed;
