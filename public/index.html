@@ -778,7 +778,7 @@ async function generateStrategy() {
 
   const poolSummary=active.map(p=>{
     const playerIdx = players.indexOf(p);
-    const ignored = ignoreAllPools || ignorePlayerPools.has(active.indexOf(p));
+    const ignored = ignoreAllPools || ignorePlayerPools.has(playerIdx);
     if(ignored) return p.name+': Välj fritt — ignorera denna spelares pool och välj bästa möjliga hjälte för laget';
     const names=(p.heroes||[]).map(id=>{ const h=HERO_LIST.find(x=>x.id===id); return h?h.name+' ('+h.roles.join('/')+')':null; }).filter(Boolean);
     const recent = recentlyPlayed[p.name]||[];
@@ -805,20 +805,20 @@ async function generateStrategy() {
   }
   let chosenStyle;
   if(isWildcard) {
-    // Wild card gets a fun style, never standard
-    const funStylesWC = STYLES.filter(s => s.name !== 'standard');
-    chosenStyle = funStylesWC[Math.floor(Math.random() * funStylesWC.length)];
+    chosenStyle = STYLES[0];
   } else {
-    // 50% chans for standard, 50% for en rolig stil
-    if(Math.random() < 0.5) {
-      chosenStyle = STYLES.find(s => s.name === 'standard');
-    } else {
-      // Roliga stilar har 4-match cooldown for variation
-      const onCooldown = new Set(window.recentStyles.slice(-4));
-      const funStyles = STYLES.filter(s => s.name !== 'standard' && !onCooldown.has(s.name));
-      const funPool = funStyles.length > 0 ? funStyles : STYLES.filter(s => s.name !== 'standard');
-      chosenStyle = funPool[Math.floor(Math.random() * funPool.length)];
-    }
+    // Filter out styles used in last 4 matches
+    const onCooldown = new Set(window.recentStyles.slice(-4).map(s => s));
+    // Also weight standard higher (add it 3 times to pool)
+    let pool = STYLES.filter(s => !onCooldown.has(s.name));
+    if(pool.length === 0) pool = STYLES; // fallback if all on cooldown
+    // Soft intro: weight standard 3x so non-standard styles feel special
+    const weighted = [];
+    pool.forEach(s => {
+      weighted.push(s);
+      if(s.name === 'standard') { weighted.push(s); weighted.push(s); }
+    });
+    chosenStyle = weighted[Math.floor(Math.random() * weighted.length)];
   }
   window.recentStyles.push(chosenStyle.name);
   if(window.recentStyles.length > 8) window.recentStyles.shift();
@@ -846,7 +846,8 @@ async function generateStrategy() {
   if(!window.recentArchetypes) {
     try { window.recentArchetypes = JSON.parse(sessionStorage.getItem('recentArchetypes')||'[]'); } catch(e) { window.recentArchetypes = []; }
   }
-  var availableArchetypes = ARCHETYPES.filter(function(a){ return !window.recentArchetypes.slice(-3).includes(a.id); });
+  var lastArchetype = window.recentArchetypes.length > 0 ? window.recentArchetypes[window.recentArchetypes.length-1] : null;
+  var availableArchetypes = ARCHETYPES.filter(function(a){ return a.id !== lastArchetype; });
   if(availableArchetypes.length === 0) availableArchetypes = ARCHETYPES;
   var chosenArchetype = availableArchetypes[Math.floor(Math.random() * availableArchetypes.length)];
   window.recentArchetypes.push(chosenArchetype.id);
@@ -893,7 +894,7 @@ async function generateStrategy() {
         try {
           var nameMatch = text.match(/"name"\s*:\s*"([^"]+)"/);
           if(nameMatch) strategyName = nameMatch[1];
-          var draftSection = text.match(/"draft"\s*:\s*({[^}]+})/);
+          var draftSection = text.match(/"draft"\s*:\s*({[\s\S]*?})/);
           if(draftSection) {
             var draftParsed = JSON.parse(draftSection[1]);
             currentDraft = draftParsed;
