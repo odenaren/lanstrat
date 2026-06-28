@@ -144,6 +144,17 @@ app.put('/api/players/:name/heroes', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+app.put('/api/players/:name/challenge-pool', async (req, res) => {
+  try {
+    const players = await readPlayers();
+    const p = players.find(p => p.name === req.params.name);
+    if (!p) return res.status(404).json({ error: 'Not found' });
+    p.challengePool = req.body.challengePool || [];
+    await writePlayers(players);
+    res.json(p);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── MATCHES ──────────────────────────────────────────
 app.get('/api/matches', async (req, res) => {
   try { res.json(await readMatches()); }
