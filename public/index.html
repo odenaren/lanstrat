@@ -126,7 +126,8 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .detail-layout{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
 @media(max-width:900px){.detail-layout{grid-template-columns:1fr;}}
 .section-title{font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;text-transform:uppercase;color:var(--gold);letter-spacing:.08em;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border);}
-.enemy-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:5px;max-height:300px;overflow-y:auto;margin-bottom:12px;}
+.enemy-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:5px;max-height:300px;overflow-y:auto;margin-bottom:12px;}
+@media(max-width:500px){.enemy-picker-grid{grid-template-columns:repeat(3,1fr);}}
 .selected-enemies{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;min-height:28px;}
 .enemy-tag{padding:3px 10px;background:rgba(231,76,60,.12);border:1px solid #c0392b55;color:var(--red);border-radius:3px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;}
 .enemy-tag button{background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;line-height:1;padding:0;}
