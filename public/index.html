@@ -128,6 +128,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .section-title{font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;text-transform:uppercase;color:var(--gold);letter-spacing:.08em;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border);}
 .enemy-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:5px;max-height:300px;overflow-y:auto;margin-bottom:12px;}
 @media(max-width:500px){.enemy-picker-grid{grid-template-columns:repeat(3,1fr);}}
+.enemy-picker-grid .hero-card{aspect-ratio:3/2;min-height:60px;}
 .selected-enemies{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;min-height:28px;}
 .enemy-tag{padding:3px 10px;background:rgba(231,76,60,.12);border:1px solid #c0392b55;color:var(--red);border-radius:3px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;}
 .enemy-tag button{background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;line-height:1;padding:0;}
@@ -843,7 +844,8 @@ function renderMatchPage() {
       var cpToggle = document.createElement('div');
       cpToggle.className = 'cp-toggle';
       cpToggle.style.marginLeft = '4px';
-      var curMode = playerCpModes[i] || 'off';
+      if(playerCpModes[i] === undefined) playerCpModes[i] = 'mix';
+      var curMode = playerCpModes[i];
       ['off','mix','only'].forEach(function(mode) {
         var b = document.createElement('button');
         b.className = 'cp-btn' + (curMode === mode ? ' active' : '');
@@ -933,7 +935,7 @@ async function generateStrategy() {
     if(ignored) return p.name+': Välj fritt — ignorera denna spelares pool och välj bästa möjliga hjälte för laget';
     const mainNames=(p.heroes||[]).map(id=>{ const h=HERO_LIST.find(x=>x.id===id); return h?h.name+' ('+h.roles.join('/')+')':null; }).filter(Boolean);
     const cpNames = p.challengePool || [];
-    const cpMode = playerCpModes[playerIdx] || 'off';
+    const cpMode = cpNames.length > 0 ? (playerCpModes[playerIdx] !== undefined ? playerCpModes[playerIdx] : 'mix') : 'off';
     let poolStr;
     if(cpMode === 'only') {
       poolStr = cpNames.length > 0
