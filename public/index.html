@@ -126,7 +126,9 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .detail-layout{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
 @media(max-width:900px){.detail-layout{grid-template-columns:1fr;}}
 .section-title{font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;text-transform:uppercase;color:var(--gold);letter-spacing:.08em;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border);}
-.enemy-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:5px;max-height:300px;overflow-y:auto;margin-bottom:12px;}
+.enemy-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:5px;max-height:300px;overflow-y:auto;margin-bottom:12px;}
+@media(max-width:500px){.enemy-picker-grid{grid-template-columns:repeat(3,1fr);}}
+.enemy-picker-grid .hero-card{aspect-ratio:3/2;min-height:60px;}
 .selected-enemies{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;min-height:28px;}
 .enemy-tag{padding:3px 10px;background:rgba(231,76,60,.12);border:1px solid #c0392b55;color:var(--red);border-radius:3px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;}
 .enemy-tag button{background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;line-height:1;padding:0;}
@@ -149,6 +151,20 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .page-header h2{font-size:28px;font-weight:700;text-transform:uppercase;color:var(--gold);letter-spacing:.1em;}
 .tag{display:inline-block;padding:2px 10px;border-radius:3px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;}
 .tag-gold{background:rgba(200,155,60,.15);border:1px solid var(--gold-dim);color:var(--gold);}
+/* CHALLENGE POOL - HOME */
+.challenge-pool-section{margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
+.challenge-pool-label{font-family:Rajdhani,sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#9b59b6;margin-bottom:8px;}
+.challenge-pool-heroes{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;}
+.challenge-hero-chip{display:flex;align-items:center;gap:4px;padding:3px 6px;background:rgba(155,89,182,.12);border:1px solid #8e44ad55;border-radius:3px;font-size:11px;color:#b980e0;}
+.challenge-hero-chip img{width:22px;height:13px;object-fit:cover;object-position:center top;border-radius:2px;}
+.challenge-gen-btn{width:100%;padding:7px;background:none;border:1px dashed #8e44ad88;color:#9b59b6;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;border-radius:4px;transition:all .15s;}
+.challenge-gen-btn:hover{background:rgba(155,89,182,.12);border-color:#9b59b6;}
+.challenge-gen-btn:disabled{opacity:.4;cursor:not-allowed;}
+/* CHALLENGE POOL - MATCH PAGE */
+.cp-toggle{display:flex;gap:3px;flex-shrink:0;}
+.cp-btn{padding:2px 6px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;cursor:pointer;border:1px solid #8e44ad44;background:none;color:#6a3d8a;transition:all .12s;}
+.cp-btn.active{border-color:#8e44ad88;background:rgba(155,89,182,.2);color:#b980e0;}
+.cp-btn:hover:not(.active){border-color:#8e44ad66;color:#9b59b6;}
 </style>
 </head>
 <body>
@@ -286,8 +302,15 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 <div id="lan-modal-overlay" class="modal-overlay">
   <div class="modal" style="width:440px">
     <h3>Infor lanet</h3>
-    <p style="color:var(--text-dim);font-size:13px;margin-bottom:20px;line-height:1.6">Valj vad du vill nullstalla. Spelarpooler paverkas aldrig.</p>
+    <p style="color:var(--text-dim);font-size:13px;margin-bottom:20px;line-height:1.6">Valj vad du vill nullstalla. Spelarna behalles.</p>
     <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">
+      <label style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer">
+        <input type="checkbox" id="lan-clear-pools" style="width:16px;height:16px;accent-color:var(--gold)">
+        <div>
+          <div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Rensa hjaltepooler</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-top:2px">Alla spelares hero pools och utmaningspooler rensas</div>
+        </div>
+      </label>
       <label style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer">
         <input type="checkbox" id="lan-clear-history" style="width:16px;height:16px;accent-color:var(--gold)">
         <div>
@@ -504,6 +527,8 @@ let saveTimeout = null;
 let matchPlayers = new Set();
 let ignoreAllPools = false;
 let ignorePlayerPools = new Set(); // player indexes
+// per-player challenge pool mode: 'off' | 'include' | 'only'
+let playerCpModes = {};
 let currentMatchId = null;
 let currentEnemies = new Set();
 let currentDraft = {};
@@ -551,6 +576,38 @@ function renderHome() {
       <div class="player-card-count"><span>${count}</span> hjältar valda</div>
       <div class="player-card-roles">${roles.map(r=>`<span class="role-pill ${r.toLowerCase()}">${r}</span>`).join('')}</div>
       <button class="player-card-btn" onclick="openPicker(${i})">${poolOnlyMode?"Valj mina hjaltar":"Redigera pool"}</button>`;
+    var cpSection = document.createElement('div');
+    cpSection.className = 'challenge-pool-section';
+    var cpPool = p.challengePool || [];
+    if(cpPool.length > 0) {
+      var cpLabel = document.createElement('div');
+      cpLabel.className = 'challenge-pool-label';
+      cpLabel.textContent = '🎯 Utmaningspool';
+      cpSection.appendChild(cpLabel);
+      var cpHeroes = document.createElement('div');
+      cpHeroes.className = 'challenge-pool-heroes';
+      cpPool.forEach(function(heroName) {
+        var h = HERO_LIST.find(function(x){ return x.name === heroName; });
+        var chip = document.createElement('div');
+        chip.className = 'challenge-hero-chip';
+        if(h) {
+          var img = heroImg(h.id);
+          if(img) { var imgEl = document.createElement('img'); imgEl.src = img; chip.appendChild(imgEl); }
+        }
+        var nameEl = document.createElement('span');
+        nameEl.textContent = heroName;
+        chip.appendChild(nameEl);
+        cpHeroes.appendChild(chip);
+      });
+      cpSection.appendChild(cpHeroes);
+    }
+    var cpBtn = document.createElement('button');
+    cpBtn.className = 'challenge-gen-btn';
+    cpBtn.id = 'cp-btn-' + i;
+    cpBtn.textContent = cpPool.length > 0 ? '↻ Ny utmaningspool' : '🎯 Generera utmaningspool';
+    cpBtn.onclick = (function(idx){ return function(){ generateChallengePool(idx); }; })(i);
+    cpSection.appendChild(cpBtn);
+    card.appendChild(cpSection);
     grid.appendChild(card);
   });
   const add = document.createElement('div');
@@ -620,6 +677,50 @@ async function confirmAddPlayer() {
   catch(err){ alert('Kunde inte lägga till: '+err.message); }
 }
 function closeModal(){ document.getElementById('modal-overlay').classList.remove('open'); }
+
+// ===================== CHALLENGE POOL =====================
+async function generateChallengePool(playerIdx) {
+  var p = players[playerIdx];
+  var btn = document.getElementById('cp-btn-' + playerIdx);
+  if(btn) { btn.disabled = true; btn.textContent = 'Genererar...'; }
+  var heroNames = (p.heroes||[]).map(function(id){
+    var h = HERO_LIST.find(function(x){ return x.id === id; });
+    return h ? h.name + ' (' + h.attr.toUpperCase() + ', ' + h.roles.join('/') + ')' : null;
+  }).filter(Boolean);
+  if(heroNames.length === 0) {
+    alert('Lagg till nagra hjaltar i poolen forst!');
+    if(btn) { btn.disabled = false; btn.textContent = '🎯 Generera utmaningspool'; }
+    return;
+  }
+  var allHeroNames = HERO_LIST.map(function(h){ return h.name; });
+  var prompt = 'Du ar en Dota 2-expert. Spelaren har dessa hjaltar i sin pool:\n'
+    + heroNames.join(', ')
+    + '\n\nAnalysera spelarens preferenser baserat pa attribut, roller och spelstil. '
+    + 'Hitta 6 hjaltar som liknar spelarens pool men som INTE redan finns i den. '
+    + 'Valj hjaltar som delar liknande roller, attribut eller spelstil - nara nog att vara igenkarliga men nya nog att vara en utmaning. '
+    + 'Hjaltar som finns tillgangliga: ' + allHeroNames.join(', ')
+    + '\n\nSvara ENDAST med ett JSON-objekt, inga backticks, ingen forklaring:\n{"heroes":["Hjaltename1","Hjaltename2","Hjaltename3","Hjaltename4","Hjaltename5","Hjaltename6"]}';
+  try {
+    var resp = await fetch('/api/strategy', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({prompt: prompt})});
+    var data = await resp.json();
+    if(data.error) throw new Error(data.error);
+    var text = data.text.replace(/```json|```/g, '').trim();
+    var jsonStart = text.indexOf('{');
+    var jsonEnd = text.lastIndexOf('}');
+    if(jsonStart === -1 || jsonEnd === -1) throw new Error('Ogiltigt svar');
+    var parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1));
+    var suggested = (parsed.heroes || []).filter(function(name){
+      return HERO_LIST.some(function(h){ return h.name === name; });
+    }).slice(0, 6);
+    if(suggested.length === 0) throw new Error('Inga hjaltar hittades');
+    await apiFetch('/players/' + encodeURIComponent(p.name) + '/challenge-pool', {method:'PUT', body:JSON.stringify({challengePool: suggested})});
+    players[playerIdx].challengePool = suggested;
+    renderHome();
+  } catch(err) {
+    alert('Kunde inte generera utmaningspool: ' + err.message);
+    if(btn) { btn.disabled = false; btn.textContent = players[playerIdx].challengePool ? '↻ Ny utmaningspool' : '🎯 Generera utmaningspool'; }
+  }
+}
 
 // ===================== PICKER =====================
 function openPicker(i) {
@@ -702,6 +803,26 @@ function setAttr(a,btn){ currentAttr=a; document.querySelectorAll('[data-attr]')
 function renderMatchPage() {
   const list=document.getElementById('player-select-list');
   list.innerHTML='';
+
+  // Global challenge pool row
+  var globalCpRow = document.createElement('div');
+  globalCpRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(155,89,182,.07);border:1px solid #8e44ad33;border-radius:4px;margin-bottom:8px';
+  var globalCpLabel = document.createElement('span');
+  globalCpLabel.style.cssText = 'font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9b59b6;flex:1';
+  globalCpLabel.textContent = '🎯 Utmaning – alla';
+  var globalToggle = document.createElement('div');
+  globalToggle.className = 'cp-toggle';
+  ['off','mix','only'].forEach(function(mode) {
+    var b = document.createElement('button');
+    b.className = 'cp-btn' + (isGlobalCpMode(mode) ? ' active' : '');
+    b.textContent = mode === 'off' ? 'Av' : mode === 'mix' ? 'Mix' : 'Endast';
+    b.onclick = function(e){ e.stopPropagation(); setAllCpModes(mode); };
+    globalToggle.appendChild(b);
+  });
+  globalCpRow.appendChild(globalCpLabel);
+  globalCpRow.appendChild(globalToggle);
+  list.appendChild(globalCpRow);
+
   players.forEach((p,i)=>{
     const item=document.createElement('div');
     item.className='player-toggle'+(matchPlayers.has(i)?' active':'');
@@ -718,6 +839,22 @@ function renderMatchPage() {
       + '<div class="player-toggle-heroes">'+heroesText+'</div>'
       + '</div>'
       + poolBtn;
+    // Per-player cp toggle (only when active and has challenge pool)
+    if(matchPlayers.has(i) && (p.challengePool||[]).length > 0) {
+      var cpToggle = document.createElement('div');
+      cpToggle.className = 'cp-toggle';
+      cpToggle.style.marginLeft = '4px';
+      if(playerCpModes[i] === undefined) playerCpModes[i] = 'mix';
+      var curMode = playerCpModes[i];
+      ['off','mix','only'].forEach(function(mode) {
+        var b = document.createElement('button');
+        b.className = 'cp-btn' + (curMode === mode ? ' active' : '');
+        b.textContent = mode === 'off' ? 'Av' : mode === 'mix' ? 'Mix' : 'Kun';
+        b.onclick = (function(idx, m){ return function(e){ e.stopPropagation(); setPlayerCpMode(idx, m); }; })(i, mode);
+        cpToggle.appendChild(b);
+      });
+      item.appendChild(cpToggle);
+    }
     item.onclick=(e)=>{ if(e.target.tagName==='BUTTON')return; if(matchPlayers.has(i)){matchPlayers.delete(i);ignorePlayerPools.delete(i);}else matchPlayers.add(i); renderMatchPage(); };
     list.appendChild(item);
   });
@@ -739,6 +876,22 @@ function invertMatchPlayers() {
   const newSet = new Set(allIndexes.filter(i => !matchPlayers.has(i)));
   matchPlayers = newSet;
   renderMatchPage();
+}
+
+function setPlayerCpMode(idx, mode) {
+  playerCpModes[idx] = mode;
+  renderMatchPage();
+}
+
+function setAllCpModes(mode) {
+  players.forEach(function(_, i){ playerCpModes[i] = mode; });
+  renderMatchPage();
+}
+
+function isGlobalCpMode(mode) {
+  var activePlayers = [...matchPlayers];
+  if(activePlayers.length === 0) return mode === 'off';
+  return activePlayers.every(function(i){ return (playerCpModes[i] || 'off') === mode; });
 }
 
 function getLaningCtx(n){
@@ -780,10 +933,23 @@ async function generateStrategy() {
     const playerIdx = players.indexOf(p);
     const ignored = ignoreAllPools || ignorePlayerPools.has(active.indexOf(p));
     if(ignored) return p.name+': Välj fritt — ignorera denna spelares pool och välj bästa möjliga hjälte för laget';
-    const names=(p.heroes||[]).map(id=>{ const h=HERO_LIST.find(x=>x.id===id); return h?h.name+' ('+h.roles.join('/')+')':null; }).filter(Boolean);
+    const mainNames=(p.heroes||[]).map(id=>{ const h=HERO_LIST.find(x=>x.id===id); return h?h.name+' ('+h.roles.join('/')+')':null; }).filter(Boolean);
+    const cpNames = p.challengePool || [];
+    const cpMode = cpNames.length > 0 ? (playerCpModes[playerIdx] !== undefined ? playerCpModes[playerIdx] : 'mix') : 'off';
+    let poolStr;
+    if(cpMode === 'only') {
+      poolStr = cpNames.length > 0
+        ? cpNames.join(', ')
+        : (mainNames.join(', ')||'Inga hjaltar valda') + ' (ingen utmaningspool finns, anvand vanlig pool)';
+    } else if(cpMode === 'mix') {
+      var combined = mainNames.concat(cpNames.map(function(n){ return n + ' (utmaning)'; }));
+      poolStr = combined.join(', ') || 'Inga hjaltar valda';
+    } else {
+      poolStr = mainNames.join(', ') || 'Inga hjältar valda';
+    }
     const recent = recentlyPlayed[p.name]||[];
     const recentStr = recent.length ? ' | Nyligen spelat (undvik): '+recent.join(', ') : '';
-    return p.name+': '+(names.join(', ')||'Inga hjältar valda')+recentStr;
+    return p.name+': '+poolStr+recentStr;
   }).join('\n\n');
 
   const draftNames = active.map(p=>p.name).join(', ');
@@ -1195,7 +1361,7 @@ async function removeEnemy(name) {
 async function generateItems() {
   var m = await apiFetch('/matches/'+currentMatchId);
   var enemyList = [...currentEnemies].join(', ');
-  var prompt = 'Du ar en Dota 2 item-expert. Vi har precis genererat en draft-strategi och ska nu mota dessa motstandare.\n\nVAR DRAFT-STRATEGI:\n'+(m.currentStrategy||m.strategy||'')+'\n\nMOTSTANDARRNA SPELAR:\n'+enemyList+'\n\nGe konkreta itemtips per spelare i vart lag. Fokusera pa 3-5 nyckelitems per spelare som ar extra viktiga MOT just dessa motstandare.\n\nAnvand svenska. Var specifik.';
+  var prompt = 'Du ar en Dota 2 item-expert. Vi har precis genererat en draft-strategi och ska nu mota dessa motstandare.\n\nVAR DRAFT-STRATEGI:\n'+(m.currentStrategy||m.strategy||'')+'\n\nMOTSTANDARRNA SPELAR:\n'+enemyList+'\n\nGe konkreta itemtips per spelare i vart lag. Fokusera pa 3-5 nyckelitems per spelare som ar extra viktiga MOT just dessa motstandare.\n\nFORMAT: For varje spelare, skriv spelarnamn och hjalte som rubrik, sedan varje item pa egen rad som "**Itemnamn** - kort motivering". Avsluta varje spelare med en "Prioritet:"-rad. Ingen markdown-tabell, inga | tecken. Anvand svenska. Var specifik.';
   var btn = document.getElementById('get-items-btn');
   if(btn) { btn.disabled = true; btn.textContent = 'Hamtar itemtips...'; }
   try {
@@ -1254,6 +1420,7 @@ function getShareUrl(playerIndex) {
 
 // ===================== LAN MODAL =====================
 function openLanModal() {
+  document.getElementById('lan-clear-pools').checked = false;
   document.getElementById('lan-clear-history').checked = false;
   document.getElementById('lan-clear-memory').checked = false;
   document.getElementById('lan-confirm-input').value = '';
@@ -1267,7 +1434,7 @@ function closeLanModal() {
 }
 function checkLanConfirm() {
   var val = document.getElementById('lan-confirm-input').value.trim().toUpperCase();
-  var anyChecked = document.getElementById('lan-clear-history').checked || document.getElementById('lan-clear-memory').checked;
+  var anyChecked = document.getElementById('lan-clear-pools').checked || document.getElementById('lan-clear-history').checked || document.getElementById('lan-clear-memory').checked;
   var ok = val === 'STARTA' && anyChecked;
   var btn = document.getElementById('lan-confirm-btn');
   btn.disabled = !ok;
@@ -1276,9 +1443,14 @@ function checkLanConfirm() {
     : 'padding:8px 20px;background:#555;border:none;color:#888;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:not-allowed;border-radius:3px';
 }
 async function executeLanReset() {
+  var clearPools = document.getElementById('lan-clear-pools').checked;
   var clearHistory = document.getElementById('lan-clear-history').checked;
   var clearMemory = document.getElementById('lan-clear-memory').checked;
   closeLanModal();
+  if(clearPools) {
+    await apiFetch('/players/reset-pools', {method:'POST'});
+    players = await apiFetch('/players');
+  }
   if(clearHistory) {
     await apiFetch('/matches', {method:'DELETE'});
   }

@@ -22,7 +22,6 @@ app.use((req, res, next) => {
 });
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ── JSONBIN HELPERS ──────────────────────────────────
 const BIN_IDS = { players: null, matches: null };
 
 async function jsonbinRequest(method, path, body) {
@@ -93,7 +92,7 @@ async function writePlayers(data) { await setBin('players', { data }); }
 async function readMatches() { const r = await getBin('matches'); return (r && r.data) ? r.data : []; }
 async function writeMatches(data) { await setBin('matches', { data }); }
 
-// ── PLAYERS ──────────────────────────────────────────
+// PLAYERS
 app.get('/api/players', async (req, res) => {
   try { res.json(await readPlayers()); }
   catch(e) { res.status(500).json({ error: e.message }); }
@@ -144,7 +143,28 @@ app.put('/api/players/:name/heroes', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── MATCHES ──────────────────────────────────────────
+app.put('/api/players/:name/challenge-pool', async (req, res) => {
+  try {
+    const players = await readPlayers();
+    const p = players.find(p => p.name === req.params.name);
+    if (!p) return res.status(404).json({ error: 'Not found' });
+    p.challengePool = req.body.challengePool || [];
+    await writePlayers(players);
+    res.json(p);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Rensa alla spelares hero pools och utmaningspooler
+app.post('/api/players/reset-pools', async (req, res) => {
+  try {
+    const players = await readPlayers();
+    players.forEach(p => { p.heroes = []; p.challengePool = []; });
+    await writePlayers(players);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// MATCHES
 app.get('/api/matches', async (req, res) => {
   try { res.json(await readMatches()); }
   catch(e) { res.status(500).json({ error: e.message }); }
@@ -263,7 +283,7 @@ app.delete('/api/matches/:id', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── AI ───────────────────────────────────────────────
+// AI
 async function callClaude(prompt, maxTokens = 1500) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
@@ -283,7 +303,7 @@ app.post('/api/strategy', async (req, res) => {
 });
 
 app.post('/api/items', async (req, res) => {
-  try { res.json({ text: await callClaude(req.body.prompt, 1200) }); }
+  try { res.json({ text: await callClaude(req.body.prompt, 2000) }); }
   catch(e) { res.status(500).json({ error: e.message }); }
 });
 
