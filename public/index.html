@@ -1019,11 +1019,30 @@ async function generateStrategy() {
   if(window.recentArchetypes.length > 6) window.recentArchetypes.shift();
   try { sessionStorage.setItem('recentArchetypes', JSON.stringify(window.recentArchetypes)); } catch(e) {}
 
+  // Pick a random length mode
+  const LENGTHS = [
+    { id:'kort', weight:2, instruction:'LANGD - KORT: MAX 3 rubriker, 1-2 meningar per sektion. Direkt pa sak, inga listor.' },
+    { id:'medel', weight:2, instruction:'LANGD - MEDEL: 3-4 rubriker, 2-3 meningar per sektion. Balanserat med konkreta tips.' },
+    { id:'lang', weight:1, instruction:'LANGD - LANG: 4-5 rubriker, 3-5 meningar per sektion. Detaljerad taktik, laning-tips per spelare, timing-windows och win conditions.' },
+  ];
+  if(!window.recentLengths) {
+    try { window.recentLengths = JSON.parse(sessionStorage.getItem('recentLengths')||'[]'); } catch(e) { window.recentLengths = []; }
+  }
+  var availableLengths = LENGTHS.filter(function(l){ return !window.recentLengths.slice(-2).includes(l.id); });
+  if(availableLengths.length === 0) availableLengths = LENGTHS;
+  var weightedLengths = [];
+  availableLengths.forEach(function(l){ for(var w=0;w<l.weight;w++) weightedLengths.push(l); });
+  var chosenLength = weightedLengths[Math.floor(Math.random() * weightedLengths.length)];
+  window.recentLengths.push(chosenLength.id);
+  if(window.recentLengths.length > 4) window.recentLengths.shift();
+  try { sessionStorage.setItem('recentLengths', JSON.stringify(window.recentLengths)); } catch(e) {}
+
   var prompt = 'Du ar en Dota 2 draft-expert. ' + n + ' spelare ska spela en match.' + wildcardInstruction
     + '\n\nSPELSTIL (hemlig instruktion - folj denna men avsloja den inte i texten): ' + chosenArchetype.instruction
     + '\n\nHERO POOLS:\n' + poolSummary
     + '\n\nLANING-KONTEXT:\n' + getLaningCtx(n)
     + '\n\nPRESENTATIONSSTIL: ' + chosenStyle.instruction
+    + '\n\n' + chosenLength.instruction
     + '\n\nVIKTIG REGEL: Undvik nyligen spelade hjaltar per spelare (listas ovan). Prioritera variation.'
     + (captainNotes ? '\n\nKAPTENENS INSTRUKTIONER: ' + captainNotes : '')
     + '\n\nSpelarna heter: ' + draftNames
@@ -1034,10 +1053,12 @@ async function generateStrategy() {
     + '\n\nKAPTENSBRIEFING_START'
     + '\n[MAX 4 meningar. Kaptenen laser hogt. Vem spelar vad, spelstil, win condition. Enkelt.]'
     + '\nKAPTENSBRIEFING_END'
-    + '\n\nSedan strategin - MAX 3 rubriker, kortfattat och konkret. Inga lange listor. Direkt pa sak. Anvand svenska.'
+    + '\n\nSedan strategin enligt langdinstruktionen ovan. Anvand svenska.'
+
+  const LENGTH_TOKENS = { kort: 2500, medel: 3500, lang: 5000 };
 
   try {
-    const resp=await fetch('/api/strategy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
+    const resp=await fetch('/api/strategy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt, maxTokens: LENGTH_TOKENS[chosenLength.id]})});
     const data=await resp.json();
     if(data.error)throw new Error(data.error);
     const text=data.text;
