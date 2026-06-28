@@ -300,8 +300,15 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 <div id="lan-modal-overlay" class="modal-overlay">
   <div class="modal" style="width:440px">
     <h3>Infor lanet</h3>
-    <p style="color:var(--text-dim);font-size:13px;margin-bottom:20px;line-height:1.6">Valj vad du vill nullstalla. Spelarpooler paverkas aldrig.</p>
+    <p style="color:var(--text-dim);font-size:13px;margin-bottom:20px;line-height:1.6">Valj vad du vill nullstalla. Spelarna behalles.</p>
     <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">
+      <label style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer">
+        <input type="checkbox" id="lan-clear-pools" style="width:16px;height:16px;accent-color:var(--gold)">
+        <div>
+          <div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Rensa hjaltepooler</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-top:2px">Alla spelares hero pools och utmaningspooler rensas</div>
+        </div>
+      </label>
       <label style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer">
         <input type="checkbox" id="lan-clear-history" style="width:16px;height:16px;accent-color:var(--gold)">
         <div>
@@ -1351,7 +1358,7 @@ async function removeEnemy(name) {
 async function generateItems() {
   var m = await apiFetch('/matches/'+currentMatchId);
   var enemyList = [...currentEnemies].join(', ');
-  var prompt = 'Du ar en Dota 2 item-expert. Vi har precis genererat en draft-strategi och ska nu mota dessa motstandare.\n\nVAR DRAFT-STRATEGI:\n'+(m.currentStrategy||m.strategy||'')+'\n\nMOTSTANDARRNA SPELAR:\n'+enemyList+'\n\nGe konkreta itemtips per spelare i vart lag. Fokusera pa 3-5 nyckelitems per spelare som ar extra viktiga MOT just dessa motstandare.\n\nAnvand svenska. Var specifik.';
+  var prompt = 'Du ar en Dota 2 item-expert. Vi har precis genererat en draft-strategi och ska nu mota dessa motstandare.\n\nVAR DRAFT-STRATEGI:\n'+(m.currentStrategy||m.strategy||'')+'\n\nMOTSTANDARRNA SPELAR:\n'+enemyList+'\n\nGe konkreta itemtips per spelare i vart lag. Fokusera pa 3-5 nyckelitems per spelare som ar extra viktiga MOT just dessa motstandare.\n\nFORMAT: For varje spelare, skriv spelarnamn och hjalte som rubrik, sedan varje item pa egen rad som "**Itemnamn** - kort motivering". Avsluta varje spelare med en "Prioritet:"-rad. Ingen markdown-tabell, inga | tecken. Anvand svenska. Var specifik.';
   var btn = document.getElementById('get-items-btn');
   if(btn) { btn.disabled = true; btn.textContent = 'Hamtar itemtips...'; }
   try {
@@ -1410,6 +1417,7 @@ function getShareUrl(playerIndex) {
 
 // ===================== LAN MODAL =====================
 function openLanModal() {
+  document.getElementById('lan-clear-pools').checked = false;
   document.getElementById('lan-clear-history').checked = false;
   document.getElementById('lan-clear-memory').checked = false;
   document.getElementById('lan-confirm-input').value = '';
@@ -1423,7 +1431,7 @@ function closeLanModal() {
 }
 function checkLanConfirm() {
   var val = document.getElementById('lan-confirm-input').value.trim().toUpperCase();
-  var anyChecked = document.getElementById('lan-clear-history').checked || document.getElementById('lan-clear-memory').checked;
+  var anyChecked = document.getElementById('lan-clear-pools').checked || document.getElementById('lan-clear-history').checked || document.getElementById('lan-clear-memory').checked;
   var ok = val === 'STARTA' && anyChecked;
   var btn = document.getElementById('lan-confirm-btn');
   btn.disabled = !ok;
@@ -1432,9 +1440,14 @@ function checkLanConfirm() {
     : 'padding:8px 20px;background:#555;border:none;color:#888;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:not-allowed;border-radius:3px';
 }
 async function executeLanReset() {
+  var clearPools = document.getElementById('lan-clear-pools').checked;
   var clearHistory = document.getElementById('lan-clear-history').checked;
   var clearMemory = document.getElementById('lan-clear-memory').checked;
   closeLanModal();
+  if(clearPools) {
+    await apiFetch('/players/reset-pools', {method:'POST'});
+    players = await apiFetch('/players');
+  }
   if(clearHistory) {
     await apiFetch('/matches', {method:'DELETE'});
   }
