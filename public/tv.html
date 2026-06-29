@@ -316,7 +316,7 @@ async function runReveal(matchId, gameNumber) {
   try {
     var resp = await fetch('/api/status');
     var status = await resp.json();
-    if(status.latestMatchId) {
+    if(!status.generating && status.latestMatchId) {
       _lastMatchId = status.latestMatchId;
     }
   } catch(e) {}
