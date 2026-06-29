@@ -89,11 +89,11 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 @media(max-width:800px){.match-layout{grid-template-columns:1fr;}}
 .match-panel h3{font-size:18px;font-weight:700;text-transform:uppercase;color:var(--gold);letter-spacing:.08em;margin-bottom:16px;}
 .player-select-list{display:flex;flex-direction:column;gap:8px;}
-.player-toggle{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer;transition:all .15s;user-select:none;}
+.player-toggle{display:flex;align-items:center;gap:6px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer;transition:all .15s;user-select:none;}
 .player-toggle:hover{border-color:var(--gold-dim);}
 .player-toggle.active{border-color:var(--gold);background:rgba(200,155,60,.08);}
-.player-toggle-name{font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;flex:1;}
-.player-toggle-heroes{font-size:12px;color:var(--text-dim);}
+.player-toggle-name{font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.player-toggle-heroes{font-size:11px;color:var(--text-dim);white-space:nowrap;}
 .player-toggle.active .player-toggle-heroes{color:var(--gold);}
 .checkbox{width:18px;height:18px;border:2px solid var(--border);border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all .15s;}
 .player-toggle.active .checkbox{background:var(--gold);border-color:var(--gold);color:#000;}
@@ -161,8 +161,8 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .challenge-gen-btn:hover{background:rgba(155,89,182,.12);border-color:#9b59b6;}
 .challenge-gen-btn:disabled{opacity:.4;cursor:not-allowed;}
 /* CHALLENGE POOL - MATCH PAGE */
-.cp-toggle{display:flex;gap:3px;flex-shrink:0;}
-.cp-btn{padding:2px 6px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;cursor:pointer;border:1px solid #8e44ad44;background:none;color:#6a3d8a;transition:all .12s;}
+.cp-toggle{display:flex;gap:2px;flex-shrink:0;}
+.cp-btn{padding:2px 5px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;cursor:pointer;border:1px solid #8e44ad44;background:none;color:#6a3d8a;transition:all .12s;white-space:nowrap;}
 .cp-btn.active{border-color:#8e44ad88;background:rgba(155,89,182,.2);color:#b980e0;}
 .cp-btn:hover:not(.active){border-color:#8e44ad66;color:#9b59b6;}
 </style>
@@ -834,7 +834,7 @@ function renderMatchPage() {
       ? '<button onclick="togglePlayerPool(event,'+i+')" style="background:none;border:1px solid '+(poolIgnored?'#8e44ad88':'var(--border)')+';color:'+(poolIgnored?'#9b59b6':'var(--text-dim)')+';font-size:11px;padding:3px 8px;border-radius:3px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.04em;white-space:nowrap">'+(poolIgnored?'🎲 FRITT':'📋 POOL')+'</button>'
       : '';
     item.innerHTML = '<div class="checkbox">'+(matchPlayers.has(i)?'✓':'')+'</div>'
-      + '<div style="flex:1">'
+      + '<div style="flex:1;min-width:0">'
       + '<div class="player-toggle-name">'+p.name+'</div>'
       + '<div class="player-toggle-heroes">'+heroesText+'</div>'
       + '</div>'
@@ -905,6 +905,10 @@ async function generateStrategy() {
   const active=[...matchPlayers].map(i=>players[i]);
   const n=active.length;
   if(n<3||n>5)return;
+
+  const genBtn = document.getElementById('gen-btn');
+  if(genBtn) { genBtn.disabled=true; genBtn.textContent='Genererar...'; }
+  apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:true})}).catch(()=>{});
 
   // Wildcard: roughly 1 in 4 chance (25%), marked separately
   const isWildcard = Math.random() < 0.25;
@@ -1182,9 +1186,59 @@ async function generateStrategy() {
 
     area.innerHTML = '';
     area.appendChild(areaDiv);
+    apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:false})}).catch(()=>{});
+    if(genBtn) { genBtn.disabled=false; genBtn.textContent='Generera ny strategi'; }
   } catch(err){
+    apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:false})}).catch(()=>{});
+    if(genBtn) { genBtn.disabled=false; genBtn.textContent='Generera strategi ('+n+' spelare)'; }
     area.innerHTML='<div class="strategy-placeholder"><div class="icon">&#9888;</div><p>Fel: '+err.message+'</p></div>';
   }
+}
+
+// ===================== POLLING =====================
+var _pollTimer = null;
+var _pollGenerating = false;
+
+function startPolling() {
+  if(_pollTimer) return;
+  _pollTimer = setInterval(async function() {
+    try {
+      var status = await apiFetch('/status');
+      var genBtn = document.getElementById('gen-btn');
+      var itemBtn = document.getElementById('get-items-btn');
+
+      if(status.generating && !_pollGenerating) {
+        // Someone else started generating
+        _pollGenerating = true;
+        if(genBtn && !genBtn.disabled) { genBtn.disabled=true; genBtn.textContent='Genererar...'; }
+        if(itemBtn && !itemBtn.disabled) { itemBtn.disabled=true; }
+        var area = document.getElementById('strategy-area');
+        if(area && !area.querySelector('.thinking')) {
+          area.innerHTML = '<div class="thinking"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div> Någon genererar strategi...</div>';
+        }
+      } else if(!status.generating && _pollGenerating) {
+        // Generation done - reload strategy
+        _pollGenerating = false;
+        if(genBtn) { genBtn.disabled=false; }
+        if(itemBtn) { itemBtn.disabled=false; }
+        if(currentMatchId) {
+          try {
+            var m = await apiFetch('/matches/'+currentMatchId);
+            if(m && (m.currentStrategy||m.strategy)) {
+              var area = document.getElementById('strategy-area');
+              if(area) {
+                var div = document.createElement('div');
+                div.className = 'strategy-raw';
+                div.innerHTML = mdToHtml(m.currentStrategy||m.strategy);
+                area.innerHTML = '';
+                area.appendChild(div);
+              }
+            }
+          } catch(e){}
+        }
+      }
+    } catch(e) {}
+  }, 2000);
 }
 
 // ===================== HISTORY =====================
@@ -1612,7 +1666,7 @@ if(poolOnlyMode) {
   if(homeSubtitle) homeSubtitle.textContent = 'Klicka pa ditt namn och bocka i hjaltarna du vill spela pa lanet';
 }
 
-ensureDefaultPlayers().then(function(){ checkUrlParams(); });
+ensureDefaultPlayers().then(function(){ checkUrlParams(); startPolling(); });
 
 document.getElementById('modal-overlay').addEventListener('click', function(e){
   if(e.target===document.getElementById('modal-overlay')) closeModal();
