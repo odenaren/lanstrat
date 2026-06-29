@@ -164,6 +164,15 @@ app.post('/api/players/reset-pools', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── STATUS (polling) ─────────────────────────────────
+let serverStatus = { generating: false, latestMatchId: null };
+app.get('/api/status', (req, res) => res.json(serverStatus));
+app.post('/api/status/generating', (req, res) => {
+  serverStatus.generating = !!req.body.generating;
+  if(req.body.latestMatchId) serverStatus.latestMatchId = req.body.latestMatchId;
+  res.json(serverStatus);
+});
+
 // MATCHES
 app.get('/api/matches', async (req, res) => {
   try { res.json(await readMatches()); }
@@ -190,6 +199,7 @@ app.post('/api/matches', async (req, res) => {
     };
     matches.unshift(match);
     await writeMatches(matches);
+    serverStatus.latestMatchId = match.id;
     res.json(match);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
