@@ -89,7 +89,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 @media(max-width:800px){.match-layout{grid-template-columns:1fr;}}
 .match-panel h3{font-size:18px;font-weight:700;text-transform:uppercase;color:var(--gold);letter-spacing:.08em;margin-bottom:16px;}
 .player-select-list{display:flex;flex-direction:column;gap:8px;}
-.player-toggle{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer;transition:all .15s;user-select:none;}
+.player-toggle{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer;transition:all .15s;user-select:none;flex-wrap:wrap;}
 .player-toggle:hover{border-color:var(--gold-dim);}
 .player-toggle.active{border-color:var(--gold);background:rgba(200,155,60,.08);}
 .player-toggle-name{font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;flex:1;}
@@ -162,6 +162,8 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .challenge-gen-btn:disabled{opacity:.4;cursor:not-allowed;}
 /* CHALLENGE POOL - MATCH PAGE */
 .cp-toggle{display:flex;gap:3px;flex-shrink:0;}
+.cp-toggle.player-cp{margin-left:auto;}
+@media(max-width:340px){.cp-toggle.player-cp{width:100%;margin-left:30px;margin-top:4px;}}
 .cp-btn{padding:2px 6px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;cursor:pointer;border:1px solid #8e44ad44;background:none;color:#6a3d8a;transition:all .12s;}
 .cp-btn.active{border-color:#8e44ad88;background:rgba(155,89,182,.2);color:#b980e0;}
 .cp-btn:hover:not(.active){border-color:#8e44ad66;color:#9b59b6;}
@@ -842,7 +844,7 @@ function renderMatchPage() {
     // Per-player cp toggle (only when active and has challenge pool)
     if(matchPlayers.has(i) && (p.challengePool||[]).length > 0) {
       var cpToggle = document.createElement('div');
-      cpToggle.className = 'cp-toggle';
+      cpToggle.className = 'cp-toggle player-cp';
       cpToggle.style.marginLeft = '4px';
       if(playerCpModes[i] === undefined) playerCpModes[i] = 'mix';
       var curMode = playerCpModes[i];
@@ -905,6 +907,11 @@ async function generateStrategy() {
   const active=[...matchPlayers].map(i=>players[i]);
   const n=active.length;
   if(n<3||n>5)return;
+
+  // Disable button for everyone via polling
+  const genBtn = document.getElementById('gen-btn');
+  if(genBtn) { genBtn.disabled=true; genBtn.textContent='Genererar...'; }
+  await apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:true})});
 
   // Wildcard: roughly 1 in 4 chance (25%), marked separately
   const isWildcard = Math.random() < 0.25;
@@ -1203,9 +1210,82 @@ async function generateStrategy() {
 
     area.innerHTML = '';
     area.appendChild(areaDiv);
+    await apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:false})});
+    if(genBtn) { genBtn.disabled=false; genBtn.textContent='Generera ny strategi'; }
   } catch(err){
+    await apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:false})}).catch(()=>{});
+    if(genBtn) { genBtn.disabled=false; genBtn.textContent='Generera strategi ('+n+' spelare)'; }
     area.innerHTML='<div class="strategy-placeholder"><div class="icon">&#9888;</div><p>Fel: '+err.message+'</p></div>';
   }
+}
+
+// ===================== POLLING =====================
+var _pollTimer = null;
+var _lastMatchId = null;
+var _isGenerating = false;
+
+function startPolling() {
+  if(_pollTimer) return;
+  _pollTimer = setInterval(async function() {
+    try {
+      var status = await apiFetch('/status');
+      var genBtn = document.getElementById('gen-btn');
+      var itemBtn = document.getElementById('get-items-btn');
+
+      // Sync generating state for non-clickers
+      if(status.generating && !_isGenerating) {
+        _isGenerating = true;
+        if(genBtn && !genBtn.disabled) { genBtn.disabled=true; genBtn.textContent='Genererar...'; }
+        if(itemBtn && !itemBtn.disabled) { itemBtn.disabled=true; }
+      } else if(!status.generating && _isGenerating) {
+        _isGenerating = false;
+        // Reload match page to show new strategy
+        if(document.getElementById('page-match') && document.getElementById('page-match').classList.contains('active')) {
+          var currentArea = document.getElementById('strategy-area');
+          // Only reload if we weren't the one generating (area already updated for clicker)
+          if(currentArea && currentArea.querySelector('.thinking')) {
+            // still showing spinner - we were the clicker, skip
+          } else {
+            // reload latest strategy for this match
+            if(currentMatchId) {
+              var m = await apiFetch('/matches/'+currentMatchId);
+              if(m && m.currentStrategy) {
+                var area = document.getElementById('strategy-area');
+                if(area) {
+                  var div = document.createElement('div');
+                  div.className = 'strategy-raw';
+                  div.innerHTML = mdToHtml(m.currentStrategy);
+                  area.innerHTML = '';
+                  area.appendChild(div);
+                }
+              }
+            }
+          }
+        }
+        if(genBtn) { genBtn.disabled=false; }
+        if(itemBtn) { itemBtn.disabled=false; }
+      }
+
+      // Check for new match
+      if(status.latestMatchId && status.latestMatchId !== _lastMatchId) {
+        _lastMatchId = status.latestMatchId;
+        if(document.getElementById('page-match') && document.getElementById('page-match').classList.contains('active')) {
+          currentMatchId = status.latestMatchId;
+          var m = await apiFetch('/matches/'+currentMatchId);
+          if(m && (m.currentStrategy||m.strategy)) {
+            var area = document.getElementById('strategy-area');
+            if(area) {
+              var div = document.createElement('div');
+              div.className = 'strategy-raw';
+              div.innerHTML = mdToHtml(m.currentStrategy||m.strategy);
+              area.innerHTML='';
+              area.appendChild(div);
+            }
+          }
+        }
+      }
+    } catch(e) {}
+  }, 2000);
 }
 
 // ===================== HISTORY =====================
@@ -1633,7 +1713,7 @@ if(poolOnlyMode) {
   if(homeSubtitle) homeSubtitle.textContent = 'Klicka pa ditt namn och bocka i hjaltarna du vill spela pa lanet';
 }
 
-ensureDefaultPlayers().then(function(){ checkUrlParams(); });
+ensureDefaultPlayers().then(function(){ checkUrlParams(); startPolling(); });
 
 document.getElementById('modal-overlay').addEventListener('click', function(e){
   if(e.target===document.getElementById('modal-overlay')) closeModal();
