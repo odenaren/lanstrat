@@ -1197,6 +1197,109 @@ async function generateStrategy() {
   }
 }
 
+function renderStrategyFromMatch(m) {
+  var area = document.getElementById('strategy-area');
+  if(!area) return;
+  var text = m.currentStrategy || m.strategy || '';
+  var draft = m.currentDraft || m.draft || {};
+  var name = m.name || 'Draft Strategi';
+  var briefing = m.briefing || '';
+  var matchPlayers = m.players || [];
+
+  // Parse strategy text sections
+  var cleanText = text;
+  var briefMatch = text.match(/KAPTENSBRIEFING_START\s*([\s\S]*?)\s*KAPTENSBRIEFING_END/);
+  if(briefMatch) { briefing = briefMatch[1].trim(); cleanText = cleanText.replace(/KAPTENSBRIEFING_START[\s\S]*?KAPTENSBRIEFING_END\s*/, '').trim(); }
+  cleanText = cleanText.replace(/DRAFT_JSON_START[\s\S]*?DRAFT_JSON_END\s*/, '').trim();
+
+  var areaDiv = document.createElement('div');
+
+  // Header
+  var headerRow = document.createElement('div');
+  headerRow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px';
+  var titleWrap = document.createElement('div');
+  var titleEl = document.createElement('h2');
+  titleEl.style.cssText = 'font-family:Rajdhani,sans-serif;font-size:22px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em';
+  titleEl.textContent = name;
+  if(m.wildcard) {
+    var wcBadge = document.createElement('span');
+    wcBadge.style.cssText = 'font-size:14px;background:rgba(155,89,182,.2);border:1px solid #8e44ad88;color:#9b59b6;padding:2px 8px;border-radius:3px;vertical-align:middle;letter-spacing:.05em;margin-left:8px';
+    wcBadge.textContent = '🎲 WILD CARD';
+    titleEl.appendChild(wcBadge);
+  }
+  var subEl = document.createElement('div');
+  subEl.style.cssText = 'color:var(--text-dim);font-size:13px;margin-top:2px';
+  subEl.textContent = 'Spelare: ' + matchPlayers.join(', ');
+  titleWrap.appendChild(titleEl);
+  titleWrap.appendChild(subEl);
+  var histBtn = document.createElement('button');
+  histBtn.className = 'btn btn-ghost';
+  histBtn.textContent = 'Se historik →';
+  histBtn.onclick = function(){ showPage('history'); };
+  headerRow.appendChild(titleWrap);
+  headerRow.appendChild(histBtn);
+  areaDiv.appendChild(headerRow);
+
+  // Briefing
+  if(briefing) {
+    var briefDiv = document.createElement('div');
+    briefDiv.style.cssText = 'background:rgba(200,155,60,.08);border:1px solid var(--gold-dim);border-radius:6px;padding:18px 20px;margin-bottom:20px';
+    var briefTitle = document.createElement('div');
+    briefTitle.style.cssText = 'font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:10px';
+    briefTitle.textContent = 'Kaptensbriefing - las hogt for laget';
+    var briefText = document.createElement('div');
+    briefText.style.cssText = 'font-size:15px;line-height:1.8;color:var(--text)';
+    briefText.innerHTML = briefing.split('\n').join('<br>');
+    briefDiv.appendChild(briefTitle);
+    briefDiv.appendChild(briefText);
+    areaDiv.appendChild(briefDiv);
+  }
+
+  // Draft portraits
+  var portraitRow = document.createElement('div');
+  portraitRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px';
+  Object.entries(draft).forEach(function(entry) {
+    var playerName = entry[0], heroName = entry[1];
+    var h = heroName ? HERO_LIST.find(function(x){ return x.name===heroName; }) : null;
+    var img = h ? heroImg(h.id) : null;
+    var pWrap = document.createElement('div');
+    pWrap.style.cssText = 'text-align:center;width:72px';
+    var imgBox = document.createElement('div');
+    imgBox.style.cssText = 'width:72px;height:40px;border-radius:4px;overflow:hidden;background:var(--surface2);border:1px solid var(--border)';
+    if(img) {
+      var imgEl = document.createElement('img');
+      imgEl.src = img;
+      imgEl.style.cssText = 'width:100%;height:100%;object-fit:cover;object-position:center top';
+      imgBox.appendChild(imgEl);
+    } else {
+      var fallback = document.createElement('div');
+      fallback.style.cssText = 'display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:18px';
+      fallback.textContent = h ? ATTR_ICONS[h.attr] : '?';
+      imgBox.appendChild(fallback);
+    }
+    var heroNameEl = document.createElement('div');
+    heroNameEl.style.cssText = 'font-size:10px;color:var(--gold);font-weight:600;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    heroNameEl.textContent = heroName || '?';
+    var playerNameEl = document.createElement('div');
+    playerNameEl.style.cssText = 'font-size:9px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    playerNameEl.textContent = playerName;
+    pWrap.appendChild(imgBox);
+    pWrap.appendChild(heroNameEl);
+    pWrap.appendChild(playerNameEl);
+    portraitRow.appendChild(pWrap);
+  });
+  areaDiv.appendChild(portraitRow);
+
+  // Strategy text
+  var stratDiv = document.createElement('div');
+  stratDiv.className = 'strategy-raw';
+  stratDiv.innerHTML = mdToHtml(cleanText);
+  areaDiv.appendChild(stratDiv);
+
+  area.innerHTML = '';
+  area.appendChild(areaDiv);
+}
+
 // ===================== POLLING =====================
 var _pollTimer = null;
 var _pollGenerating = false;
@@ -1238,14 +1341,7 @@ function startPolling() {
                 if(stBtn) stBtn.classList.add('active');
               }
               currentMatchId = matchIdToLoad;
-              var area = document.getElementById('strategy-area');
-              if(area) {
-                var div = document.createElement('div');
-                div.className = 'strategy-raw';
-                div.innerHTML = mdToHtml(m.currentStrategy||m.strategy);
-                area.innerHTML = '';
-                area.appendChild(div);
-              }
+              renderStrategyFromMatch(m);
             }
           } catch(e){}
         }
