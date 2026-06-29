@@ -312,15 +312,7 @@ async function runReveal(matchId, gameNumber) {
 }
 
 // Kolla direkt vid sidladdning
-(async function() {
-  try {
-    var resp = await fetch('/api/status');
-    var status = await resp.json();
-    if(!status.generating && status.latestMatchId) {
-      _lastMatchId = status.latestMatchId;
-    }
-  } catch(e) {}
-})();
+// _lastMatchId hanteras enbart av polling
 
 var _pendingMatchId = null;
 
@@ -333,9 +325,12 @@ setInterval(async function() {
 
     if(status.generating && !_pollGenerating) {
       _pollGenerating = true;
+      // Notera ID som pågår men sätt inte _lastMatchId än
+      _pendingMatchId = status.latestMatchId;
     } else if(!status.generating && _pollGenerating) {
       _pollGenerating = false;
       var matchId = status.latestMatchId;
+      // Trigga bara om detta är ett annat ID än det vi sett innan generating:true
       if(matchId && matchId !== _lastMatchId) {
         _lastMatchId = matchId;
         var allResp = await fetch('/api/matches');
