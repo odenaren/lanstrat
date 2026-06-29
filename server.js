@@ -169,7 +169,6 @@ let serverStatus = { generating: false, latestMatchId: null };
 app.get('/api/status', (req, res) => res.json(serverStatus));
 app.post('/api/status/generating', (req, res) => {
   serverStatus.generating = !!req.body.generating;
-  if(req.body.latestMatchId) serverStatus.latestMatchId = req.body.latestMatchId;
   res.json(serverStatus);
 });
 
@@ -316,6 +315,8 @@ app.post('/api/items', async (req, res) => {
   try { res.json({ text: await callClaude(req.body.prompt, 2000) }); }
   catch(e) { res.status(500).json({ error: e.message }); }
 });
+
+app.get('/tv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'tv.html')));
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
