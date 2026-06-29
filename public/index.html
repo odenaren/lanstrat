@@ -829,7 +829,7 @@ function renderMatchPage() {
     const poolIgnored = ignorePlayerPools.has(i);
     const heroesText = poolIgnored
       ? '<span style="text-decoration:line-through;opacity:.5">'+(p.heroes||[]).length+' hjältar</span> <span style="color:#9b59b6;font-size:11px">🎲 FRITT</span>'
-      : (p.heroes||[]).length+' hjältar i poolen';
+      : (p.heroes||[]).length+' hjältar';
     const poolBtn = matchPlayers.has(i)
       ? '<button onclick="togglePlayerPool(event,'+i+')" style="background:none;border:1px solid '+(poolIgnored?'#8e44ad88':'var(--border)')+';color:'+(poolIgnored?'#9b59b6':'var(--text-dim)')+';font-size:11px;padding:3px 8px;border-radius:3px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.04em;white-space:nowrap">'+(poolIgnored?'🎲 FRITT':'📋 POOL')+'</button>'
       : '';
@@ -1186,7 +1186,7 @@ async function generateStrategy() {
 
     area.innerHTML = '';
     area.appendChild(areaDiv);
-    apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:false})}).catch(()=>{});
+    apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:false, latestMatchId: currentMatchId})}).catch(()=>{});
     if(genBtn) { genBtn.disabled=false; genBtn.textContent='Generera ny strategi'; }
   } catch(err){
     apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:false})}).catch(()=>{});
@@ -1221,10 +1221,21 @@ function startPolling() {
         _pollGenerating = false;
         if(genBtn) { genBtn.disabled=false; }
         if(itemBtn) { itemBtn.disabled=false; }
-        if(currentMatchId) {
+        var matchIdToLoad = currentMatchId || status.latestMatchId;
+        if(matchIdToLoad) {
           try {
-            var m = await apiFetch('/matches/'+currentMatchId);
+            var m = await apiFetch('/matches/'+matchIdToLoad);
             if(m && (m.currentStrategy||m.strategy)) {
+              // Navigate to strats page if not already there
+              var matchPage = document.getElementById('page-match');
+              if(matchPage) {
+                document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+                matchPage.classList.add('active');
+                document.querySelectorAll('.nav-tab').forEach(function(t){ t.classList.remove('active'); });
+                var stBtn = document.querySelector('[data-page="match"]');
+                if(stBtn) stBtn.classList.add('active');
+              }
+              currentMatchId = matchIdToLoad;
               var area = document.getElementById('strategy-area');
               if(area) {
                 var div = document.createElement('div');
