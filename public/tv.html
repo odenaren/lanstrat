@@ -207,6 +207,7 @@ async function runReveal(matchId) {
         wa.play().catch(function(){});
       }
       await wait(33000);
+      await wait(2000);
     }
 
     // STEG 1: Strateginamnet + game_N.mp3 samtidigt
@@ -219,7 +220,7 @@ async function runReveal(matchId) {
       ga.currentTime = 0;
       ga.play().catch(function(){});
     }
-    await wait(2800);
+    await wait(6000);
 
     // STEG 2: Hero reveal ett i taget
     for(var i = 0; i < playerNames.length; i++) {
@@ -235,7 +236,7 @@ async function runReveal(matchId) {
 
       show('hero-reveal');
       document.getElementById('hero-content').style.animation = 'slideUp .4s ease both';
-      await wait(2200);
+      await wait(4400);
     }
 
     // STEG 3: Briefing
