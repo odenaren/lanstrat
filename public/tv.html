@@ -48,6 +48,17 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
 #briefing-screen .brief-title{font-size:20px;font-weight:700;color:var(--gold);letter-spacing:.2em;text-transform:uppercase;}
 #briefing-screen .brief-text{font-size:clamp(22px,3vw,40px);line-height:1.7;color:var(--text);max-width:1100px;}
 
+/* WELCOME */
+#welcome{display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:32px;position:relative;overflow:hidden;}
+#welcome .dhs-logo{font-size:clamp(80px,14vw,160px);font-weight:700;color:var(--gold);letter-spacing:.25em;text-transform:uppercase;text-shadow:0 0 60px rgba(200,155,60,.5);animation:logoPulse 3s ease-in-out infinite;}
+#welcome .dhs-sub{font-size:clamp(16px,2vw,28px);color:var(--text-dim);letter-spacing:.4em;text-transform:uppercase;}
+.spotlight{position:absolute;width:300px;height:600px;background:linear-gradient(180deg,rgba(200,155,60,.08) 0%,transparent 100%);border-radius:50%;pointer-events:none;transform-origin:bottom center;}
+
+@keyframes logoPulse{0%,100%{text-shadow:0 0 40px rgba(200,155,60,.4)}50%{text-shadow:0 0 100px rgba(200,155,60,.8),0 0 200px rgba(200,155,60,.3)}}
+@keyframes spot1{0%{transform:rotate(-30deg) translateX(-200px);opacity:0}10%{opacity:1}50%{transform:rotate(20deg) translateX(200px);opacity:.8}90%{opacity:1}100%{transform:rotate(-30deg) translateX(-200px);opacity:0}}
+@keyframes spot2{0%{transform:rotate(30deg) translateX(200px);opacity:0}15%{opacity:.6}50%{transform:rotate(-15deg) translateX(-150px);opacity:1}85%{opacity:.6}100%{transform:rotate(30deg) translateX(200px);opacity:0}}
+@keyframes spot3{0%{transform:rotate(5deg) translateX(0);opacity:.3}33%{transform:rotate(-25deg) translateX(-180px);opacity:.7}66%{transform:rotate(25deg) translateX(180px);opacity:.5}100%{transform:rotate(5deg) translateX(0);opacity:.3}}
+
 /* DRAFT OVERVIEW */
 #overview{display:none;flex-direction:column;align-items:center;justify-content:center;gap:40px;padding:60px;}
 #overview .ov-title{font-size:clamp(28px,4vw,52px);font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.1em;}
@@ -62,7 +73,18 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
 <body>
 <div id="screen">
 
-  <div id="idle">
+  <div id="welcome">
+    <div class="spotlight" style="animation:spot1 11s ease-in-out infinite;top:-100px;left:30%;"></div>
+    <div class="spotlight" style="animation:spot2 14s ease-in-out infinite;top:-100px;left:50%;"></div>
+    <div class="spotlight" style="animation:spot3 9s ease-in-out infinite;top:-100px;left:20%;"></div>
+    <div class="dhs-logo">DHS</div>
+    <div class="gold-line"></div>
+    <div class="dhs-sub">Dreamhack Skyrup · Season VII</div>
+  </div>
+
+  <audio id="welcome-audio" src="/sounds/announcer/welcome.mp3" preload="auto"></audio>
+
+
     <div class="logo">DHS</div>
     <div class="gold-line"></div>
     <div class="sub">Dreamhack Skyrup · The Playbook</div>
@@ -128,7 +150,7 @@ function heroImgUrl(heroName) {
 }
 
 function show(id) {
-  ['idle','splash','hero-reveal','briefing-screen','overview'].forEach(function(s){
+  ['idle','welcome','splash','hero-reveal','briefing-screen','overview'].forEach(function(s){
     var el = document.getElementById(s);
     el.style.display = 'none';
     el.style.animation = '';
@@ -156,6 +178,20 @@ async function runReveal(matchId) {
     var briefing = m.briefing || '';
     var isWildcard = !!m.wildcard;
     var playerNames = Object.keys(draft);
+
+    // Räkna matcher för att avgöra game-nummer
+    var allMatchesResp = await fetch('/api/matches');
+    var allMatches = await allMatchesResp.json();
+    var gameNumber = allMatches.length; // denna match är redan sparad, så length = nuvarande game
+
+    // GAME 1: Welcome-sekvens (33 sek)
+    if(gameNumber === 1) {
+      show('welcome');
+      var audio = document.getElementById('welcome-audio');
+      audio.currentTime = 0;
+      audio.play().catch(function(){});
+      await wait(33000);
+    }
 
     // STEG 1: Strateginamnet
     document.getElementById('splash-name').textContent = stratName;
