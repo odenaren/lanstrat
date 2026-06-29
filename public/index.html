@@ -1186,9 +1186,11 @@ async function generateStrategy() {
 
     area.innerHTML = '';
     area.appendChild(areaDiv);
+    _pollGenerating = false;
     apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:false, latestMatchId: currentMatchId})}).catch(()=>{});
     if(genBtn) { genBtn.disabled=false; genBtn.textContent='Generera ny strategi'; }
   } catch(err){
+    _pollGenerating = false;
     apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:false})}).catch(()=>{});
     if(genBtn) { genBtn.disabled=false; genBtn.textContent='Generera strategi ('+n+' spelare)'; }
     area.innerHTML='<div class="strategy-placeholder"><div class="icon">&#9888;</div><p>Fel: '+err.message+'</p></div>';
