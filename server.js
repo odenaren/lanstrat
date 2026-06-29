@@ -184,7 +184,7 @@ app.post('/api/matches', async (req, res) => {
   try {
     const matches = await readMatches();
     const match = {
-      id: Date.now().toString(),
+      id: req.body.id || Date.now().toString(),
       createdAt: new Date().toISOString(),
       name: name || '',
       briefing: briefing || '',
