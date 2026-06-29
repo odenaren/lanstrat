@@ -201,8 +201,7 @@ function unlockAudio() {
 
 var _isPlaying = false;
 
-var _introRunning = false;
-var _introMatchId = null;
+var _lastMatchId = null;
 
 async function runReveal(matchId, gameNumber) {
   if(_isPlaying) return;
