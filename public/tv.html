@@ -204,19 +204,9 @@ var _isPlaying = false;
 var _introRunning = false;
 var _introMatchId = null;
 
-async function startIntro(matchId) {
+async function runReveal(matchId, gameNumber) {
   if(_isPlaying) return;
   _isPlaying = true;
-  _introRunning = true;
-  _introMatchId = matchId;
-
-  // Räkna matcher — hämta historik nu, denna match är ännu inte sparad
-  var allMatchesResp = await fetch('/api/matches');
-  var allMatches = await allMatchesResp.json();
-  // +1 eftersom matchen inte är sparad än
-  var gameNumber = allMatches.length + 1;
-  // Spara gameNumber för finishReveal
-  _introMatchId._gameNumber = gameNumber;
 
   // GAME 1: Welcome-sekvens (33 sek)
   if(gameNumber === 1) {
@@ -231,7 +221,6 @@ async function startIntro(matchId) {
   }
 
   // STEG 1: Strateginamnet + game_N.mp3
-  // Visa ett tomt splash med game-ljud medan vi väntar på data
   document.getElementById('splash-name').textContent = '';
   document.getElementById('splash-wild').style.display = 'none';
   show('splash');
@@ -241,94 +230,82 @@ async function startIntro(matchId) {
     ga.currentTime = 0;
     ga.play().catch(function(){});
   }
-  _introRunning = false;
-}
 
-async function finishReveal(matchId) {
-  // Vänta om intro fortfarande körs
-  while(_introRunning) { await wait(200); }
+  // Vänta på match-data (max 30 sek)
+  var m = null;
+  for(var attempt = 0; attempt < 30; attempt++) {
+    try {
+      var resp = await fetch('/api/matches/' + matchId);
+      var data = await resp.json();
+      if(data && (data.strategy || data.currentStrategy)) { m = data; break; }
+    } catch(e) {}
+    await wait(1000);
+  }
 
-  try {
-    var resp = await fetch('/api/matches/' + matchId);
-    var m = await resp.json();
-    if(!m || (!m.currentStrategy && !m.strategy)) { _isPlaying = false; return; }
+  if(!m) { show('idle'); _isPlaying = false; return; }
 
-    var draft = m.currentDraft || m.draft || {};
-    var stratName = m.name || 'Draft Strategi';
-    var briefing = m.briefing || '';
-    var isWildcard = !!m.wildcard;
-    var playerNames = Object.keys(draft);
+  var draft = m.currentDraft || m.draft || {};
+  var stratName = m.name || 'Draft Strategi';
+  var briefing = m.briefing || '';
+  var isWildcard = !!m.wildcard;
+  var playerNames = Object.keys(draft);
 
-    // Uppdatera splash-namnet nu när vi har data
-    document.getElementById('splash-name').textContent = stratName;
-    document.getElementById('splash-wild').style.display = isWildcard ? 'block' : 'none';
+  // Uppdatera splash med namn och vänta ut 6 sek
+  document.getElementById('splash-name').textContent = stratName;
+  document.getElementById('splash-wild').style.display = isWildcard ? 'block' : 'none';
+  await wait(6000);
 
-    // Vänta ut resten av splash-tiden (6 sek totalt, dra av vad som gått)
-    await wait(6000);
+  // STEG 2: Hero reveal
+  for(var i = 0; i < playerNames.length; i++) {
+    var playerName = playerNames[i];
+    var heroName = draft[playerName];
+    var imgUrl = heroImgUrl(heroName);
 
-    // STEG 2: Hero reveal ett i taget
-    for(var i = 0; i < playerNames.length; i++) {
-      var playerName = playerNames[i];
-      var heroName = draft[playerName];
-      var imgUrl = heroImgUrl(heroName);
+    document.getElementById('hero-bg').style.backgroundImage = imgUrl ? 'url(' + imgUrl + ')' : 'none';
+    document.getElementById('hero-img-tv').src = imgUrl || '';
+    document.getElementById('hero-name-tv').textContent = heroName || '?';
+    document.getElementById('player-name-tv').textContent = playerName;
+    document.getElementById('pick-counter').textContent = (i+1) + ' / ' + playerNames.length;
 
-      document.getElementById('hero-bg').style.backgroundImage = imgUrl ? 'url(' + imgUrl + ')' : 'none';
-      document.getElementById('hero-img-tv').src = imgUrl || '';
-      document.getElementById('hero-name-tv').textContent = heroName || '?';
-      document.getElementById('player-name-tv').textContent = playerName;
-      document.getElementById('pick-counter').textContent = (i+1) + ' / ' + playerNames.length;
-
-      show('hero-reveal');
-      document.getElementById('hero-content').style.animation = 'slideUp .4s ease both';
-      if(_audioUnlocked) {
-        var heroSlug = heroName.toLowerCase().trim().replace(/['\s]+/g,'_').replace(/-/g,'_');
-        var ha = document.getElementById('hero-audio');
-        ha.src = '/sounds/heroes/' + heroSlug + '.mp3';
-        ha.currentTime = 0;
-        ha.play().catch(function(){});
-      }
-      await wait(4400);
+    show('hero-reveal');
+    document.getElementById('hero-content').style.animation = 'slideUp .4s ease both';
+    if(_audioUnlocked) {
+      var heroSlug = heroName.toLowerCase().trim().replace(/['\s]+/g,'_').replace(/-/g,'_');
+      var ha = document.getElementById('hero-audio');
+      ha.src = '/sounds/heroes/' + heroSlug + '.mp3';
+      ha.currentTime = 0;
+      ha.play().catch(function(){});
     }
+    await wait(4400);
+  }
 
-    // STEG 3: Briefing
-    if(briefing) {
-      document.getElementById('brief-text').textContent = briefing;
-      show('briefing-screen');
-      await wait(15000);
-    }
-
-    // STEG 4: Draft overview
-    document.getElementById('ov-title').textContent = stratName;
-    var portraits = document.getElementById('ov-portraits');
-    portraits.innerHTML = '';
-    playerNames.forEach(function(playerName) {
-      var heroName = draft[playerName];
-      var imgUrl = heroImgUrl(heroName);
-      var card = document.createElement('div');
-      card.className = 'ov-card';
-      card.style.animation = 'slideUp .4s ease both';
-      var imgWrap = document.createElement('div');
-      imgWrap.className = 'ov-img';
-      if(imgUrl) {
-        var img = document.createElement('img');
-        img.src = imgUrl;
-        imgWrap.appendChild(img);
-      }
-      var hn = document.createElement('div');
-      hn.className = 'ov-hero';
-      hn.textContent = heroName || '?';
-      var pn = document.createElement('div');
-      pn.className = 'ov-player';
-      pn.textContent = playerName;
-      card.appendChild(imgWrap);
-      card.appendChild(hn);
-      card.appendChild(pn);
-      portraits.appendChild(card);
-    });
-    show('overview');
+  // STEG 3: Briefing
+  if(briefing) {
+    document.getElementById('brief-text').textContent = briefing;
+    show('briefing-screen');
     await wait(15000);
+  }
 
-  } catch(e) { console.error(e); }
+  // STEG 4: Draft overview
+  document.getElementById('ov-title').textContent = stratName;
+  var portraits = document.getElementById('ov-portraits');
+  portraits.innerHTML = '';
+  playerNames.forEach(function(pName) {
+    var hName = draft[pName];
+    var iUrl = heroImgUrl(hName);
+    var card = document.createElement('div');
+    card.className = 'ov-card';
+    card.style.animation = 'slideUp .4s ease both';
+    var imgWrap = document.createElement('div');
+    imgWrap.className = 'ov-img';
+    if(iUrl) { var img = document.createElement('img'); img.src = iUrl; imgWrap.appendChild(img); }
+    var hn = document.createElement('div'); hn.className = 'ov-hero'; hn.textContent = hName || '?';
+    var pn = document.createElement('div'); pn.className = 'ov-player'; pn.textContent = pName;
+    card.appendChild(imgWrap); card.appendChild(hn); card.appendChild(pn);
+    portraits.appendChild(card);
+  });
+  show('overview');
+  await wait(15000);
 
   show('idle');
   _isPlaying = false;
@@ -339,9 +316,8 @@ async function finishReveal(matchId) {
   try {
     var resp = await fetch('/api/status');
     var status = await resp.json();
-    if(!status.generating && status.latestMatchId) {
+    if(status.latestMatchId) {
       _lastMatchId = status.latestMatchId;
-      finishReveal(status.latestMatchId);
     }
   } catch(e) {}
 })();
@@ -357,19 +333,16 @@ setInterval(async function() {
 
     if(status.generating && !_pollGenerating) {
       _pollGenerating = true;
-      // Starta animation direkt om nytt match-ID
       if(status.latestMatchId && status.latestMatchId !== _lastMatchId) {
-        _pendingMatchId = status.latestMatchId;
-        startIntro(_pendingMatchId);
+        _lastMatchId = status.latestMatchId;
+        // Räkna matcher nu (match ej sparad än, så +1)
+        var allResp = await fetch('/api/matches');
+        var allMatches = await allResp.json();
+        var gameNumber = allMatches.length + 1;
+        runReveal(status.latestMatchId, gameNumber);
       }
     } else if(!status.generating && _pollGenerating) {
       _pollGenerating = false;
-      var matchId = _pendingMatchId || status.latestMatchId;
-      if(matchId && matchId !== _lastMatchId) {
-        _lastMatchId = matchId;
-        _pendingMatchId = null;
-        finishReveal(matchId);
-      }
     }
   } catch(e) {}
 }, 2000);
