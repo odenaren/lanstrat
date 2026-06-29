@@ -341,6 +341,7 @@ async function finishReveal(matchId) {
     var status = await resp.json();
     if(!status.generating && status.latestMatchId) {
       _lastMatchId = status.latestMatchId;
+      finishReveal(status.latestMatchId);
     }
   } catch(e) {}
 })();
