@@ -201,9 +201,53 @@ function unlockAudio() {
 
 var _isPlaying = false;
 
-async function runReveal(matchId) {
+var _introRunning = false;
+var _introMatchId = null;
+
+async function startIntro(matchId) {
   if(_isPlaying) return;
   _isPlaying = true;
+  _introRunning = true;
+  _introMatchId = matchId;
+
+  // Räkna matcher — hämta historik nu, denna match är ännu inte sparad
+  var allMatchesResp = await fetch('/api/matches');
+  var allMatches = await allMatchesResp.json();
+  // +1 eftersom matchen inte är sparad än
+  var gameNumber = allMatches.length + 1;
+  // Spara gameNumber för finishReveal
+  _introMatchId._gameNumber = gameNumber;
+
+  // GAME 1: Welcome-sekvens (33 sek)
+  if(gameNumber === 1) {
+    show('welcome');
+    if(_audioUnlocked) {
+      var wa = document.getElementById('welcome-audio');
+      wa.currentTime = 0;
+      wa.play().catch(function(){});
+    }
+    await wait(33000);
+    await wait(2000);
+  }
+
+  // STEG 1: Strateginamnet + game_N.mp3
+  // Visa ett tomt splash med game-ljud medan vi väntar på data
+  document.getElementById('splash-name').textContent = '';
+  document.getElementById('splash-wild').style.display = 'none';
+  show('splash');
+  if(_audioUnlocked) {
+    var ga = document.getElementById('game-audio');
+    ga.src = '/sounds/announcer/game_' + gameNumber + '.mp3';
+    ga.currentTime = 0;
+    ga.play().catch(function(){});
+  }
+  _introRunning = false;
+}
+
+async function finishReveal(matchId) {
+  // Vänta om intro fortfarande körs
+  while(_introRunning) { await wait(200); }
+
   try {
     var resp = await fetch('/api/matches/' + matchId);
     var m = await resp.json();
@@ -215,33 +259,11 @@ async function runReveal(matchId) {
     var isWildcard = !!m.wildcard;
     var playerNames = Object.keys(draft);
 
-    // Räkna matcher för att avgöra game-nummer
-    var allMatchesResp = await fetch('/api/matches');
-    var allMatches = await allMatchesResp.json();
-    var gameNumber = allMatches.length; // denna match är redan sparad, så length = nuvarande game
-
-    // GAME 1: Welcome-sekvens (33 sek)
-    if(gameNumber === 1) {
-      show('welcome');
-      if(_audioUnlocked) {
-        var wa = document.getElementById('welcome-audio');
-        wa.currentTime = 0;
-        wa.play().catch(function(){});
-      }
-      await wait(33000);
-      await wait(2000);
-    }
-
-    // STEG 1: Strateginamnet + game_N.mp3 samtidigt
+    // Uppdatera splash-namnet nu när vi har data
     document.getElementById('splash-name').textContent = stratName;
     document.getElementById('splash-wild').style.display = isWildcard ? 'block' : 'none';
-    show('splash');
-    if(_audioUnlocked) {
-      var ga = document.getElementById('game-audio');
-      ga.src = '/sounds/announcer/game_' + gameNumber + '.mp3';
-      ga.currentTime = 0;
-      ga.play().catch(function(){});
-    }
+
+    // Vänta ut resten av splash-tiden (6 sek totalt, dra av vad som gått)
     await wait(6000);
 
     // STEG 2: Hero reveal ett i taget
@@ -308,7 +330,6 @@ async function runReveal(matchId) {
 
   } catch(e) { console.error(e); }
 
-  // Tillbaka till idle
   show('idle');
   _isPlaying = false;
 }
@@ -324,6 +345,8 @@ async function runReveal(matchId) {
   } catch(e) {}
 })();
 
+var _pendingMatchId = null;
+
 // Polling
 var _pollGenerating = false;
 setInterval(async function() {
@@ -333,12 +356,18 @@ setInterval(async function() {
 
     if(status.generating && !_pollGenerating) {
       _pollGenerating = true;
+      // Starta animation direkt om nytt match-ID
+      if(status.latestMatchId && status.latestMatchId !== _lastMatchId) {
+        _pendingMatchId = status.latestMatchId;
+        startIntro(_pendingMatchId);
+      }
     } else if(!status.generating && _pollGenerating) {
       _pollGenerating = false;
-      var matchId = status.latestMatchId;
+      var matchId = _pendingMatchId || status.latestMatchId;
       if(matchId && matchId !== _lastMatchId) {
         _lastMatchId = matchId;
-        runReveal(matchId);
+        _pendingMatchId = null;
+        finishReveal(matchId);
       }
     }
   } catch(e) {}
