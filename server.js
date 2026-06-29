@@ -169,6 +169,7 @@ let serverStatus = { generating: false, latestMatchId: null };
 app.get('/api/status', (req, res) => res.json(serverStatus));
 app.post('/api/status/generating', (req, res) => {
   serverStatus.generating = !!req.body.generating;
+  if(req.body.latestMatchId) serverStatus.latestMatchId = req.body.latestMatchId;
   res.json(serverStatus);
 });
 
