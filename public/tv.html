@@ -283,6 +283,17 @@ async function runReveal(matchId) {
   _isPlaying = false;
 }
 
+// Kolla direkt vid sidladdning
+(async function() {
+  try {
+    var resp = await fetch('/api/status');
+    var status = await resp.json();
+    if(!status.generating && status.latestMatchId) {
+      _lastMatchId = status.latestMatchId;
+    }
+  } catch(e) {}
+})();
+
 // Polling
 var _pollGenerating = false;
 setInterval(async function() {
