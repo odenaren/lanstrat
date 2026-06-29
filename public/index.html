@@ -165,6 +165,10 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .cp-btn{padding:2px 5px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;cursor:pointer;border:1px solid #8e44ad44;background:none;color:#6a3d8a;transition:all .12s;white-space:nowrap;}
 .cp-btn.active{border-color:#8e44ad88;background:rgba(155,89,182,.2);color:#b980e0;}
 .cp-btn:hover:not(.active){border-color:#8e44ad66;color:#9b59b6;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+@keyframes portraitPop{from{opacity:0;transform:scale(.85);}to{opacity:1;transform:scale(1);}}
+.strat-reveal{animation:fadeIn .4s ease both;}
+.portrait-pop{animation:portraitPop .3s ease both;}
 </style>
 </head>
 <body>
@@ -1178,14 +1182,55 @@ async function generateStrategy() {
     });
     areaDiv.appendChild(portraitRow);
 
-    // Strategy text
+    // Strategy text (bygg men visa ej än)
     var stratDiv = document.createElement('div');
     stratDiv.className = 'strategy-raw';
     stratDiv.innerHTML = mdToHtml(cleanText);
     areaDiv.appendChild(stratDiv);
 
+    // STEG 1: Visa strateginamnet stort och ensamt
+    var splash = document.createElement('div');
+    splash.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;text-align:center';
+    var splashName = document.createElement('div');
+    splashName.style.cssText = 'font-family:Rajdhani,sans-serif;font-size:36px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.12em;animation:fadeIn .5s ease both';
+    splashName.textContent = strategyName || 'Draft Strategi';
+    if(isWildcard) {
+      var splashBadge = document.createElement('div');
+      splashBadge.style.cssText = 'margin-top:12px;font-size:16px;color:#9b59b6;letter-spacing:.1em;animation:fadeIn .5s ease .2s both';
+      splashBadge.textContent = '🎲 WILD CARD';
+      splash.appendChild(splashName);
+      splash.appendChild(splashBadge);
+    } else {
+      splash.appendChild(splashName);
+    }
     area.innerHTML = '';
+    area.appendChild(splash);
+
+    // STEG 2: Efter 1.2s – visa header + briefing + tom portrait-rad
+    await new Promise(function(r){ setTimeout(r, 1200); });
+    area.innerHTML = '';
+    areaDiv.style.opacity = '0';
     area.appendChild(areaDiv);
+    // Fade in hela containern
+    areaDiv.style.transition = 'opacity .4s ease';
+    setTimeout(function(){ areaDiv.style.opacity = '1'; }, 20);
+
+    // STEG 3: Lägg till portraits ett i taget
+    var portraits = Array.from(portraitRow.children);
+    portraitRow.innerHTML = '';
+    areaDiv.insertBefore(portraitRow, stratDiv);
+    for(var pi = 0; pi < portraits.length; pi++) {
+      await new Promise(function(r){ setTimeout(r, 220); });
+      portraits[pi].classList.add('portrait-pop');
+      portraitRow.appendChild(portraits[pi]);
+    }
+
+    // STEG 4: Fade in strategitexten
+    await new Promise(function(r){ setTimeout(r, 300); });
+    stratDiv.style.opacity = '0';
+    stratDiv.style.transition = 'opacity .5s ease';
+    setTimeout(function(){ stratDiv.style.opacity = '1'; }, 20);
+
     _pollGenerating = false;
     apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:false, latestMatchId: currentMatchId})}).catch(()=>{});
     if(genBtn) { genBtn.disabled=false; genBtn.textContent='Generera ny strategi'; }
