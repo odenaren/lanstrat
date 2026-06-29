@@ -333,16 +333,16 @@ setInterval(async function() {
 
     if(status.generating && !_pollGenerating) {
       _pollGenerating = true;
-      if(status.latestMatchId && status.latestMatchId !== _lastMatchId) {
-        _lastMatchId = status.latestMatchId;
-        // Räkna matcher nu (match ej sparad än, så +1)
-        var allResp = await fetch('/api/matches');
-        var allMatches = await allResp.json();
-        var gameNumber = allMatches.length + 1;
-        runReveal(status.latestMatchId, gameNumber);
-      }
     } else if(!status.generating && _pollGenerating) {
       _pollGenerating = false;
+      var matchId = status.latestMatchId;
+      if(matchId && matchId !== _lastMatchId) {
+        _lastMatchId = matchId;
+        var allResp = await fetch('/api/matches');
+        var allMatches = await allResp.json();
+        var gameNumber = allMatches.length;
+        runReveal(matchId, gameNumber);
+      }
     }
   } catch(e) {}
 }, 2000);
