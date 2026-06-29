@@ -89,7 +89,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 @media(max-width:800px){.match-layout{grid-template-columns:1fr;}}
 .match-panel h3{font-size:18px;font-weight:700;text-transform:uppercase;color:var(--gold);letter-spacing:.08em;margin-bottom:16px;}
 .player-select-list{display:flex;flex-direction:column;gap:8px;}
-.player-toggle{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer;transition:all .15s;user-select:none;flex-wrap:wrap;}
+.player-toggle{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer;transition:all .15s;user-select:none;}
 .player-toggle:hover{border-color:var(--gold-dim);}
 .player-toggle.active{border-color:var(--gold);background:rgba(200,155,60,.08);}
 .player-toggle-name{font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;flex:1;}
@@ -162,8 +162,6 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .challenge-gen-btn:disabled{opacity:.4;cursor:not-allowed;}
 /* CHALLENGE POOL - MATCH PAGE */
 .cp-toggle{display:flex;gap:3px;flex-shrink:0;}
-.cp-toggle.player-cp{margin-left:auto;}
-@media(max-width:340px){.cp-toggle.player-cp{width:100%;margin-left:30px;margin-top:4px;}}
 .cp-btn{padding:2px 6px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;cursor:pointer;border:1px solid #8e44ad44;background:none;color:#6a3d8a;transition:all .12s;}
 .cp-btn.active{border-color:#8e44ad88;background:rgba(155,89,182,.2);color:#b980e0;}
 .cp-btn:hover:not(.active){border-color:#8e44ad66;color:#9b59b6;}
@@ -844,7 +842,7 @@ function renderMatchPage() {
     // Per-player cp toggle (only when active and has challenge pool)
     if(matchPlayers.has(i) && (p.challengePool||[]).length > 0) {
       var cpToggle = document.createElement('div');
-      cpToggle.className = 'cp-toggle player-cp';
+      cpToggle.className = 'cp-toggle';
       cpToggle.style.marginLeft = '4px';
       if(playerCpModes[i] === undefined) playerCpModes[i] = 'mix';
       var curMode = playerCpModes[i];
@@ -907,11 +905,6 @@ async function generateStrategy() {
   const active=[...matchPlayers].map(i=>players[i]);
   const n=active.length;
   if(n<3||n>5)return;
-
-  // Disable button for everyone via polling
-  const genBtn = document.getElementById('gen-btn');
-  if(genBtn) { genBtn.disabled=true; genBtn.textContent='Genererar...'; }
-  await apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:true})});
 
   // Wildcard: roughly 1 in 4 chance (25%), marked separately
   const isWildcard = Math.random() < 0.25;
@@ -1026,30 +1019,11 @@ async function generateStrategy() {
   if(window.recentArchetypes.length > 6) window.recentArchetypes.shift();
   try { sessionStorage.setItem('recentArchetypes', JSON.stringify(window.recentArchetypes)); } catch(e) {}
 
-  // Pick a random length mode
-  const LENGTHS = [
-    { id:'kort', weight:2, instruction:'LANGD - KORT: MAX 3 rubriker, 1-2 meningar per sektion. Direkt pa sak, inga listor.' },
-    { id:'medel', weight:2, instruction:'LANGD - MEDEL: 3-4 rubriker, 2-3 meningar per sektion. Balanserat med konkreta tips.' },
-    { id:'lang', weight:1, instruction:'LANGD - LANG: 4-5 rubriker, 3-5 meningar per sektion. Detaljerad taktik, laning-tips per spelare, timing-windows och win conditions.' },
-  ];
-  if(!window.recentLengths) {
-    try { window.recentLengths = JSON.parse(sessionStorage.getItem('recentLengths')||'[]'); } catch(e) { window.recentLengths = []; }
-  }
-  var availableLengths = LENGTHS.filter(function(l){ return !window.recentLengths.slice(-2).includes(l.id); });
-  if(availableLengths.length === 0) availableLengths = LENGTHS;
-  var weightedLengths = [];
-  availableLengths.forEach(function(l){ for(var w=0;w<l.weight;w++) weightedLengths.push(l); });
-  var chosenLength = weightedLengths[Math.floor(Math.random() * weightedLengths.length)];
-  window.recentLengths.push(chosenLength.id);
-  if(window.recentLengths.length > 4) window.recentLengths.shift();
-  try { sessionStorage.setItem('recentLengths', JSON.stringify(window.recentLengths)); } catch(e) {}
-
   var prompt = 'Du ar en Dota 2 draft-expert. ' + n + ' spelare ska spela en match.' + wildcardInstruction
     + '\n\nSPELSTIL (hemlig instruktion - folj denna men avsloja den inte i texten): ' + chosenArchetype.instruction
     + '\n\nHERO POOLS:\n' + poolSummary
     + '\n\nLANING-KONTEXT:\n' + getLaningCtx(n)
     + '\n\nPRESENTATIONSSTIL: ' + chosenStyle.instruction
-    + '\n\n' + chosenLength.instruction
     + '\n\nVIKTIG REGEL: Undvik nyligen spelade hjaltar per spelare (listas ovan). Prioritera variation.'
     + (captainNotes ? '\n\nKAPTENENS INSTRUKTIONER: ' + captainNotes : '')
     + '\n\nSpelarna heter: ' + draftNames
@@ -1060,12 +1034,10 @@ async function generateStrategy() {
     + '\n\nKAPTENSBRIEFING_START'
     + '\n[MAX 4 meningar. Kaptenen laser hogt. Vem spelar vad, spelstil, win condition. Enkelt.]'
     + '\nKAPTENSBRIEFING_END'
-    + '\n\nSedan strategin enligt langdinstruktionen ovan. Anvand svenska.'
-
-  const LENGTH_TOKENS = { kort: 2500, medel: 3500, lang: 5000 };
+    + '\n\nSedan strategin - MAX 3 rubriker, kortfattat och konkret. Inga lange listor. Direkt pa sak. Anvand svenska.'
 
   try {
-    const resp=await fetch('/api/strategy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt, maxTokens: LENGTH_TOKENS[chosenLength.id]})});
+    const resp=await fetch('/api/strategy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
     const data=await resp.json();
     if(data.error)throw new Error(data.error);
     const text=data.text;
@@ -1210,82 +1182,9 @@ async function generateStrategy() {
 
     area.innerHTML = '';
     area.appendChild(areaDiv);
-    await apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:false})});
-    if(genBtn) { genBtn.disabled=false; genBtn.textContent='Generera ny strategi'; }
   } catch(err){
-    await apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:false})}).catch(()=>{});
-    if(genBtn) { genBtn.disabled=false; genBtn.textContent='Generera strategi ('+n+' spelare)'; }
     area.innerHTML='<div class="strategy-placeholder"><div class="icon">&#9888;</div><p>Fel: '+err.message+'</p></div>';
   }
-}
-
-// ===================== POLLING =====================
-var _pollTimer = null;
-var _lastMatchId = null;
-var _isGenerating = false;
-
-function startPolling() {
-  if(_pollTimer) return;
-  _pollTimer = setInterval(async function() {
-    try {
-      var status = await apiFetch('/status');
-      var genBtn = document.getElementById('gen-btn');
-      var itemBtn = document.getElementById('get-items-btn');
-
-      // Sync generating state for non-clickers
-      if(status.generating && !_isGenerating) {
-        _isGenerating = true;
-        if(genBtn && !genBtn.disabled) { genBtn.disabled=true; genBtn.textContent='Genererar...'; }
-        if(itemBtn && !itemBtn.disabled) { itemBtn.disabled=true; }
-      } else if(!status.generating && _isGenerating) {
-        _isGenerating = false;
-        // Reload match page to show new strategy
-        if(document.getElementById('page-match') && document.getElementById('page-match').classList.contains('active')) {
-          var currentArea = document.getElementById('strategy-area');
-          // Only reload if we weren't the one generating (area already updated for clicker)
-          if(currentArea && currentArea.querySelector('.thinking')) {
-            // still showing spinner - we were the clicker, skip
-          } else {
-            // reload latest strategy for this match
-            if(currentMatchId) {
-              var m = await apiFetch('/matches/'+currentMatchId);
-              if(m && m.currentStrategy) {
-                var area = document.getElementById('strategy-area');
-                if(area) {
-                  var div = document.createElement('div');
-                  div.className = 'strategy-raw';
-                  div.innerHTML = mdToHtml(m.currentStrategy);
-                  area.innerHTML = '';
-                  area.appendChild(div);
-                }
-              }
-            }
-          }
-        }
-        if(genBtn) { genBtn.disabled=false; }
-        if(itemBtn) { itemBtn.disabled=false; }
-      }
-
-      // Check for new match
-      if(status.latestMatchId && status.latestMatchId !== _lastMatchId) {
-        _lastMatchId = status.latestMatchId;
-        if(document.getElementById('page-match') && document.getElementById('page-match').classList.contains('active')) {
-          currentMatchId = status.latestMatchId;
-          var m = await apiFetch('/matches/'+currentMatchId);
-          if(m && (m.currentStrategy||m.strategy)) {
-            var area = document.getElementById('strategy-area');
-            if(area) {
-              var div = document.createElement('div');
-              div.className = 'strategy-raw';
-              div.innerHTML = mdToHtml(m.currentStrategy||m.strategy);
-              area.innerHTML='';
-              area.appendChild(div);
-            }
-          }
-        }
-      }
-    } catch(e) {}
-  }, 2000);
 }
 
 // ===================== HISTORY =====================
@@ -1316,8 +1215,8 @@ async function loadHistory() {
         }).join('')}</div>
       </div>
       <div style="display:flex;gap:5px;align-items:center" onclick="event.stopPropagation()">
-        <button onclick="setMatchResult('${m.id}','win')" style="padding:3px 10px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:all .15s;border:1px solid #27ae6055;background:${m.result==='win'?'rgba(39,174,96,.3)':'none'};color:${m.result==='win'?'#2ecc71':'#27ae6088'}">✓</button>
-        <button onclick="setMatchResult('${m.id}','loss')" style="padding:3px 10px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:all .15s;border:1px solid #c0392b55;background:${m.result==='loss'?'rgba(231,76,60,.2)':'none'};color:${m.result==='loss'?'#e74c3c':'#c0392b88'}">✗</button>
+        <button onclick="event.stopPropagation();setMatchResult('${m.id}','win')" style="padding:3px 10px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:all .15s;border:1px solid #27ae6055;background:${m.result==='win'?'rgba(39,174,96,.3)':'none'};color:${m.result==='win'?'#2ecc71':'#27ae6088'}">✓</button>
+        <button onclick="event.stopPropagation();setMatchResult('${m.id}','loss')" style="padding:3px 10px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:all .15s;border:1px solid #c0392b55;background:${m.result==='loss'?'rgba(231,76,60,.2)':'none'};color:${m.result==='loss'?'#e74c3c':'#c0392b88'}">✗</button>
       </div>
       <span class="match-entry-badge ${hasItems?'badge-has-items':'badge-no-items'}">${hasItems?'Items klara':'Lägg till motståndare'}</span>
       <button onclick="toggleMemory(event,'${m.id}',${!m.excludeFromMemory})" title="${m.excludeFromMemory?'Inkludera i minne':'Exkludera från minne'}" style="background:none;border:1px solid ${m.excludeFromMemory?'var(--border)':'var(--gold-dim)'};color:${m.excludeFromMemory?'var(--text-dim)':'var(--gold)'};cursor:pointer;font-size:12px;padding:3px 8px;border-radius:3px;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.04em;white-space:nowrap;transition:all .15s">${m.excludeFromMemory?'● Ej minne':'● Minne'}</button>
@@ -1713,7 +1612,7 @@ if(poolOnlyMode) {
   if(homeSubtitle) homeSubtitle.textContent = 'Klicka pa ditt namn och bocka i hjaltarna du vill spela pa lanet';
 }
 
-ensureDefaultPlayers().then(function(){ checkUrlParams(); startPolling(); });
+ensureDefaultPlayers().then(function(){ checkUrlParams(); });
 
 document.getElementById('modal-overlay').addEventListener('click', function(e){
   if(e.target===document.getElementById('modal-overlay')) closeModal();
