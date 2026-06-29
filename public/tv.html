@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dreamhack Skyrup — The Playbook</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --gold:#c89b3c;--gold-dim:#7a5c1e;--gold-light:#e8c46a;
+  --bg:#0a0b0d;--surface:#12141a;--text:#e8e6e0;--text-dim:#6b6860;
+}
+html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;overflow:hidden;}
+
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideUp{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:translateY(0)}}
+@keyframes zoomIn{from{opacity:0;transform:scale(1.08)}to{opacity:1;transform:scale(1)}}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+
+#screen{width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;position:relative;}
+
+/* IDLE */
+#idle{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;text-align:center;}
+#idle .logo{font-size:80px;font-weight:700;color:var(--gold);letter-spacing:.2em;text-transform:uppercase;}
+#idle .sub{font-size:22px;color:var(--text-dim);letter-spacing:.3em;text-transform:uppercase;}
+#idle .waiting{font-size:16px;color:var(--text-dim);letter-spacing:.15em;text-transform:uppercase;animation:pulse 2s infinite;}
+.gold-line{width:200px;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);}
+
+/* NAME SPLASH */
+#splash{display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:20px;padding:60px;}
+#splash .strat-name{font-size:clamp(48px,8vw,96px);font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.12em;line-height:1.1;}
+#splash .wild-badge{font-size:28px;color:#9b59b6;letter-spacing:.1em;margin-top:8px;}
+#splash .strat-line{width:300px;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);}
+
+/* HERO REVEAL */
+#hero-reveal{display:none;width:100%;height:100%;position:relative;overflow:hidden;}
+#hero-bg{position:absolute;inset:0;background-size:cover;background-position:center top;filter:blur(40px) brightness(.3);transform:scale(1.1);transition:none;}
+#hero-content{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;}
+#hero-img-wrap{width:min(600px,70vw);height:min(340px,40vw);border-radius:12px;overflow:hidden;border:2px solid var(--gold-dim);box-shadow:0 0 80px rgba(200,155,60,.3);}
+#hero-img-wrap img{width:100%;height:100%;object-fit:cover;object-position:center top;}
+#hero-name-tv{font-size:clamp(36px,6vw,72px);font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.12em;margin-top:32px;}
+#player-name-tv{font-size:clamp(18px,2.5vw,32px);color:var(--text-dim);letter-spacing:.25em;text-transform:uppercase;margin-top:8px;}
+#pick-counter{position:absolute;bottom:40px;right:60px;font-size:18px;color:var(--text-dim);letter-spacing:.1em;}
+
+/* BRIEFING */
+#briefing-screen{display:none;flex-direction:column;align-items:center;justify-content:center;padding:80px;text-align:center;gap:32px;}
+#briefing-screen .brief-title{font-size:20px;font-weight:700;color:var(--gold);letter-spacing:.2em;text-transform:uppercase;}
+#briefing-screen .brief-text{font-size:clamp(22px,3vw,40px);line-height:1.7;color:var(--text);max-width:1100px;}
+
+/* DRAFT OVERVIEW */
+#overview{display:none;flex-direction:column;align-items:center;justify-content:center;gap:40px;padding:60px;}
+#overview .ov-title{font-size:clamp(28px,4vw,52px);font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.1em;}
+#ov-portraits{display:flex;gap:32px;justify-content:center;flex-wrap:wrap;}
+.ov-card{display:flex;flex-direction:column;align-items:center;gap:10px;}
+.ov-img{width:min(160px,15vw);height:min(90px,9vw);border-radius:6px;overflow:hidden;border:1px solid var(--gold-dim);}
+.ov-img img{width:100%;height:100%;object-fit:cover;object-position:center top;}
+.ov-hero{font-size:clamp(14px,1.8vw,22px);font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;}
+.ov-player{font-size:clamp(11px,1.2vw,16px);color:var(--text-dim);letter-spacing:.1em;text-transform:uppercase;}
+</style>
+</head>
+<body>
+<div id="screen">
+
+  <div id="idle">
+    <div class="logo">DHS</div>
+    <div class="gold-line"></div>
+    <div class="sub">Dreamhack Skyrup · The Playbook</div>
+    <div class="waiting">Väntar på nästa match...</div>
+  </div>
+
+  <div id="splash">
+    <div class="strat-line"></div>
+    <div class="strat-name" id="splash-name"></div>
+    <div class="wild-badge" id="splash-wild" style="display:none">🎲 WILD CARD</div>
+    <div class="strat-line"></div>
+  </div>
+
+  <div id="hero-reveal">
+    <div id="hero-bg"></div>
+    <div id="hero-content">
+      <div id="hero-img-wrap"><img id="hero-img-tv" src="" alt=""></div>
+      <div id="hero-name-tv"></div>
+      <div id="player-name-tv"></div>
+    </div>
+    <div id="pick-counter"></div>
+  </div>
+
+  <div id="briefing-screen">
+    <div class="brief-title">⚔ Kaptensbriefing</div>
+    <div class="brief-text" id="brief-text"></div>
+  </div>
+
+  <div id="overview">
+    <div class="ov-title" id="ov-title"></div>
+    <div id="ov-portraits"></div>
+  </div>
+
+</div>
+<script>
+const CDN = 'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/';
+
+function heroImgUrl(heroName) {
+  if(!heroName) return '';
+  var slug = heroName.toLowerCase()
+    .replace('anti-mage','antimage')
+    .replace('vengeful spirit','vengefulspirit')
+    .replace('queen of pain','queenofpain')
+    .replace('wraith king','wraithking')
+    .replace('shadow shaman','shadowshaman')
+    .replace('witch doctor','witch_doctor')
+    .replace('nature\'s prophet','furion')
+    .replace('outworld destroyer','obsidian_destroyer')
+    .replace('keeper of the light','keeper_of_the_light')
+    .replace('treant protector','treant')
+    .replace('ogre magi','ogre_magi')
+    .replace('shadow demon','shadow_demon')
+    .replace('underlord','abyssal_underlord')
+    .replace('magnus','magnataur')
+    .replace('clockwerk','rattletrap')
+    .replace('io','wisp')
+    .replace('timbersaw','shredder')
+    .replace('bristleback','bristleback')
+    .replace('tusk','tusk')
+    .replace(/['\s]+/g,'_')
+    .replace(/-/g,'_');
+  return CDN + slug + '.png';
+}
+
+function show(id) {
+  ['idle','splash','hero-reveal','briefing-screen','overview'].forEach(function(s){
+    var el = document.getElementById(s);
+    el.style.display = 'none';
+    el.style.animation = '';
+  });
+  var el = document.getElementById(id);
+  el.style.display = 'flex';
+  el.style.animation = 'fadeIn .5s ease both';
+}
+
+function wait(ms) { return new Promise(function(r){ setTimeout(r, ms); }); }
+
+var _lastMatchId = null;
+var _isPlaying = false;
+
+async function runReveal(matchId) {
+  if(_isPlaying) return;
+  _isPlaying = true;
+  try {
+    var resp = await fetch('/api/matches/' + matchId);
+    var m = await resp.json();
+    if(!m || (!m.currentStrategy && !m.strategy)) { _isPlaying = false; return; }
+
+    var draft = m.currentDraft || m.draft || {};
+    var stratName = m.name || 'Draft Strategi';
+    var briefing = m.briefing || '';
+    var isWildcard = !!m.wildcard;
+    var playerNames = Object.keys(draft);
+
+    // STEG 1: Strateginamnet
+    document.getElementById('splash-name').textContent = stratName;
+    document.getElementById('splash-wild').style.display = isWildcard ? 'block' : 'none';
+    show('splash');
+    await wait(2800);
+
+    // STEG 2: Hero reveal ett i taget
+    for(var i = 0; i < playerNames.length; i++) {
+      var playerName = playerNames[i];
+      var heroName = draft[playerName];
+      var imgUrl = heroImgUrl(heroName);
+
+      document.getElementById('hero-bg').style.backgroundImage = imgUrl ? 'url(' + imgUrl + ')' : 'none';
+      document.getElementById('hero-img-tv').src = imgUrl || '';
+      document.getElementById('hero-name-tv').textContent = heroName || '?';
+      document.getElementById('player-name-tv').textContent = playerName;
+      document.getElementById('pick-counter').textContent = (i+1) + ' / ' + playerNames.length;
+
+      show('hero-reveal');
+      document.getElementById('hero-content').style.animation = 'slideUp .4s ease both';
+      await wait(2200);
+    }
+
+    // STEG 3: Briefing
+    if(briefing) {
+      document.getElementById('brief-text').textContent = briefing;
+      show('briefing-screen');
+      await wait(8000);
+    }
+
+    // STEG 4: Draft overview
+    document.getElementById('ov-title').textContent = stratName;
+    var portraits = document.getElementById('ov-portraits');
+    portraits.innerHTML = '';
+    playerNames.forEach(function(playerName) {
+      var heroName = draft[playerName];
+      var imgUrl = heroImgUrl(heroName);
+      var card = document.createElement('div');
+      card.className = 'ov-card';
+      card.style.animation = 'slideUp .4s ease both';
+      var imgWrap = document.createElement('div');
+      imgWrap.className = 'ov-img';
+      if(imgUrl) {
+        var img = document.createElement('img');
+        img.src = imgUrl;
+        imgWrap.appendChild(img);
+      }
+      var hn = document.createElement('div');
+      hn.className = 'ov-hero';
+      hn.textContent = heroName || '?';
+      var pn = document.createElement('div');
+      pn.className = 'ov-player';
+      pn.textContent = playerName;
+      card.appendChild(imgWrap);
+      card.appendChild(hn);
+      card.appendChild(pn);
+      portraits.appendChild(card);
+    });
+    show('overview');
+    await wait(15000);
+
+  } catch(e) { console.error(e); }
+
+  // Tillbaka till idle
+  show('idle');
+  _isPlaying = false;
+}
+
+// Polling
+var _pollGenerating = false;
+setInterval(async function() {
+  try {
+    var resp = await fetch('/api/status');
+    var status = await resp.json();
+
+    if(status.generating && !_pollGenerating) {
+      _pollGenerating = true;
+    } else if(!status.generating && _pollGenerating) {
+      _pollGenerating = false;
+      var matchId = status.latestMatchId;
+      if(matchId && matchId !== _lastMatchId) {
+        _lastMatchId = matchId;
+        runReveal(matchId);
+      }
+    }
+  } catch(e) {}
+}, 2000);
+</script>
+</body>
+</html>
