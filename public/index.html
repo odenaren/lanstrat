@@ -1206,30 +1206,46 @@ async function generateStrategy() {
     area.innerHTML = '';
     area.appendChild(splash);
 
-    // STEG 2: Efter 1.2s – visa header + briefing + tom portrait-rad
-    await new Promise(function(r){ setTimeout(r, 1200); });
-    area.innerHTML = '';
-    areaDiv.style.opacity = '0';
-    area.appendChild(areaDiv);
-    // Fade in hela containern
-    areaDiv.style.transition = 'opacity .4s ease';
-    setTimeout(function(){ areaDiv.style.opacity = '1'; }, 20);
+    // STEG 2: Efter 2s – hero reveal en i taget, halv viewport
+    await new Promise(function(r){ setTimeout(r, 2000); });
 
-    // STEG 3: Lägg till portraits ett i taget
-    var portraits = Array.from(portraitRow.children);
-    portraitRow.innerHTML = '';
-    areaDiv.insertBefore(portraitRow, stratDiv);
-    for(var pi = 0; pi < portraits.length; pi++) {
-      await new Promise(function(r){ setTimeout(r, 220); });
-      portraits[pi].classList.add('portrait-pop');
-      portraitRow.appendChild(portraits[pi]);
+    var revealPlayers = active.slice();
+    for(var ri = 0; ri < revealPlayers.length; ri++) {
+      var rp = revealPlayers[ri];
+      var heroName = currentDraft[rp.name];
+      var rh = heroName ? HERO_LIST.find(function(x){ return x.name===heroName; }) : null;
+      var rimg = rh ? heroImg(rh.id) : null;
+
+      var reveal = document.createElement('div');
+      reveal.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:50vh;text-align:center;animation:fadeIn .35s ease both';
+
+      if(rimg) {
+        var bigImg = document.createElement('img');
+        bigImg.src = rimg;
+        bigImg.style.cssText = 'width:min(340px,85vw);height:min(190px,48vw);object-fit:cover;object-position:center top;border-radius:8px;border:2px solid var(--gold-dim);box-shadow:0 0 40px rgba(200,155,60,.25)';
+        reveal.appendChild(bigImg);
+      }
+      var revHeroName = document.createElement('div');
+      revHeroName.style.cssText = 'font-family:Rajdhani,sans-serif;font-size:28px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.1em;margin-top:14px;animation:fadeIn .4s ease .1s both';
+      revHeroName.textContent = heroName || '?';
+      var revPlayerName = document.createElement('div');
+      revPlayerName.style.cssText = 'font-size:14px;color:var(--text-dim);letter-spacing:.15em;text-transform:uppercase;margin-top:4px;animation:fadeIn .4s ease .2s both';
+      revPlayerName.textContent = rp.name;
+      reveal.appendChild(revHeroName);
+      reveal.appendChild(revPlayerName);
+
+      area.innerHTML = '';
+      area.appendChild(reveal);
+      await new Promise(function(r){ setTimeout(r, 1800); });
     }
 
-    // STEG 4: Fade in strategitexten
-    await new Promise(function(r){ setTimeout(r, 300); });
-    stratDiv.style.opacity = '0';
-    stratDiv.style.transition = 'opacity .5s ease';
-    setTimeout(function(){ stratDiv.style.opacity = '1'; }, 20);
+    // STEG 3: Visa hela strategin
+    area.innerHTML = '';
+    areaDiv.style.opacity = '0';
+    areaDiv.insertBefore(portraitRow, stratDiv);
+    area.appendChild(areaDiv);
+    areaDiv.style.transition = 'opacity .5s ease';
+    setTimeout(function(){ areaDiv.style.opacity = '1'; }, 20);
 
     _pollGenerating = false;
     apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:false, latestMatchId: currentMatchId})}).catch(()=>{});
