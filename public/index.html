@@ -533,6 +533,7 @@ let ignoreAllPools = false;
 let ignorePlayerPools = new Set(); // player indexes
 // per-player challenge pool mode: 'off' | 'include' | 'only'
 let playerCpModes = {};
+try { var _saved = localStorage.getItem('cpModes'); if(_saved) playerCpModes = JSON.parse(_saved); } catch(e) {}
 let currentMatchId = null;
 let currentEnemies = new Set();
 let currentDraft = {};
@@ -884,11 +885,13 @@ function invertMatchPlayers() {
 
 function setPlayerCpMode(idx, mode) {
   playerCpModes[idx] = mode;
+  try { localStorage.setItem('cpModes', JSON.stringify(playerCpModes)); } catch(e) {}
   renderMatchPage();
 }
 
 function setAllCpModes(mode) {
   players.forEach(function(_, i){ playerCpModes[i] = mode; });
+  try { localStorage.setItem('cpModes', JSON.stringify(playerCpModes)); } catch(e) {}
   renderMatchPage();
 }
 
