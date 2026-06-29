@@ -912,8 +912,7 @@ async function generateStrategy() {
 
   const genBtn = document.getElementById('gen-btn');
   if(genBtn) { genBtn.disabled=true; genBtn.textContent='Genererar...'; }
-  var pendingMatchId = Date.now().toString();
-  apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:true, latestMatchId: pendingMatchId})}).catch(()=>{});
+  apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:true})}).catch(()=>{});
 
   // Wildcard: roughly 1 in 4 chance (25%), marked separately
   const isWildcard = Math.random() < 0.25;
@@ -1087,7 +1086,6 @@ async function generateStrategy() {
 
     // Save match to server
     const match=await apiFetch('/matches',{method:'POST',body:JSON.stringify({
-      id:pendingMatchId,
       players:active.map(p=>({name:p.name,heroes:p.heroes||[]})),
       strategy:cleanText,
       briefing:briefing,
