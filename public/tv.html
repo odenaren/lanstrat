@@ -131,28 +131,49 @@ const CDN = 'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react
 
 function heroImgUrl(heroName) {
   if(!heroName) return '';
-  var slug = heroName.toLowerCase()
-    .replace('anti-mage','antimage')
-    .replace('vengeful spirit','vengefulspirit')
-    .replace('queen of pain','queenofpain')
-    .replace('wraith king','wraithking')
-    .replace('shadow shaman','shadowshaman')
-    .replace('witch doctor','witch_doctor')
-    .replace('nature\'s prophet','furion')
-    .replace('outworld destroyer','obsidian_destroyer')
-    .replace('keeper of the light','keeper_of_the_light')
-    .replace('treant protector','treant')
-    .replace('ogre magi','ogre_magi')
-    .replace('shadow demon','shadow_demon')
-    .replace('underlord','abyssal_underlord')
-    .replace('magnus','magnataur')
-    .replace('clockwerk','rattletrap')
-    .replace('io','wisp')
-    .replace('timbersaw','shredder')
-    .replace('bristleback','bristleback')
-    .replace('tusk','tusk')
-    .replace(/['\s]+/g,'_')
-    .replace(/-/g,'_');
+  var slugs = {
+    'abaddon':'abaddon','alchemist':'alchemist','ancient apparition':'ancient_apparition',
+    'anti-mage':'antimage','arc warden':'arc_warden','axe':'axe','bane':'bane',
+    'batrider':'batrider','beastmaster':'beastmaster','bloodseeker':'bloodseeker',
+    'bounty hunter':'bounty_hunter','brewmaster':'brewmaster','bristleback':'bristleback',
+    'broodmother':'broodmother','centaur warrunner':'centaur','chaos knight':'chaos_knight',
+    'chen':'chen','clinkz':'clinkz','clockwerk':'rattletrap','crystal maiden':'crystal_maiden',
+    'dark seer':'dark_seer','dark willow':'dark_willow','dawnbreaker':'dawnbreaker',
+    'dazzle':'dazzle','death prophet':'death_prophet','disruptor':'disruptor',
+    'doom':'doom_bringer','dragon knight':'dragon_knight','drow ranger':'drow_ranger',
+    'earth spirit':'earth_spirit','earthshaker':'earthshaker','elder titan':'elder_titan',
+    'ember spirit':'ember_spirit','enchantress':'enchantress','enigma':'enigma',
+    'faceless void':'faceless_void','grimstroke':'grimstroke','gyrocopter':'gyrocopter',
+    'hoodwink':'hoodwink','huskar':'huskar','invoker':'invoker','io':'wisp',
+    'jakiro':'jakiro','juggernaut':'juggernaut','keeper of the light':'keeper_of_the_light',
+    'kez':'kez','kunkka':'kunkka','largo':'largo','legion commander':'legion_commander',
+    'leshrac':'leshrac','lich':'lich','lifestealer':'life_stealer','lina':'lina',
+    'lion':'lion','lone druid':'lone_druid','luna':'luna','lycan':'lycan',
+    'magnus':'magnataur','marci':'marci','mars':'mars','medusa':'medusa','meepo':'meepo',
+    'mirana':'mirana','monkey king':'monkey_king','morphling':'morphling','muerta':'muerta',
+    'naga siren':'naga_siren',"nature's prophet":'furion','necrophos':'necrolyte',
+    'night stalker':'night_stalker','nyx assassin':'nyx_assassin','ogre magi':'ogre_magi',
+    'omniknight':'omniknight','oracle':'oracle','outworld devourer':'obsidian_destroyer',
+    'outworld destroyer':'obsidian_destroyer','pangolier':'pangolier',
+    'phantom assassin':'phantom_assassin','phantom lancer':'phantom_lancer',
+    'phoenix':'phoenix','primal beast':'primal_beast','puck':'puck','pudge':'pudge',
+    'pugna':'pugna','queen of pain':'queenofpain','razor':'razor','riki':'riki',
+    'ring master':'ringmaster','rubick':'rubick','sand king':'sand_king',
+    'shadow demon':'shadow_demon','shadow fiend':'nevermore','shadow shaman':'shadow_shaman',
+    'silencer':'silencer','skywrath mage':'skywrath_mage','slardar':'slardar','slark':'slark',
+    'snapfire':'snapfire','sniper':'sniper','spectre':'spectre','spirit breaker':'spirit_breaker',
+    'storm spirit':'storm_spirit','sven':'sven','techies':'techies',
+    'templar assassin':'templar_assassin','terrorblade':'terrorblade','tidehunter':'tidehunter',
+    'timbersaw':'shredder','tinker':'tinker','tiny':'tiny','treant protector':'treant',
+    'troll warlord':'troll_warlord','tusk':'tusk','underlord':'abyssal_underlord',
+    'undying':'undying','ursa':'ursa','vengeful spirit':'vengefulspirit',
+    'venomancer':'venomancer','viper':'viper','visage':'visage','void spirit':'void_spirit',
+    'warlock':'warlock','weaver':'weaver','windranger':'windrunner',
+    'winter wyvern':'winter_wyvern','witch doctor':'witch_doctor','wraith king':'skeleton_king',
+    'zeus':'zuus'
+  };
+  var key = heroName.toLowerCase().trim();
+  var slug = slugs[key] || key.replace(/['\s]+/g,'_').replace(/-/g,'_');
   return CDN + slug + '.png';
 }
 
@@ -243,7 +264,7 @@ async function runReveal(matchId) {
     if(briefing) {
       document.getElementById('brief-text').textContent = briefing;
       show('briefing-screen');
-      await wait(8000);
+      await wait(15000);
     }
 
     // STEG 4: Draft overview
