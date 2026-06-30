@@ -558,16 +558,29 @@ function fadeAudio(el, from, to, durationMs, onDone) {
     await wait(20000);
   }
 
-  // STEG 4: Draft overview
-  document.getElementById('ov-title').textContent = stratName;
+  // STEG 4: Draft overview - sekventiell trillande entré
+  var ovTitleEl = document.getElementById('ov-title');
+  ovTitleEl.textContent = '';
+  ovTitleEl.style.animation = 'none';
+  ovTitleEl.style.opacity = '0';
   var portraits = document.getElementById('ov-portraits');
   portraits.innerHTML = '';
-  playerNames.forEach(function(pName) {
+
+  show('overview');
+
+  await new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); });
+
+  ovTitleEl.textContent = stratName;
+  ovTitleEl.style.animation = 'stratNameFadeIn .5s ease both';
+  await wait(350);
+
+  for(var oi = 0; oi < playerNames.length; oi++) {
+    var pName = playerNames[oi];
     var hName = draft[pName];
     var iUrl = heroImgUrl(hName);
     var card = document.createElement('div');
     card.className = 'ov-card';
-    card.style.animation = 'slideUp .4s ease both';
+    card.style.opacity = '0';
     var imgWrap = document.createElement('div');
     imgWrap.className = 'ov-img';
     if(iUrl) { var img = document.createElement('img'); img.src = iUrl; imgWrap.appendChild(img); }
@@ -575,9 +588,13 @@ function fadeAudio(el, from, to, durationMs, onDone) {
     var pn = document.createElement('div'); pn.className = 'ov-player'; pn.textContent = pName;
     card.appendChild(imgWrap); card.appendChild(hn); card.appendChild(pn);
     portraits.appendChild(card);
-  });
-  show('overview');
-  await wait(15000);
+
+    await new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); });
+    card.style.animation = 'slideUp .35s ease both';
+    await wait(180);
+  }
+
+  await wait(15000 - 350 - (playerNames.length * 180));
 
   var bgEnd = document.getElementById('bg-music');
   fadeAudio(bgEnd, bgEnd.volume, 0, 2500, function(){ bgEnd.pause(); });
