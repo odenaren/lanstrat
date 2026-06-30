@@ -482,11 +482,10 @@ function fadeAudio(el, from, to, durationMs, onDone) {
   splashNameEl.textContent = stratName;
   document.getElementById('splash-wild').style.display = isWildcard ? 'block' : 'none';
   setTimeout(function() {
-    splashNameEl.style.opacity = '';
     splashNameEl.style.animation = 'none';
     void splashNameEl.offsetWidth;
     splashNameEl.style.animation = 'stratNameFadeIn 1.3s ease both';
-  }, 300);
+  }, 800);
   await wait(6000);
 
   // STEG 2: Hero reveal
@@ -508,6 +507,7 @@ function fadeAudio(el, from, to, durationMs, onDone) {
     heroContentEl.style.opacity = '0';
     heroBgEl.style.opacity = '0';
     heroBgEl.style.transition = 'none';
+    void heroBgEl.offsetWidth; // force reflow so opacity:0 applies before next transition is set
     shineEl.style.animation = 'none';
 
     if(_audioUnlocked) {
@@ -521,12 +521,11 @@ function fadeAudio(el, from, to, durationMs, onDone) {
     }
 
     setTimeout(function() {
-      heroContentEl.style.opacity = '';
       heroContentEl.style.animation = 'none';
       void heroContentEl.offsetWidth;
       heroContentEl.style.animation = 'heroZoomIn 1.9s ease both';
       heroBgEl.style.transition = 'opacity 1.2s ease';
-      heroBgEl.style.opacity = '';
+      heroBgEl.style.opacity = '1';
       void shineEl.offsetWidth;
       setTimeout(function(){ shineEl.style.animation = 'heroShine 1.4s ease both'; }, 1000);
     }, 500);
