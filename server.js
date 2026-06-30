@@ -166,11 +166,27 @@ app.post('/api/players/reset-pools', async (req, res) => {
 });
 
 // ── STATUS (polling) ─────────────────────────────────
-let serverStatus = { generating: false, latestMatchId: null };
+let serverStatus = { generating: false, latestMatchId: null, replayToken: null };
 app.get('/api/status', (req, res) => res.json(serverStatus));
 app.post('/api/status/generating', (req, res) => {
   serverStatus.generating = !!req.body.generating;
   res.json(serverStatus);
+});
+
+// Trigga TV-repris för en befintlig match
+app.post('/api/replay/:id', async (req, res) => {
+  try {
+    const matches = await readMatches();
+    const match = matches.find(m => m.id === req.params.id);
+    if (!match) return res.status(404).json({ error: 'Not found' });
+    serverStatus.generating = true;
+    setTimeout(() => {
+      serverStatus.latestMatchId = match.id;
+      serverStatus.replayToken = Date.now().toString();
+      serverStatus.generating = false;
+    }, 500);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // MATCHES
@@ -183,9 +199,11 @@ app.post('/api/matches', async (req, res) => {
   const { players, strategy, briefing, captainNotes, draft, name, wildcard, style } = req.body;
   try {
     const matches = await readMatches();
+    const gameNumber = matches.length + 1;
     const match = {
       id: req.body.id || Date.now().toString(),
       createdAt: new Date().toISOString(),
+      gameNumber: gameNumber,
       name: name || '',
       briefing: briefing || '',
       captainNotes: captainNotes || '',
