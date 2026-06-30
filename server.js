@@ -16,7 +16,8 @@ app.use((req, res, next) => {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src https://fonts.gstatic.com; " +
     "img-src 'self' https://cdn.dota2.com https://cdn.cloudflare.steamstatic.com https://steamcdn-a.akamaihd.net data:; " +
-    "connect-src 'self'"
+    "connect-src 'self'; " +
+    "media-src 'self'"
   );
   next();
 });
@@ -169,7 +170,6 @@ let serverStatus = { generating: false, latestMatchId: null };
 app.get('/api/status', (req, res) => res.json(serverStatus));
 app.post('/api/status/generating', (req, res) => {
   serverStatus.generating = !!req.body.generating;
-  if(req.body.latestMatchId) serverStatus.latestMatchId = req.body.latestMatchId;
   res.json(serverStatus);
 });
 
@@ -184,7 +184,7 @@ app.post('/api/matches', async (req, res) => {
   try {
     const matches = await readMatches();
     const match = {
-      id: Date.now().toString(),
+      id: req.body.id || Date.now().toString(),
       createdAt: new Date().toISOString(),
       name: name || '',
       briefing: briefing || '',
@@ -316,6 +316,8 @@ app.post('/api/items', async (req, res) => {
   try { res.json({ text: await callClaude(req.body.prompt, 2000) }); }
   catch(e) { res.status(500).json({ error: e.message }); }
 });
+
+app.get('/tv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'tv.html')));
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
