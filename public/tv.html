@@ -339,7 +339,9 @@ function show(id) {
   });
   var el = document.getElementById(id);
   el.style.display = 'flex';
-  el.style.animation = 'fadeIn .5s ease both';
+  if(id !== 'hero-reveal') {
+    el.style.animation = 'fadeIn .5s ease both';
+  }
 }
 
 function wait(ms) { return new Promise(function(r){ setTimeout(r, ms); }); }
