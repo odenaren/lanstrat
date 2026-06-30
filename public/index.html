@@ -249,6 +249,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
   <div class="page-header">
     <h2>Matchhistorik</h2>
     <span style="color:var(--text-dim);font-size:13px">Klicka på en match för detaljer &amp; itemtips</span>
+    <button onclick="importDraftPools()" style="margin-left:8px;padding:6px 14px;background:rgba(76,175,80,.12);border:1px solid #4caf5066;color:#4caf50;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s">📥 Importera pooler</button>
     <button onclick="openLanModal()" style="margin-left:auto;padding:6px 14px;background:rgba(200,155,60,.15);border:1px solid var(--gold-dim);color:var(--gold);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s">⚔️ Inför lanet</button>
     <button onclick="clearAllMemory()" style="margin-left:auto;padding:6px 14px;background:none;border:1px solid #c0392b44;color:var(--red);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='#c0392b44'">Rensa minne</button>
   </div>
@@ -1655,6 +1656,18 @@ function getShareUrl(playerIndex) {
 }
 
 // ===================== LAN MODAL =====================
+async function importDraftPools() {
+  if(!confirm('Importera hjältepooler från /pool-sidan? Detta skriver över spelarnas nuvarande hero-pool med vad de valt på den separata sidan.')) return;
+  try {
+    var result = await apiFetch('/draftpools/import', {method:'POST'});
+    players = await apiFetch('/players');
+    renderHome();
+    alert('Importerade pooler för ' + result.imported + ' av ' + result.total + ' spelare.');
+  } catch(e) {
+    alert('Import misslyckades: ' + e.message);
+  }
+}
+
 function openLanModal() {
   document.getElementById('lan-clear-pools').checked = false;
   document.getElementById('lan-clear-history').checked = false;
