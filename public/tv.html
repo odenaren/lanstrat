@@ -15,6 +15,11 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
 
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideUp{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:translateY(0)}}
+@keyframes heroZoomIn{0%{opacity:0;transform:scale(.85)}60%{opacity:1}100%{opacity:1;transform:scale(1)}}
+@keyframes heroShine{0%{transform:translateX(-150%) skewX(-20deg)}100%{transform:translateX(250%) skewX(-20deg)}}
+@keyframes heroSpot1{0%{transform:rotate(-25deg) translateX(-250px);opacity:0}15%{opacity:.6}50%{transform:rotate(15deg) translateX(250px);opacity:.9}85%{opacity:.6}100%{transform:rotate(-25deg) translateX(-250px);opacity:0}}
+@keyframes heroSpot2{0%{transform:rotate(20deg) translateX(220px);opacity:0}20%{opacity:.5}50%{transform:rotate(-20deg) translateX(-220px);opacity:.8}80%{opacity:.5}100%{transform:rotate(20deg) translateX(220px);opacity:0}}
+@keyframes stratNameFadeIn{from{opacity:0;transform:translateY(15px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
 @keyframes zoomIn{from{opacity:0;transform:scale(1.08)}to{opacity:1;transform:scale(1)}}
 @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
 
@@ -37,8 +42,10 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
 #hero-reveal{display:none;width:100%;height:100%;position:relative;overflow:hidden;}
 #hero-bg{position:absolute;inset:0;background-size:cover;background-position:center top;filter:blur(40px) brightness(.3);transform:scale(1.1);transition:none;}
 #hero-content{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;}
-#hero-img-wrap{width:min(600px,70vw);height:min(340px,40vw);border-radius:12px;overflow:hidden;border:2px solid var(--gold-dim);box-shadow:0 0 80px rgba(200,155,60,.3);}
+#hero-img-wrap{width:min(600px,70vw);height:min(340px,40vw);border-radius:12px;overflow:hidden;border:2px solid var(--gold-dim);box-shadow:0 0 80px rgba(200,155,60,.3);position:relative;}
 #hero-img-wrap img{width:100%;height:100%;object-fit:cover;object-position:center top;}
+.hero-shine{position:absolute;top:0;left:0;width:60%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent);pointer-events:none;}
+.hero-spotlight{position:absolute;width:280px;height:560px;background:linear-gradient(180deg,rgba(200,155,60,.1) 0%,transparent 100%);border-radius:50%;pointer-events:none;transform-origin:bottom center;}
 #hero-name-tv{font-size:clamp(36px,6vw,72px);font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.12em;margin-top:32px;}
 #player-name-tv{font-size:clamp(18px,2.5vw,32px);color:var(--text-dim);letter-spacing:.25em;text-transform:uppercase;margin-top:8px;}
 #pick-counter{position:absolute;bottom:40px;right:60px;font-size:18px;color:var(--text-dim);letter-spacing:.1em;}
@@ -87,6 +94,11 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
   <audio id="hero-audio" preload="none"></audio>
   <audio id="bg-music" src="/sounds/music/background.mp3" preload="auto" loop></audio>
 
+  <div id="control-buttons" style="position:fixed;bottom:16px;left:16px;display:flex;gap:8px;z-index:8888;opacity:.15;transition:opacity .2s;" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=.15">
+    <button onclick="toggleFullscreen()" title="Helskärm" style="width:36px;height:36px;border-radius:6px;border:1px solid var(--gold-dim);background:rgba(0,0,0,.6);color:var(--gold);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;">⛶</button>
+    <button onclick="replayLast()" title="Spela upp senaste igen" style="width:36px;height:36px;border-radius:6px;border:1px solid var(--gold-dim);background:rgba(0,0,0,.6);color:var(--gold);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;">↺</button>
+  </div>
+
   <div id="unlock-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:24px;cursor:pointer;" onclick="unlockAudio()">
     <img src="https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/global/dota2_logo_symbol.png" style="width:120px;opacity:.6;" alt="Dota 2">
     <div style="font-size:22px;color:var(--gold);letter-spacing:.2em;text-transform:uppercase;">Klicka för att starta</div>
@@ -109,8 +121,10 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
 
   <div id="hero-reveal">
     <div id="hero-bg"></div>
+    <div class="hero-spotlight" style="top:-150px;left:25%;animation:heroSpot1 7s ease-in-out infinite;"></div>
+    <div class="hero-spotlight" style="top:-150px;left:60%;animation:heroSpot2 8.5s ease-in-out infinite;"></div>
     <div id="hero-content">
-      <div id="hero-img-wrap"><img id="hero-img-tv" src="" alt=""></div>
+      <div id="hero-img-wrap"><img id="hero-img-tv" src="" alt=""><div class="hero-shine" id="hero-shine"></div></div>
       <div id="hero-name-tv"></div>
       <div id="player-name-tv"></div>
     </div>
@@ -325,12 +339,32 @@ function show(id) {
   });
   var el = document.getElementById(id);
   el.style.display = 'flex';
-  el.style.animation = 'fadeIn .5s ease both';
+  if(id !== 'hero-reveal') {
+    el.style.animation = 'fadeIn .5s ease both';
+  }
 }
 
 function wait(ms) { return new Promise(function(r){ setTimeout(r, ms); }); }
 
 var _audioUnlocked = false;
+
+function toggleFullscreen() {
+  if(!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(function(){});
+  } else {
+    document.exitFullscreen().catch(function(){});
+  }
+}
+
+async function replayLast() {
+  try {
+    var resp = await fetch('/api/matches');
+    var matches = await resp.json();
+    if(!matches || !matches.length) return;
+    var latest = matches[0]; // senaste matchen, eftersom unshift används vid sparning
+    await fetch('/api/replay/' + latest.id, {method:'POST'});
+  } catch(e) {}
+}
 
 function unlockAudio() {
   document.getElementById('unlock-overlay').style.display = 'none';
@@ -411,10 +445,12 @@ function fadeAudio(el, from, to, durationMs, onDone) {
   document.getElementById('splash-wild').style.display = 'none';
   show('splash');
   if(_audioUnlocked) {
-    var ga = document.getElementById('game-audio');
-    ga.src = '/sounds/announcer/game_' + gameNumber + '.mp3';
-    ga.currentTime = 0;
-    ga.play().catch(function(){});
+    setTimeout(function() {
+      var ga = document.getElementById('game-audio');
+      ga.src = '/sounds/announcer/game_' + gameNumber + '.mp3';
+      ga.currentTime = 0;
+      ga.play().catch(function(){});
+    }, 2000);
   }
 
   // Vänta på match-data (max 30 sek)
@@ -443,9 +479,24 @@ function fadeAudio(el, from, to, durationMs, onDone) {
   var playerNames = Object.keys(draft);
 
   // Uppdatera splash med namn och vänta ut 6 sek
-  document.getElementById('splash-name').textContent = stratName;
+  var splashNameEl = document.getElementById('splash-name');
+  splashNameEl.style.animation = 'none';
+  splashNameEl.style.opacity = '0';
+  splashNameEl.textContent = '';
+  document.getElementById('splash-wild').style.display = 'none';
+
+  await new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); });
+
+  splashNameEl.textContent = stratName;
   document.getElementById('splash-wild').style.display = isWildcard ? 'block' : 'none';
-  await wait(6000);
+
+  await wait(800);
+
+  splashNameEl.style.animation = 'none';
+  void splashNameEl.offsetWidth;
+  splashNameEl.style.animation = 'stratNameFadeIn 1.3s ease both';
+
+  await wait(5200);
 
   // STEG 2: Hero reveal
   for(var i = 0; i < playerNames.length; i++) {
@@ -453,14 +504,30 @@ function fadeAudio(el, from, to, durationMs, onDone) {
     var heroName = draft[playerName];
     var imgUrl = heroImgUrl(heroName);
 
-    document.getElementById('hero-bg').style.backgroundImage = imgUrl ? 'url(' + imgUrl + ')' : 'none';
-    document.getElementById('hero-img-tv').src = imgUrl || '';
+    var heroContentEl = document.getElementById('hero-content');
+    var heroBgEl = document.getElementById('hero-bg');
+    var heroImgEl = document.getElementById('hero-img-tv');
+    var shineEl = document.getElementById('hero-shine');
+
+    // Steg 1: dölj kort-bilden helt, men låt bakgrunden fadea ut mjukt (crossfade)
+    heroContentEl.style.animation = 'none';
+    heroContentEl.style.opacity = '0';
+    heroBgEl.style.transition = 'opacity .6s ease';
+    heroBgEl.style.opacity = '0';
+    heroImgEl.src = '';
+    shineEl.style.animation = 'none';
     document.getElementById('hero-name-tv').textContent = heroName || '?';
     document.getElementById('player-name-tv').textContent = playerName;
     document.getElementById('pick-counter').textContent = (i+1) + ' / ' + playerNames.length;
 
     show('hero-reveal');
-    document.getElementById('hero-content').style.animation = 'slideUp .4s ease both';
+
+    // Steg 2: vänta tills bakgrunden hunnit fadea ut innan vi byter bild bakom kulisserna
+    await wait(600);
+
+    heroBgEl.style.backgroundImage = imgUrl ? 'url(' + imgUrl + ')' : 'none';
+    heroImgEl.src = imgUrl || '';
+
     if(_audioUnlocked) {
       var soundUrl = heroSoundUrl(heroName);
       if(soundUrl) {
@@ -470,7 +537,18 @@ function fadeAudio(el, from, to, durationMs, onDone) {
         ha.play().catch(function(){});
       }
     }
-    await wait(4400);
+
+    await wait(200);
+
+    heroContentEl.style.animation = 'none';
+    void heroContentEl.offsetWidth;
+    heroContentEl.style.animation = 'heroZoomIn 1.9s ease both';
+    heroBgEl.style.transition = 'opacity 1.2s ease';
+    heroBgEl.style.opacity = '1';
+    void shineEl.offsetWidth;
+    setTimeout(function(){ shineEl.style.animation = 'heroShine 1.4s ease both'; }, 1000);
+
+    await wait(3600);
   }
 
   // STEG 3: Briefing
@@ -480,16 +558,23 @@ function fadeAudio(el, from, to, durationMs, onDone) {
     await wait(20000);
   }
 
-  // STEG 4: Draft overview
-  document.getElementById('ov-title').textContent = stratName;
+  // STEG 4: Draft overview - sekventiell trillande entré
+  var ovTitleEl = document.getElementById('ov-title');
+  ovTitleEl.textContent = '';
+  ovTitleEl.style.animation = 'none';
+  ovTitleEl.style.opacity = '0';
   var portraits = document.getElementById('ov-portraits');
   portraits.innerHTML = '';
+
+  // Bygg alla kort direkt så layouten/positionerna är fixerade, men håll dem osynliga
+  var ovCards = [];
   playerNames.forEach(function(pName) {
     var hName = draft[pName];
     var iUrl = heroImgUrl(hName);
     var card = document.createElement('div');
     card.className = 'ov-card';
-    card.style.animation = 'slideUp .4s ease both';
+    card.style.opacity = '0';
+    card.style.transform = 'translateY(40px)';
     var imgWrap = document.createElement('div');
     imgWrap.className = 'ov-img';
     if(iUrl) { var img = document.createElement('img'); img.src = iUrl; imgWrap.appendChild(img); }
@@ -497,9 +582,26 @@ function fadeAudio(el, from, to, durationMs, onDone) {
     var pn = document.createElement('div'); pn.className = 'ov-player'; pn.textContent = pName;
     card.appendChild(imgWrap); card.appendChild(hn); card.appendChild(pn);
     portraits.appendChild(card);
+    ovCards.push(card);
   });
+
   show('overview');
-  await wait(15000);
+
+  await new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); });
+
+  ovTitleEl.textContent = stratName;
+  ovTitleEl.style.animation = 'stratNameFadeIn .5s ease both';
+  await wait(350);
+
+  for(var oi = 0; oi < ovCards.length; oi++) {
+    var thisCard = ovCards[oi];
+    thisCard.style.transition = 'opacity .35s ease, transform .35s ease';
+    thisCard.style.opacity = '1';
+    thisCard.style.transform = 'translateY(0)';
+    await wait(180);
+  }
+
+  await wait(15000 - 350 - (playerNames.length * 180));
 
   var bgEnd = document.getElementById('bg-music');
   fadeAudio(bgEnd, bgEnd.volume, 0, 2500, function(){ bgEnd.pause(); });
@@ -508,8 +610,17 @@ function fadeAudio(el, from, to, durationMs, onDone) {
   _isPlaying = false;
 }
 
-// Kolla direkt vid sidladdning
-// _lastMatchId hanteras enbart av polling
+// Kolla direkt vid sidladdning - registrera befintligt state utan att spela upp det
+var _initDone = false;
+(async function() {
+  try {
+    var resp = await fetch('/api/status');
+    var status = await resp.json();
+    if(status.latestMatchId) _lastMatchId = status.latestMatchId;
+    if(status.replayToken) _lastReplayToken = status.replayToken;
+  } catch(e) {}
+  _initDone = true;
+})();
 
 var _pendingMatchId = null;
 
@@ -518,6 +629,7 @@ var _lastReplayToken = null;
 // Polling
 var _pollGenerating = false;
 setInterval(async function() {
+  if(!_initDone) return;
   try {
     var resp = await fetch('/api/status');
     var status = await resp.json();
