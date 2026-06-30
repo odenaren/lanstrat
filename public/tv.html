@@ -19,6 +19,7 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
 @keyframes heroShine{0%{transform:translateX(-150%) skewX(-20deg)}100%{transform:translateX(250%) skewX(-20deg)}}
 @keyframes heroSpot1{0%{transform:rotate(-25deg) translateX(-250px);opacity:0}15%{opacity:.6}50%{transform:rotate(15deg) translateX(250px);opacity:.9}85%{opacity:.6}100%{transform:rotate(-25deg) translateX(-250px);opacity:0}}
 @keyframes heroSpot2{0%{transform:rotate(20deg) translateX(220px);opacity:0}20%{opacity:.5}50%{transform:rotate(-20deg) translateX(-220px);opacity:.8}80%{opacity:.5}100%{transform:rotate(20deg) translateX(220px);opacity:0}}
+@keyframes stratNameFadeIn{from{opacity:0;transform:translateY(15px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
 @keyframes zoomIn{from{opacity:0;transform:scale(1.08)}to{opacity:1;transform:scale(1)}}
 @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
 
@@ -476,8 +477,16 @@ function fadeAudio(el, from, to, durationMs, onDone) {
   var playerNames = Object.keys(draft);
 
   // Uppdatera splash med namn och vänta ut 6 sek
-  document.getElementById('splash-name').textContent = stratName;
+  var splashNameEl = document.getElementById('splash-name');
+  splashNameEl.style.opacity = '0';
+  splashNameEl.textContent = stratName;
   document.getElementById('splash-wild').style.display = isWildcard ? 'block' : 'none';
+  setTimeout(function() {
+    splashNameEl.style.opacity = '';
+    splashNameEl.style.animation = 'none';
+    void splashNameEl.offsetWidth;
+    splashNameEl.style.animation = 'stratNameFadeIn 1.3s ease both';
+  }, 300);
   await wait(6000);
 
   // STEG 2: Hero reveal
@@ -494,8 +503,11 @@ function fadeAudio(el, from, to, durationMs, onDone) {
 
     show('hero-reveal');
     var heroContentEl = document.getElementById('hero-content');
+    var heroBgEl = document.getElementById('hero-bg');
     var shineEl = document.getElementById('hero-shine');
     heroContentEl.style.opacity = '0';
+    heroBgEl.style.opacity = '0';
+    heroBgEl.style.transition = 'none';
     shineEl.style.animation = 'none';
 
     if(_audioUnlocked) {
@@ -513,6 +525,8 @@ function fadeAudio(el, from, to, durationMs, onDone) {
       heroContentEl.style.animation = 'none';
       void heroContentEl.offsetWidth;
       heroContentEl.style.animation = 'heroZoomIn 1.9s ease both';
+      heroBgEl.style.transition = 'opacity 1.2s ease';
+      heroBgEl.style.opacity = '';
       void shineEl.offsetWidth;
       setTimeout(function(){ shineEl.style.animation = 'heroShine 1.4s ease both'; }, 1000);
     }, 500);
