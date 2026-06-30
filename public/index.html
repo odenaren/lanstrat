@@ -1444,6 +1444,7 @@ async function loadHistory() {
       <div style="display:flex;gap:5px;align-items:center" onclick="event.stopPropagation()">
         <button onclick="event.stopPropagation();setMatchResult('${m.id}','win')" style="padding:3px 10px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:all .15s;border:1px solid #27ae6055;background:${m.result==='win'?'rgba(39,174,96,.3)':'none'};color:${m.result==='win'?'#2ecc71':'#27ae6088'}">✓</button>
         <button onclick="event.stopPropagation();setMatchResult('${m.id}','loss')" style="padding:3px 10px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:all .15s;border:1px solid #c0392b55;background:${m.result==='loss'?'rgba(231,76,60,.2)':'none'};color:${m.result==='loss'?'#e74c3c':'#c0392b88'}">✗</button>
+        <button onclick="event.stopPropagation();replayOnTv('${m.id}')" title="Visa på TV igen" style="padding:3px 10px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--gold-dim);background:none;color:var(--gold)">📺</button>
       </div>
       <span class="match-entry-badge ${hasItems?'badge-has-items':'badge-no-items'}">${hasItems?'Items klara':'Lägg till motståndare'}</span>
       <button onclick="toggleMemory(event,'${m.id}',${!m.excludeFromMemory})" title="${m.excludeFromMemory?'Inkludera i minne':'Exkludera från minne'}" style="background:none;border:1px solid ${m.excludeFromMemory?'var(--border)':'var(--gold-dim)'};color:${m.excludeFromMemory?'var(--text-dim)':'var(--gold)'};cursor:pointer;font-size:12px;padding:3px 8px;border-radius:3px;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.04em;white-space:nowrap;transition:all .15s">${m.excludeFromMemory?'● Ej minne':'● Minne'}</button>
@@ -1452,6 +1453,12 @@ async function loadHistory() {
     list.appendChild(el);
   });
 }
+async function replayOnTv(matchId) {
+  try {
+    await apiFetch('/replay/' + matchId, {method:'POST'});
+  } catch(err) { alert('Kunde inte visa på TV: ' + err.message); }
+}
+
 async function toggleBan(heroName) {
   if(!heroName || heroName === '?') return;
   if(currentBanned.has(heroName)) currentBanned.delete(heroName);
