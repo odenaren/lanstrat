@@ -130,6 +130,58 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
 <script>
 const CDN = 'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/';
 
+var heroSoundFiles = {
+  'axe':'axe.mp3',
+  'abaddon':'Vo_abaddon_abad_spawn_01.mp3',
+  'alchemist':'Vo_alchemist_alch_spawn_02.mp3',
+  'ancient apparition':'Vo_ancient_apparition_appa_spawn_02.mp3',
+  'anti-mage':'Vo_antimage_anti_move_08.mp3',
+  'arc warden':'Vo_arc_warden_arcwar_spawn_07.mp3',
+  'bane':'Vo_bane_bane_spawn_06.mp3',
+  'batrider':'Vo_batrider_bat_spawn_03.mp3',
+  'beastmaster':'Vo_beastmaster_beas_spawn_05.mp3',
+  'bloodseeker':'Vo_bloodseeker_blod_spawn_05.mp3',
+  'bounty hunter':'Vo_bounty_hunter_bount_spawn_01.mp3',
+  'brewmaster':'Vo_brewmaster_brew_spawn_01.mp3',
+  'bristleback':'Vo_bristleback_bristle_spawn_01.mp3',
+  'broodmother':'Vo_broodmother_broo_spawn_01.mp3',
+  'centaur warrunner':'Vo_centaur_cent_spawn_06.mp3',
+  'chaos knight':'Vo_chaos_knight_chaknight_spawn_03.mp3',
+  'chen':'Vo_chen_chen_spawn_02.mp3',
+  'clinkz':'Vo_clinkz_clinkz_move_11.mp3',
+  'crystal maiden':'Vo_crystalmaiden_cm_spawn_02.mp3',
+  'dark seer':'Vo_dark_seer_dkseer_spawn_02.mp3',
+  'dark willow':'Vo_dark_willow_sylph_spawn_06.mp3',
+  'dawnbreaker':'Vo_dawnbreaker_valora_spawn_03.mp3',
+  'dazzle':'Vo_dazzle_dazz_spawn_03.mp3',
+  'death prophet':'Vo_death_prophet_dpro_spawn_05.mp3',
+  'disruptor':'Vo_disruptor_dis_begin_01.mp3',
+  'doom':'Vo_doom_bringer_doom_battlebegins_01.mp3',
+  'dragon knight':'Vo_dragon_knight_drag_spawn_02.mp3',
+  'drow ranger':'Vo_drowranger_dro_spawn_07.mp3',
+  'earth spirit':'Vo_earth_spirit_earthspi_spawn_06.mp3',
+  'earthshaker':'Vo_earthshaker_erth_spawn_02.mp3',
+  'elder titan':'Vo_elder_titan_elder_spawn_01.mp3',
+  'ember spirit':'Vo_ember_spirit_embr_spawn_03.mp3',
+  'enchantress':'Vo_enchantress_ench_spawn_03.mp3',
+  'enigma':'Vo_enigma_enig_spawn_02.mp3',
+  'faceless void':'Vo_faceless_void_face_spawn_02.mp3',
+  'grimstroke':'Vo_grimstroke_grimstroke_spawn_11.mp3',
+  'gyrocopter':'Vo_gyrocopter_gyro_spawn_06.mp3',
+  'hoodwink':'Vo_hoodwink_hoodwink_intro_08_03.mp3',
+  'huskar':'Vo_huskar_husk_spawn_04.mp3',
+  'invoker':'Vo_invoker_invo_spawn_05.mp3',
+  'clockwerk':'Vo_rattletrap_ratt_move_14.mp3'
+};
+
+function heroSoundUrl(heroName) {
+  if(!heroName) return '';
+  var key = heroName.toLowerCase().trim();
+  var file = heroSoundFiles[key];
+  if(!file) return '';
+  return '/sounds/heroes/' + file;
+}
+
 function heroImgUrl(heroName) {
   if(!heroName) return '';
   var slugs = {
@@ -269,11 +321,13 @@ async function runReveal(matchId, gameNumber) {
     show('hero-reveal');
     document.getElementById('hero-content').style.animation = 'slideUp .4s ease both';
     if(_audioUnlocked) {
-      var heroSlug = heroName.toLowerCase().trim().replace(/['\s]+/g,'_').replace(/-/g,'_');
-      var ha = document.getElementById('hero-audio');
-      ha.src = '/sounds/heroes/' + heroSlug + '.mp3';
-      ha.currentTime = 0;
-      ha.play().catch(function(){});
+      var soundUrl = heroSoundUrl(heroName);
+      if(soundUrl) {
+        var ha = document.getElementById('hero-audio');
+        ha.src = soundUrl;
+        ha.currentTime = 0;
+        ha.play().catch(function(){});
+      }
     }
     await wait(4400);
   }
