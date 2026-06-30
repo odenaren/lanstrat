@@ -833,7 +833,7 @@ function renderMatchPage() {
     item.className='player-toggle'+(matchPlayers.has(i)?' active':'');
     const poolIgnored = ignorePlayerPools.has(i);
     const heroesText = poolIgnored
-      ? '<span style="text-decoration:line-through;opacity:.5">'+(p.heroes||[]).length+' hjältar</span> <span style="color:#9b59b6;font-size:11px">🎲 FRITT</span>'
+      ? '<span style="text-decoration:line-through;opacity:.5">'+(p.heroes||[]).length+' hjältar</span>'
       : (p.heroes||[]).length+' hjältar';
     const poolBtn = matchPlayers.has(i)
       ? '<button onclick="togglePlayerPool(event,'+i+')" style="background:none;border:1px solid '+(poolIgnored?'#8e44ad88':'var(--border)')+';color:'+(poolIgnored?'#9b59b6':'var(--text-dim)')+';font-size:11px;padding:3px 8px;border-radius:3px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.04em;white-space:nowrap">'+(poolIgnored?'🎲 FRITT':'📋 POOL')+'</button>'
