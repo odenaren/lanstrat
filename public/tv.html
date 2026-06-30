@@ -346,10 +346,34 @@ async function runReveal(matchId, gameNumber) {
   if(_isPlaying) return;
   _isPlaying = true;
 
+var BG_TARGET_VOLUME = 0.35;
+var _bgFadeInterval = null;
+
+function fadeAudio(el, from, to, durationMs, onDone) {
+  if(_bgFadeInterval) clearInterval(_bgFadeInterval);
+  var steps = 30;
+  var stepMs = durationMs / steps;
+  var stepAmount = (to - from) / steps;
+  var current = from;
+  el.volume = Math.max(0, Math.min(1, current));
+  var count = 0;
+  _bgFadeInterval = setInterval(function() {
+    count++;
+    current += stepAmount;
+    el.volume = Math.max(0, Math.min(1, current));
+    if(count >= steps) {
+      clearInterval(_bgFadeInterval);
+      _bgFadeInterval = null;
+      el.volume = Math.max(0, Math.min(1, to));
+      if(onDone) onDone();
+    }
+  }, stepMs);
+}
+
   // Bakgrundsmusik: från början på Game 1, annars slumpad startpunkt med marginal
   if(_audioUnlocked) {
     var bg = document.getElementById('bg-music');
-    bg.volume = 0.35;
+    bg.volume = 0;
     function startBgMusic() {
       if(gameNumber === 1) {
         bg.currentTime = 0;
@@ -361,6 +385,7 @@ async function runReveal(matchId, gameNumber) {
         bg.currentTime = 0;
       }
       bg.play().catch(function(){});
+      fadeAudio(bg, 0, BG_TARGET_VOLUME, 2500);
     }
     if(bg.readyState >= 1) {
       startBgMusic();
@@ -405,7 +430,7 @@ async function runReveal(matchId, gameNumber) {
 
   if(!m) {
     var bgFail = document.getElementById('bg-music');
-    bgFail.pause();
+    fadeAudio(bgFail, bgFail.volume, 0, 1500, function(){ bgFail.pause(); });
     show('idle');
     _isPlaying = false;
     return;
@@ -477,7 +502,7 @@ async function runReveal(matchId, gameNumber) {
   await wait(15000);
 
   var bgEnd = document.getElementById('bg-music');
-  bgEnd.pause();
+  fadeAudio(bgEnd, bgEnd.volume, 0, 2500, function(){ bgEnd.pause(); });
 
   show('idle');
   _isPlaying = false;
