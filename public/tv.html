@@ -480,15 +480,23 @@ function fadeAudio(el, from, to, durationMs, onDone) {
 
   // Uppdatera splash med namn och vänta ut 6 sek
   var splashNameEl = document.getElementById('splash-name');
+  splashNameEl.style.animation = 'none';
   splashNameEl.style.opacity = '0';
+  splashNameEl.textContent = '';
+  document.getElementById('splash-wild').style.display = 'none';
+
+  await new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); });
+
   splashNameEl.textContent = stratName;
   document.getElementById('splash-wild').style.display = isWildcard ? 'block' : 'none';
-  setTimeout(function() {
-    splashNameEl.style.animation = 'none';
-    void splashNameEl.offsetWidth;
-    splashNameEl.style.animation = 'stratNameFadeIn 1.3s ease both';
-  }, 800);
-  await wait(6000);
+
+  await wait(800);
+
+  splashNameEl.style.animation = 'none';
+  void splashNameEl.offsetWidth;
+  splashNameEl.style.animation = 'stratNameFadeIn 1.3s ease both';
+
+  await wait(5200);
 
   // STEG 2: Hero reveal
   for(var i = 0; i < playerNames.length; i++) {
