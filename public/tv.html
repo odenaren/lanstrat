@@ -501,12 +501,11 @@ function fadeAudio(el, from, to, durationMs, onDone) {
     var heroImgEl = document.getElementById('hero-img-tv');
     var shineEl = document.getElementById('hero-shine');
 
-    // Steg 1: dölj allt och rensa bild-src INNAN något annat sätts
+    // Steg 1: dölj kort-bilden helt, men låt bakgrunden fadea ut mjukt (crossfade)
     heroContentEl.style.animation = 'none';
     heroContentEl.style.opacity = '0';
-    heroBgEl.style.transition = 'none';
+    heroBgEl.style.transition = 'opacity .6s ease';
     heroBgEl.style.opacity = '0';
-    heroBgEl.style.backgroundImage = 'none';
     heroImgEl.src = '';
     shineEl.style.animation = 'none';
     document.getElementById('hero-name-tv').textContent = heroName || '?';
@@ -515,8 +514,8 @@ function fadeAudio(el, from, to, durationMs, onDone) {
 
     show('hero-reveal');
 
-    // Steg 2: vänta två frames för att garantera att opacity:0 är målad innan bilden sätts
-    await new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); });
+    // Steg 2: vänta tills bakgrunden hunnit fadea ut innan vi byter bild bakom kulisserna
+    await wait(600);
 
     heroBgEl.style.backgroundImage = imgUrl ? 'url(' + imgUrl + ')' : 'none';
     heroImgEl.src = imgUrl || '';
@@ -531,7 +530,7 @@ function fadeAudio(el, from, to, durationMs, onDone) {
       }
     }
 
-    await wait(500);
+    await wait(200);
 
     heroContentEl.style.animation = 'none';
     void heroContentEl.offsetWidth;
@@ -541,7 +540,7 @@ function fadeAudio(el, from, to, durationMs, onDone) {
     void shineEl.offsetWidth;
     setTimeout(function(){ shineEl.style.animation = 'heroShine 1.4s ease both'; }, 1000);
 
-    await wait(3900);
+    await wait(3600);
   }
 
   // STEG 3: Briefing
