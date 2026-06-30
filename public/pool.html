@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mina hjältar</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --gold:#c89b3c;--gold-dim:#7a5c1e;--gold-light:#e8c46a;
+  --bg:#0a0b0d;--surface:#15171c;--surface2:#1c1e24;--border:#2a2d35;
+  --text:#e8e6e0;--text-dim:#8a877e;--green:#4caf50;
+}
+html,body{width:100%;min-height:100vh;background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;}
+.wrap{max-width:680px;margin:0 auto;padding:24px 16px 80px;}
+header{text-align:center;margin-bottom:28px;}
+header h1{font-size:28px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;}
+header p{color:var(--text-dim);font-size:14px;margin-top:6px;}
+
+#name-select{display:flex;flex-direction:column;gap:10px;}
+.name-btn{padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:600;cursor:pointer;transition:all .15s;text-align:left;}
+.name-btn:active{transform:scale(.98);}
+.name-btn:hover{border-color:var(--gold-dim);background:var(--surface2);}
+
+#pool-view{display:none;}
+.pool-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.pool-header h2{font-size:22px;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;}
+.back-btn{background:none;border:1px solid var(--border);color:var(--text-dim);padding:6px 12px;border-radius:6px;font-family:'Rajdhani',sans-serif;font-size:13px;cursor:pointer;}
+.count-badge{font-size:13px;color:var(--text-dim);margin-bottom:16px;}
+.count-badge strong{color:var(--gold);}
+
+.search-box{width:100%;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Rajdhani',sans-serif;font-size:15px;margin-bottom:16px;}
+.search-box:focus{outline:none;border-color:var(--gold-dim);}
+
+.attr-tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;}
+.attr-tab{padding:6px 12px;border-radius:5px;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:600;cursor:pointer;}
+.attr-tab.active{border-color:var(--gold);color:var(--gold);background:rgba(200,155,60,.08);}
+
+.hero-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:10px;}
+.hero-card{position:relative;border-radius:6px;overflow:hidden;border:2px solid var(--border);cursor:pointer;background:var(--surface);transition:all .15s;aspect-ratio:1.4;}
+.hero-card img{width:100%;height:100%;object-fit:cover;object-position:center top;display:block;opacity:.55;transition:opacity .15s;}
+.hero-card.selected{border-color:var(--gold);}
+.hero-card.selected img{opacity:1;}
+.hero-card.selected::after{content:'✓';position:absolute;top:4px;right:4px;width:20px;height:20px;background:var(--gold);color:#000;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;}
+.hero-card-name{position:absolute;bottom:0;left:0;right:0;padding:3px 5px;font-size:10px;font-weight:600;text-align:center;background:linear-gradient(transparent,rgba(0,0,0,.85));color:var(--text);text-transform:uppercase;letter-spacing:.02em;}
+
+.save-status{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);padding:12px 16px;text-align:center;font-size:13px;color:var(--text-dim);}
+.save-status.saved{color:var(--green);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Mina Hjältar</h1>
+    <p>Välj de hjältar du vill kunna spela</p>
+  </header>
+
+  <div id="name-select"></div>
+
+  <div id="pool-view">
+    <div class="pool-header">
+      <h2 id="current-player-name"></h2>
+      <button class="back-btn" onclick="goBack()">← Byt spelare</button>
+    </div>
+    <div class="count-badge"><strong id="pool-count">0</strong> hjältar valda</div>
+    <input type="text" class="search-box" id="search" placeholder="Sök hjälte..." oninput="renderHeroes()">
+    <div class="attr-tabs" id="attr-tabs"></div>
+    <div class="hero-grid" id="hero-grid"></div>
+  </div>
+</div>
+
+<div class="save-status" id="save-status">Ändringar sparas automatiskt</div>
+
+<script>
+const API = '/api';
+
+const HEROES = [
+  {id:1,name:"Axe",attr:"str"},
+  {id:2,name:"Beastmaster",attr:"str"},
+  {id:3,name:"Brewmaster",attr:"str"},
+  {id:4,name:"Centaur Warrunner",attr:"str"},
+  {id:5,name:"Chaos Knight",attr:"str"},
+  {id:6,name:"Clockwerk",attr:"str"},
+  {id:7,name:"Dragon Knight",attr:"str"},
+  {id:8,name:"Earth Spirit",attr:"str"},
+  {id:9,name:"Earthshaker",attr:"str"},
+  {id:10,name:"Elder Titan",attr:"str"},
+  {id:11,name:"Huskar",attr:"str"},
+  {id:12,name:"Io",attr:"str"},
+  {id:13,name:"Kunkka",attr:"str"},
+  {id:14,name:"Legion Commander",attr:"str"},
+  {id:15,name:"Lifestealer",attr:"str"},
+  {id:16,name:"Lycan",attr:"str"},
+  {id:17,name:"Magnus",attr:"str"},
+  {id:18,name:"Mars",attr:"str"},
+  {id:19,name:"Night Stalker",attr:"str"},
+  {id:20,name:"Ogre Magi",attr:"str"},
+  {id:21,name:"Omniknight",attr:"str"},
+  {id:22,name:"Phoenix",attr:"str"},
+  {id:23,name:"Primal Beast",attr:"str"},
+  {id:24,name:"Pudge",attr:"str"},
+  {id:25,name:"Sand King",attr:"str"},
+  {id:26,name:"Slardar",attr:"str"},
+  {id:27,name:"Spirit Breaker",attr:"str"},
+  {id:28,name:"Sven",attr:"str"},
+  {id:29,name:"Tidehunter",attr:"str"},
+  {id:30,name:"Timbersaw",attr:"str"},
+  {id:31,name:"Tiny",attr:"str"},
+  {id:32,name:"Treant Protector",attr:"str"},
+  {id:33,name:"Tusk",attr:"str"},
+  {id:34,name:"Underlord",attr:"str"},
+  {id:35,name:"Undying",attr:"str"},
+  {id:36,name:"Wraith King",attr:"str"},
+  {id:37,name:"Dawnbreaker",attr:"str"},
+  {id:40,name:"Anti-Mage",attr:"agi"},
+  {id:41,name:"Arc Warden",attr:"agi"},
+  {id:42,name:"Bloodseeker",attr:"agi"},
+  {id:43,name:"Bounty Hunter",attr:"agi"},
+  {id:44,name:"Bristleback",attr:"agi"},
+  {id:45,name:"Clinkz",attr:"agi"},
+  {id:46,name:"Drow Ranger",attr:"agi"},
+  {id:47,name:"Ember Spirit",attr:"agi"},
+  {id:48,name:"Faceless Void",attr:"agi"},
+  {id:49,name:"Gyrocopter",attr:"agi"},
+  {id:50,name:"Hoodwink",attr:"agi"},
+  {id:51,name:"Juggernaut",attr:"agi"},
+  {id:52,name:"Lone Druid",attr:"agi"},
+  {id:53,name:"Luna",attr:"agi"},
+  {id:54,name:"Medusa",attr:"agi"},
+  {id:55,name:"Meepo",attr:"agi"},
+  {id:56,name:"Mirana",attr:"agi"},
+  {id:57,name:"Morphling",attr:"agi"},
+  {id:58,name:"Naga Siren",attr:"agi"},
+  {id:59,name:"Nyx Assassin",attr:"agi"},
+  {id:60,name:"Pangolier",attr:"agi"},
+  {id:61,name:"Phantom Assassin",attr:"agi"},
+  {id:62,name:"Phantom Lancer",attr:"agi"},
+  {id:63,name:"Razor",attr:"agi"},
+  {id:64,name:"Riki",attr:"agi"},
+  {id:65,name:"Shadow Fiend",attr:"agi"},
+  {id:66,name:"Slark",attr:"agi"},
+  {id:67,name:"Sniper",attr:"agi"},
+  {id:68,name:"Spectre",attr:"agi"},
+  {id:69,name:"Templar Assassin",attr:"agi"},
+  {id:70,name:"Terror Blade",attr:"agi"},
+  {id:71,name:"Troll Warlord",attr:"agi"},
+  {id:72,name:"Ursa",attr:"agi"},
+  {id:73,name:"Viper",attr:"agi"},
+  {id:74,name:"Visage",attr:"agi"},
+  {id:75,name:"Weaver",attr:"agi"},
+  {id:80,name:"Ancient Apparition",attr:"int"},
+  {id:81,name:"Bane",attr:"int"},
+  {id:82,name:"Batrider",attr:"int"},
+  {id:83,name:"Chen",attr:"int"},
+  {id:84,name:"Crystal Maiden",attr:"int"},
+  {id:85,name:"Dark Seer",attr:"int"},
+  {id:86,name:"Dark Willow",attr:"int"},
+  {id:87,name:"Dazzle",attr:"int"},
+  {id:88,name:"Death Prophet",attr:"int"},
+  {id:89,name:"Disruptor",attr:"int"},
+  {id:90,name:"Enchantress",attr:"int"},
+  {id:91,name:"Enigma",attr:"int"},
+  {id:92,name:"Grimstroke",attr:"int"},
+  {id:93,name:"Invoker",attr:"int"},
+  {id:94,name:"Jakiro",attr:"int"},
+  {id:95,name:"Keeper of the Light",attr:"int"},
+  {id:96,name:"Leshrac",attr:"int"},
+  {id:97,name:"Lich",attr:"int"},
+  {id:98,name:"Lina",attr:"int"},
+  {id:99,name:"Lion",attr:"int"},
+  {id:100,name:"Muerta",attr:"int"},
+  {id:101,name:"Nature's Prophet",attr:"int"},
+  {id:102,name:"Necrophos",attr:"int"},
+  {id:105,name:"Oracle",attr:"int"},
+  {id:106,name:"Outworld Destroyer",attr:"int"},
+  {id:107,name:"Pugna",attr:"int"},
+  {id:108,name:"Queen of Pain",attr:"int"},
+  {id:109,name:"Rubick",attr:"int"},
+  {id:110,name:"Shadow Demon",attr:"int"},
+  {id:111,name:"Shadow Shaman",attr:"int"},
+  {id:112,name:"Silencer",attr:"int"},
+  {id:113,name:"Skywrath Mage",attr:"int"},
+  {id:114,name:"Storm Spirit",attr:"int"},
+  {id:115,name:"Tinker",attr:"int"},
+  {id:116,name:"Vengeful Spirit",attr:"int"},
+  {id:117,name:"Venomancer",attr:"int"},
+  {id:118,name:"Warlock",attr:"int"},
+  {id:119,name:"Windranger",attr:"int"},
+  {id:120,name:"Winter Wyvern",attr:"int"},
+  {id:121,name:"Witch Doctor",attr:"int"},
+  {id:122,name:"Zeus",attr:"int"},
+  {id:130,name:"Abaddon",attr:"uni"},
+  {id:131,name:"Alchemist",attr:"uni"},
+  {id:132,name:"Doom",attr:"uni"},
+  {id:135,name:"Kez",attr:"uni"},
+  {id:136,name:"Marci",attr:"uni"},
+  {id:137,name:"Monkey King",attr:"uni"},
+  {id:138,name:"Snapfire",attr:"uni"},
+  {id:139,name:"Techies",attr:"int"},
+  {id:141,name:"Void Spirit",attr:"uni"},
+  {id:143,name:"Ringmaster",attr:"uni"},
+];
+const HERO_LIST = HEROES.slice().sort((a,b)=>a.name.localeCompare(b.name));
+
+const HERO_SLUGS = {
+  1:"axe",2:"beastmaster",3:"brewmaster",4:"centaur",5:"chaos_knight",6:"rattletrap",
+  7:"dragon_knight",8:"earth_spirit",9:"earthshaker",10:"elder_titan",11:"huskar",12:"wisp",
+  13:"kunkka",14:"legion_commander",15:"life_stealer",16:"lycan",17:"magnataur",18:"mars",
+  19:"night_stalker",20:"ogre_magi",21:"omniknight",22:"phoenix",23:"primal_beast",24:"pudge",
+  25:"sand_king",26:"slardar",27:"spirit_breaker",28:"sven",29:"tidehunter",30:"shredder",
+  31:"tiny",32:"treant",33:"tusk",34:"abyssal_underlord",35:"undying",36:"skeleton_king",37:"dawnbreaker",
+  40:"antimage",41:"arc_warden",42:"bloodseeker",43:"bounty_hunter",44:"bristleback",45:"clinkz",
+  46:"drow_ranger",47:"ember_spirit",48:"faceless_void",49:"gyrocopter",50:"hoodwink",51:"juggernaut",
+  52:"lone_druid",53:"luna",54:"medusa",55:"meepo",56:"mirana",57:"morphling",58:"naga_siren",
+  59:"nyx_assassin",60:"pangolier",61:"phantom_assassin",62:"phantom_lancer",63:"razor",64:"riki",
+  65:"nevermore",66:"slark",67:"sniper",68:"spectre",69:"templar_assassin",70:"terrorblade",
+  71:"troll_warlord",72:"ursa",73:"viper",74:"visage",75:"weaver",
+  80:"ancient_apparition",81:"bane",82:"batrider",83:"chen",84:"crystal_maiden",85:"dark_seer",
+  86:"dark_willow",87:"dazzle",88:"death_prophet",89:"disruptor",90:"enchantress",91:"enigma",
+  92:"grimstroke",93:"invoker",94:"jakiro",95:"keeper_of_the_light",96:"leshrac",97:"lich",
+  98:"lina",99:"lion",100:"muerta",101:"furion",102:"necrolyte",105:"oracle",
+  106:"obsidian_destroyer",107:"pugna",108:"queenofpain",109:"rubick",110:"shadow_demon",
+  111:"shadow_shaman",112:"silencer",113:"skywrath_mage",114:"storm_spirit",115:"tinker",
+  116:"vengefulspirit",117:"venomancer",118:"warlock",119:"windrunner",120:"winter_wyvern",
+  121:"witch_doctor",122:"zuus",130:"abaddon",131:"alchemist",132:"doom_bringer",
+  135:"kez",136:"marci",137:"monkey_king",138:"snapfire",139:"techies",141:"void_spirit",143:"ringmaster"
+};
+const CDN = 'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/';
+const HERO_IMG_OVERRIDES = { 13: CDN+'kunkka.png', 35: CDN+'undying.png', 90: CDN+'enchantress.png', 99: CDN+'lion.png' };
+function heroImg(id) {
+  if(HERO_IMG_OVERRIDES[+id]) return HERO_IMG_OVERRIDES[+id];
+  const slug = HERO_SLUGS[+id];
+  if(!slug) return null;
+  return CDN+slug+'.png';
+}
+
+let players = [];
+let currentPlayer = null;
+let currentAttr = 'all';
+let saveTimeout = null;
+
+async function apiFetch(path, options={}) {
+  const res = await fetch(API+path, {headers:{'Content-Type':'application/json'},...options});
+  if(!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function init() {
+  try {
+    const livePlayers = await apiFetch('/players');
+    let draftPools = [];
+    try { draftPools = await apiFetch('/draftpools'); } catch(e) {}
+
+    players = livePlayers.map(p => {
+      const draft = draftPools.find(d => d.name === p.name);
+      return { name: p.name, heroes: draft ? (draft.heroes || []) : [] };
+    });
+  } catch(e) {
+    document.getElementById('name-select').innerHTML = '<p style="color:var(--text-dim);text-align:center">Kunde inte ladda spelare. Försök igen senare.</p>';
+    return;
+  }
+  renderNameSelect();
+}
+
+function renderNameSelect() {
+  const el = document.getElementById('name-select');
+  el.innerHTML = '';
+  players.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'name-btn';
+    const count = (p.heroes||[]).length;
+    btn.innerHTML = p.name + (count ? ' <span style="color:var(--text-dim);font-size:13px;float:right">'+count+' valda</span>' : '');
+    btn.onclick = () => selectPlayer(p.name);
+    el.appendChild(btn);
+  });
+}
+
+function selectPlayer(name) {
+  currentPlayer = players.find(p => p.name === name);
+  if(!currentPlayer) return;
+  document.getElementById('name-select').style.display = 'none';
+  document.getElementById('pool-view').style.display = 'block';
+  document.getElementById('current-player-name').textContent = currentPlayer.name;
+  renderAttrTabs();
+  renderHeroes();
+  updateCount();
+}
+
+function goBack() {
+  document.getElementById('pool-view').style.display = 'none';
+  document.getElementById('name-select').style.display = 'flex';
+  currentPlayer = null;
+  init();
+}
+
+function renderAttrTabs() {
+  const tabs = [['all','Alla'],['str','Strength'],['agi','Agility'],['int','Intelligence'],['uni','Universal']];
+  const el = document.getElementById('attr-tabs');
+  el.innerHTML = '';
+  tabs.forEach(([key,label]) => {
+    const b = document.createElement('button');
+    b.className = 'attr-tab' + (currentAttr===key ? ' active' : '');
+    b.textContent = label;
+    b.onclick = () => { currentAttr = key; renderAttrTabs(); renderHeroes(); };
+    el.appendChild(b);
+  });
+}
+
+function renderHeroes() {
+  const grid = document.getElementById('hero-grid');
+  const search = document.getElementById('search').value.toLowerCase().trim();
+  grid.innerHTML = '';
+  const selected = new Set(currentPlayer.heroes || []);
+  HERO_LIST.filter(h => {
+    if(currentAttr !== 'all' && h.attr !== currentAttr) return false;
+    if(search && !h.name.toLowerCase().includes(search)) return false;
+    return true;
+  }).forEach(h => {
+    const card = document.createElement('div');
+    card.className = 'hero-card' + (selected.has(h.name) ? ' selected' : '');
+    const img = heroImg(h.id);
+    card.innerHTML = (img ? '<img src="'+img+'" alt="">' : '') + '<div class="hero-card-name">'+h.name+'</div>';
+    card.onclick = () => toggleHero(h.name);
+    grid.appendChild(card);
+  });
+}
+
+function toggleHero(name) {
+  if(!currentPlayer.heroes) currentPlayer.heroes = [];
+  const idx = currentPlayer.heroes.indexOf(name);
+  if(idx >= 0) currentPlayer.heroes.splice(idx,1);
+  else currentPlayer.heroes.push(name);
+  renderHeroes();
+  updateCount();
+  scheduleSave();
+}
+
+function updateCount() {
+  document.getElementById('pool-count').textContent = (currentPlayer.heroes||[]).length;
+}
+
+function scheduleSave() {
+  const status = document.getElementById('save-status');
+  status.textContent = 'Sparar...';
+  status.classList.remove('saved');
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(savePool, 800);
+}
+
+async function savePool() {
+  try {
+    await apiFetch('/draftpools/'+encodeURIComponent(currentPlayer.name)+'/heroes', {
+      method:'PUT',
+      body: JSON.stringify({heroes: currentPlayer.heroes||[]})
+    });
+    const status = document.getElementById('save-status');
+    status.textContent = 'Sparat ✓';
+    status.classList.add('saved');
+  } catch(e) {
+    document.getElementById('save-status').textContent = 'Kunde inte spara, försök igen';
+  }
+}
+
+init();
+</script>
+</body>
+</html>
