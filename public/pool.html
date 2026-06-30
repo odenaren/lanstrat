@@ -318,19 +318,19 @@ function renderHeroes() {
     return true;
   }).forEach(h => {
     const card = document.createElement('div');
-    card.className = 'hero-card' + (selected.has(h.name) ? ' selected' : '');
+    card.className = 'hero-card' + (selected.has(h.id) ? ' selected' : '');
     const img = heroImg(h.id);
     card.innerHTML = (img ? '<img src="'+img+'" alt="">' : '') + '<div class="hero-card-name">'+h.name+'</div>';
-    card.onclick = () => toggleHero(h.name);
+    card.onclick = () => toggleHero(h.id);
     grid.appendChild(card);
   });
 }
 
-function toggleHero(name) {
+function toggleHero(id) {
   if(!currentPlayer.heroes) currentPlayer.heroes = [];
-  const idx = currentPlayer.heroes.indexOf(name);
+  const idx = currentPlayer.heroes.indexOf(id);
   if(idx >= 0) currentPlayer.heroes.splice(idx,1);
-  else currentPlayer.heroes.push(name);
+  else currentPlayer.heroes.push(id);
   renderHeroes();
   updateCount();
   scheduleSave();
