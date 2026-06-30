@@ -496,21 +496,30 @@ function fadeAudio(el, from, to, durationMs, onDone) {
     var heroName = draft[playerName];
     var imgUrl = heroImgUrl(heroName);
 
-    document.getElementById('hero-bg').style.backgroundImage = imgUrl ? 'url(' + imgUrl + ')' : 'none';
-    document.getElementById('hero-img-tv').src = imgUrl || '';
+    var heroContentEl = document.getElementById('hero-content');
+    var heroBgEl = document.getElementById('hero-bg');
+    var heroImgEl = document.getElementById('hero-img-tv');
+    var shineEl = document.getElementById('hero-shine');
+
+    // Steg 1: dölj allt och rensa bild-src INNAN något annat sätts
+    heroContentEl.style.animation = 'none';
+    heroContentEl.style.opacity = '0';
+    heroBgEl.style.transition = 'none';
+    heroBgEl.style.opacity = '0';
+    heroBgEl.style.backgroundImage = 'none';
+    heroImgEl.src = '';
+    shineEl.style.animation = 'none';
     document.getElementById('hero-name-tv').textContent = heroName || '?';
     document.getElementById('player-name-tv').textContent = playerName;
     document.getElementById('pick-counter').textContent = (i+1) + ' / ' + playerNames.length;
 
     show('hero-reveal');
-    var heroContentEl = document.getElementById('hero-content');
-    var heroBgEl = document.getElementById('hero-bg');
-    var shineEl = document.getElementById('hero-shine');
-    heroContentEl.style.opacity = '0';
-    heroBgEl.style.opacity = '0';
-    heroBgEl.style.transition = 'none';
-    void heroBgEl.offsetWidth; // force reflow so opacity:0 applies before next transition is set
-    shineEl.style.animation = 'none';
+
+    // Steg 2: vänta två frames för att garantera att opacity:0 är målad innan bilden sätts
+    await new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); });
+
+    heroBgEl.style.backgroundImage = imgUrl ? 'url(' + imgUrl + ')' : 'none';
+    heroImgEl.src = imgUrl || '';
 
     if(_audioUnlocked) {
       var soundUrl = heroSoundUrl(heroName);
@@ -522,17 +531,17 @@ function fadeAudio(el, from, to, durationMs, onDone) {
       }
     }
 
-    setTimeout(function() {
-      heroContentEl.style.animation = 'none';
-      void heroContentEl.offsetWidth;
-      heroContentEl.style.animation = 'heroZoomIn 1.9s ease both';
-      heroBgEl.style.transition = 'opacity 1.2s ease';
-      heroBgEl.style.opacity = '1';
-      void shineEl.offsetWidth;
-      setTimeout(function(){ shineEl.style.animation = 'heroShine 1.4s ease both'; }, 1000);
-    }, 500);
+    await wait(500);
 
-    await wait(4400);
+    heroContentEl.style.animation = 'none';
+    void heroContentEl.offsetWidth;
+    heroContentEl.style.animation = 'heroZoomIn 1.9s ease both';
+    heroBgEl.style.transition = 'opacity 1.2s ease';
+    heroBgEl.style.opacity = '1';
+    void shineEl.offsetWidth;
+    setTimeout(function(){ shineEl.style.animation = 'heroShine 1.4s ease both'; }, 1000);
+
+    await wait(3900);
   }
 
   // STEG 3: Briefing
@@ -570,8 +579,17 @@ function fadeAudio(el, from, to, durationMs, onDone) {
   _isPlaying = false;
 }
 
-// Kolla direkt vid sidladdning
-// _lastMatchId hanteras enbart av polling
+// Kolla direkt vid sidladdning - registrera befintligt state utan att spela upp det
+var _initDone = false;
+(async function() {
+  try {
+    var resp = await fetch('/api/status');
+    var status = await resp.json();
+    if(status.latestMatchId) _lastMatchId = status.latestMatchId;
+    if(status.replayToken) _lastReplayToken = status.replayToken;
+  } catch(e) {}
+  _initDone = true;
+})();
 
 var _pendingMatchId = null;
 
@@ -580,6 +598,7 @@ var _lastReplayToken = null;
 // Polling
 var _pollGenerating = false;
 setInterval(async function() {
+  if(!_initDone) return;
   try {
     var resp = await fetch('/api/status');
     var status = await resp.json();
