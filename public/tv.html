@@ -85,6 +85,7 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
   <audio id="welcome-audio" src="/sounds/announcer/welcome.mp3" preload="auto"></audio>
   <audio id="game-audio" preload="none"></audio>
   <audio id="hero-audio" preload="none"></audio>
+  <audio id="bg-music" src="/sounds/music/background.mp3" preload="auto" loop></audio>
 
   <div id="unlock-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:24px;cursor:pointer;" onclick="unlockAudio()">
     <img src="https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/global/dota2_logo_symbol.png" style="width:120px;opacity:.6;" alt="Dota 2">
@@ -133,6 +134,7 @@ const CDN = 'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react
 var heroSoundFiles = {
   'axe':'axe.mp3',
   'abaddon':'Vo_abaddon_abad_spawn_01.mp3',
+  'underlord':'Vo_abyssal_underlord_abys_spawn_02.mp3',
   'alchemist':'Vo_alchemist_alch_spawn_02.mp3',
   'ancient apparition':'Vo_ancient_apparition_appa_spawn_02.mp3',
   'anti-mage':'Vo_antimage_anti_move_08.mp3',
@@ -165,13 +167,98 @@ var heroSoundFiles = {
   'ember spirit':'Vo_ember_spirit_embr_spawn_03.mp3',
   'enchantress':'Vo_enchantress_ench_spawn_03.mp3',
   'enigma':'Vo_enigma_enig_spawn_02.mp3',
+  'muerta':'Vo_eth_muerta_ally_131.mp3',
   'faceless void':'Vo_faceless_void_face_spawn_02.mp3',
+  "nature's prophet":'Vo_furion_furi_spawn_01.mp3',
   'grimstroke':'Vo_grimstroke_grimstroke_spawn_11.mp3',
   'gyrocopter':'Vo_gyrocopter_gyro_spawn_06.mp3',
   'hoodwink':'Vo_hoodwink_hoodwink_intro_08_03.mp3',
   'huskar':'Vo_huskar_husk_spawn_04.mp3',
   'invoker':'Vo_invoker_invo_spawn_05.mp3',
-  'clockwerk':'Vo_rattletrap_ratt_move_14.mp3'
+  'jakiro':'Vo_jakiro_jak_spawn_02.mp3',
+  'juggernaut':'Vo_juggernaut_jugsc_arc_spawn_05.mp3',
+  'keeper of the light':'Vo_keeper_of_the_light_keep_move_04.mp3',
+  'kunkka':'Vo_kunkka_kunk_spawn_03.mp3',
+  'legion commander':'Vo_legion_commander_legcom_dem_attack_06.mp3',
+  'leshrac':'Vo_leshrac_lesh_spawn_02.mp3',
+  'lich':'Vo_lich_lich_spawn_04.mp3',
+  'lifestealer':'Vo_life_stealer_lifest_move_19.mp3',
+  'lina':'Vo_lina_lina_spawn_05.mp3',
+  'lion':'Vo_lion_lion_move_12.mp3',
+  'lone druid':'Vo_lone_druid_lone_druid_spawn_02.mp3',
+  'luna':'Vo_luna_luna_spawn_02.mp3',
+  'lycan':'Vo_lycan_lycan_spawn_04.mp3',
+  'magnus':'Vo_magnataur_magn_spawn_06.mp3',
+  'marci':'Vo_marci_marci_move_2.mp3',
+  'mars':'Vo_mars_mars_spawn_04.mp3',
+  'medusa':'Vo_medusa_medus_spawn_05.mp3',
+  'meepo':'Vo_meepo_meepo_spawn_02.mp3',
+  'mirana':'Vo_mirana_mir_spawn_04.mp3',
+  'monkey king':'Vo_monkey_king_monkey_crown_spawn_01.mp3',
+  'morphling':'Vo_morphling_mrph_spawn_08.mp3',
+  'naga siren':'Vo_naga_siren_naga_spawn_01.mp3',
+  'necrophos':'Vo_necrolyte_necr_spawn_04.mp3',
+  'shadow fiend':'Vo_nevermore_nev_arc_spawn_03.mp3',
+  'night stalker':'Vo_night_stalker_nstalk_battlebegins_02.mp3',
+  'nyx assassin':'Vo_nyx_assassin_nyx_spawn_04.mp3',
+  'ogre magi':'Vo_ogre_magi_ogmag_spawn_02.mp3',
+  'omniknight':'Vo_omniknight_omni_spawn_03.mp3',
+  'oracle':'Vo_oracle_orac_spawn_02.mp3',
+  'outworld destroyer':'Vo_outworld_destroyer_odest_spawn_04.mp3',
+  'pangolier':'Vo_pangolin_pangolin_spawn_02.mp3',
+  'phantom assassin':'Vo_phantom_assassin_phass_arc_spawn_03.mp3',
+  'phantom lancer':'Vo_phantom_lancer_plance_spawn_02.mp3',
+  'phoenix':'Vo_phoenix_phoenix_bird_respawn.mp3',
+  'primal beast':'Vo_primal_beast_primal_attack_big_01.mp3',
+  'puck':'Vo_puck_puck_spawn_02.mp3',
+  'pudge':'Vo_pudge_pud_ability_hook_10.mp3',
+  'pugna':'Vo_pugna_pugna_spawn_04.mp3',
+  'queen of pain':'Vo_queenofpain_pain_spawn_01.mp3',
+  'clockwerk':'Vo_rattletrap_ratt_move_14.mp3',
+  'razor':'Vo_razor_raz_spawn_09.mp3',
+  'riki':'Vo_riki_riki_spawn_06.mp3',
+  'rubick':'Vo_rubick_rub_arc_spawn_06.mp3',
+  'sand king':'Vo_sandking_skg_spawn_06.mp3',
+  'shadow demon':'Vo_shadow_demon_shadow_demon_spawn_01.mp3',
+  'shadow shaman':'Vo_shadowshaman_shad_attack_10.mp3',
+  'timbersaw':'Vo_shredder_timb_attack_04.mp3',
+  'silencer':'Vo_silencer_silen_spawn_02.mp3',
+  'wraith king':'Vo_skeleton_king_wraith_spawn_02.mp3',
+  'skywrath mage':'Vo_skywrath_mage_drag_move_05.mp3',
+  'slardar':'Vo_slardar_slar_spawn_03.mp3',
+  'slark':'Vo_slark_slark_dark_pact_03.mp3',
+  'snapfire':'Vo_snapfire_snapfire_spawn_05.mp3',
+  'sniper':'Vo_sniper_helmet_snip_spawn_03.mp3',
+  'spectre':'Vo_spectre_spec_spawn_01.mp3',
+  'spirit breaker':'Vo_spirit_breaker_spir_spawn_02.mp3',
+  'storm spirit':'Vo_stormspirit_ss_spawn_02.mp3',
+  'sven':'Vo_sven_sven_spawn_04.mp3',
+  'techies':'Vo_techies_tech_spawn_01.mp3',
+  'templar assassin':'Vo_templar_assassin_temp_spawn_03.mp3',
+  'terrorblade':'Vo_terrorblade_terr_shards_spawn_01.mp3',
+  'tidehunter':'Vo_tidehunter_tide_spawn_02.mp3',
+  'tinker':'Vo_tinker_tink_spawn_03.mp3',
+  'tiny':'Vo_tiny_tiny_pres_t3_spawn_02.mp3',
+  'treant protector':'Vo_treant_treant_spawn_02.mp3',
+  'troll warlord':'Vo_troll_warlord_troll_spawn_03.mp3',
+  'tusk':'Vo_tusk_tusk_spawn_02.mp3',
+  'undying':'Vo_undying_undying_spawn_01.mp3',
+  'ursa':'Vo_ursa_ursa_spawn_01.mp3',
+  'vengeful spirit':'Vo_vengefulspirit_vng_spawn_01.mp3',
+  'venomancer':'Vo_venomancer_venm_attack_02.mp3',
+  'viper':'Vo_viper_vipe_spawn_02.mp3',
+  'visage':'Vo_visage_visa_spawn_07.mp3',
+  'void spirit':'Vo_void_spirit_voidspir_spawn_04.mp3',
+  'warlock':'Vo_warlock_warl_spawn_04.mp3',
+  'weaver':'Vo_weaver_weav_spawn_02.mp3',
+  'windranger':'Vo_windrunner_wind_spawn_01.mp3',
+  'winter wyvern':'Vo_winter_wyvern_winwyv_spawn_02.mp3',
+  'io':'Vo_wisp_spawn_respawn.mp3',
+  'witch doctor':'Vo_witchdoctor_wdoc_move_06.mp3',
+  'zeus':'Vo_zuus_zuus_arc_spawn_05.mp3',
+  'kez':'Weapons_hero_kez_raptor_cast.mp3',
+  'largo':'Weapons_hero_largo_lick_target_ally.mp3',
+  'ring master':'Weapons_hero_ringmaster_whip_channel.mp3'
 };
 
 function heroSoundUrl(heroName) {
@@ -259,6 +346,54 @@ async function runReveal(matchId, gameNumber) {
   if(_isPlaying) return;
   _isPlaying = true;
 
+var BG_TARGET_VOLUME = 0.35;
+var _bgFadeInterval = null;
+
+function fadeAudio(el, from, to, durationMs, onDone) {
+  if(_bgFadeInterval) clearInterval(_bgFadeInterval);
+  var steps = 30;
+  var stepMs = durationMs / steps;
+  var stepAmount = (to - from) / steps;
+  var current = from;
+  el.volume = Math.max(0, Math.min(1, current));
+  var count = 0;
+  _bgFadeInterval = setInterval(function() {
+    count++;
+    current += stepAmount;
+    el.volume = Math.max(0, Math.min(1, current));
+    if(count >= steps) {
+      clearInterval(_bgFadeInterval);
+      _bgFadeInterval = null;
+      el.volume = Math.max(0, Math.min(1, to));
+      if(onDone) onDone();
+    }
+  }, stepMs);
+}
+
+  // Bakgrundsmusik: från början på Game 1, annars slumpad startpunkt med marginal
+  if(_audioUnlocked) {
+    var bg = document.getElementById('bg-music');
+    bg.volume = 0;
+    function startBgMusic() {
+      if(gameNumber === 1) {
+        bg.currentTime = 0;
+      } else if(bg.duration && isFinite(bg.duration)) {
+        var safeMargin = 95; // sekunder presentation tar efter splash
+        var maxStart = Math.max(0, bg.duration - safeMargin);
+        bg.currentTime = Math.random() * maxStart;
+      } else {
+        bg.currentTime = 0;
+      }
+      bg.play().catch(function(){});
+      fadeAudio(bg, 0, BG_TARGET_VOLUME, 2500);
+    }
+    if(bg.readyState >= 1) {
+      startBgMusic();
+    } else {
+      bg.addEventListener('loadedmetadata', startBgMusic, {once:true});
+    }
+  }
+
   // GAME 1: Welcome-sekvens (33 sek)
   if(gameNumber === 1) {
     show('welcome');
@@ -293,7 +428,13 @@ async function runReveal(matchId, gameNumber) {
     await wait(1000);
   }
 
-  if(!m) { show('idle'); _isPlaying = false; return; }
+  if(!m) {
+    var bgFail = document.getElementById('bg-music');
+    fadeAudio(bgFail, bgFail.volume, 0, 1500, function(){ bgFail.pause(); });
+    show('idle');
+    _isPlaying = false;
+    return;
+  }
 
   var draft = m.currentDraft || m.draft || {};
   var stratName = m.name || 'Draft Strategi';
@@ -359,6 +500,9 @@ async function runReveal(matchId, gameNumber) {
   });
   show('overview');
   await wait(15000);
+
+  var bgEnd = document.getElementById('bg-music');
+  fadeAudio(bgEnd, bgEnd.volume, 0, 2500, function(){ bgEnd.pause(); });
 
   show('idle');
   _isPlaying = false;

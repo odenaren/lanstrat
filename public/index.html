@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Laneight Strategy</title>
+<title>DHS - The Playbook</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500&display=swap');
 :root {
@@ -1100,6 +1100,9 @@ async function generateStrategy() {
     })});
     currentMatchId=match.id;
 
+    // Signalera TV direkt - matchen är sparad, ingen anledning att vänta på lokal animation
+    apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:false, latestMatchId: currentMatchId})}).catch(()=>{});
+
     // Build strategy output via DOM to avoid quote/backtick issues
     var areaDiv = document.createElement('div');
 
@@ -1251,7 +1254,6 @@ async function generateStrategy() {
     setTimeout(function(){ areaDiv.style.opacity = '1'; }, 20);
 
     _pollGenerating = false;
-    apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:false, latestMatchId: currentMatchId})}).catch(()=>{});
     if(genBtn) { genBtn.disabled=false; genBtn.textContent='Generera ny strategi'; }
   } catch(err){
     _pollGenerating = false;
@@ -1444,14 +1446,21 @@ async function loadHistory() {
       <div style="display:flex;gap:5px;align-items:center" onclick="event.stopPropagation()">
         <button onclick="event.stopPropagation();setMatchResult('${m.id}','win')" style="padding:3px 10px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:all .15s;border:1px solid #27ae6055;background:${m.result==='win'?'rgba(39,174,96,.3)':'none'};color:${m.result==='win'?'#2ecc71':'#27ae6088'}">✓</button>
         <button onclick="event.stopPropagation();setMatchResult('${m.id}','loss')" style="padding:3px 10px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:all .15s;border:1px solid #c0392b55;background:${m.result==='loss'?'rgba(231,76,60,.2)':'none'};color:${m.result==='loss'?'#e74c3c':'#c0392b88'}">✗</button>
+        <button onclick="event.stopPropagation();replayOnTv('${m.id}')" title="Visa på TV igen" style="padding:8px 14px;border-radius:4px;font-family:Rajdhani,sans-serif;font-size:16px;font-weight:700;cursor:pointer;border:1px solid var(--gold-dim);background:rgba(200,155,60,.08);color:var(--gold);min-width:44px;min-height:36px">📺</button>
       </div>
       <span class="match-entry-badge ${hasItems?'badge-has-items':'badge-no-items'}">${hasItems?'Items klara':'Lägg till motståndare'}</span>
       <button onclick="toggleMemory(event,'${m.id}',${!m.excludeFromMemory})" title="${m.excludeFromMemory?'Inkludera i minne':'Exkludera från minne'}" style="background:none;border:1px solid ${m.excludeFromMemory?'var(--border)':'var(--gold-dim)'};color:${m.excludeFromMemory?'var(--text-dim)':'var(--gold)'};cursor:pointer;font-size:12px;padding:3px 8px;border-radius:3px;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.04em;white-space:nowrap;transition:all .15s">${m.excludeFromMemory?'● Ej minne':'● Minne'}</button>
       <button class="match-entry-del" onclick="deleteMatch(event,'${m.id}')" title="Ta bort">✕</button>`;
-    el.onclick=(e)=>{ if(e.target.classList.contains('match-entry-del'))return; openDetail(m.id); };
+    el.onclick=(e)=>{ if(e.target.closest('.match-entry-del') || e.target.closest('button')) return; openDetail(m.id); };
     list.appendChild(el);
   });
 }
+async function replayOnTv(matchId) {
+  try {
+    await apiFetch('/replay/' + matchId, {method:'POST'});
+  } catch(err) { alert('Kunde inte visa på TV: ' + err.message); }
+}
+
 async function toggleBan(heroName) {
   if(!heroName || heroName === '?') return;
   if(currentBanned.has(heroName)) currentBanned.delete(heroName);
