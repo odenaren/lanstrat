@@ -90,8 +90,8 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
   </div>
 
   <audio id="welcome-audio" src="/sounds/announcer/welcome.mp3" preload="auto"></audio>
-  <audio id="game-audio" preload="none"></audio>
-  <audio id="hero-audio" preload="none"></audio>
+  <audio id="game-audio" src="/sounds/announcer/game_1.mp3" preload="auto"></audio>
+  <audio id="hero-audio" src="/sounds/announcer/welcome.mp3" preload="auto"></audio>
   <audio id="bg-music" src="/sounds/music/background.mp3" preload="auto" loop></audio>
 
   <div id="control-buttons" style="position:fixed;bottom:16px;left:16px;display:flex;gap:8px;z-index:8888;opacity:.15;transition:opacity .2s;" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=.15">
@@ -369,6 +369,23 @@ async function replayLast() {
 function unlockAudio() {
   document.getElementById('unlock-overlay').style.display = 'none';
   _audioUnlocked = true;
+
+  // Lås upp varje audio-element explicit (krävs av iOS Safari m.fl. mobilwebbläsare)
+  var audioIds = ['welcome-audio', 'game-audio', 'hero-audio', 'bg-music'];
+  audioIds.forEach(function(id) {
+    var el = document.getElementById(id);
+    if(!el) return;
+    var prevSrc = el.src;
+    var prevMuted = el.muted;
+    el.muted = true;
+    el.play().then(function() {
+      el.pause();
+      el.currentTime = 0;
+      el.muted = prevMuted;
+    }).catch(function() {
+      el.muted = prevMuted;
+    });
+  });
 }
 
 
