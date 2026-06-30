@@ -447,7 +447,7 @@ function fadeAudio(el, from, to, durationMs, onDone) {
       ga.src = '/sounds/announcer/game_' + gameNumber + '.mp3';
       ga.currentTime = 0;
       ga.play().catch(function(){});
-    }, 1200);
+    }, 2000);
   }
 
   // Vänta på match-data (max 30 sek)
@@ -494,13 +494,10 @@ function fadeAudio(el, from, to, durationMs, onDone) {
 
     show('hero-reveal');
     var heroContentEl = document.getElementById('hero-content');
-    heroContentEl.style.animation = 'none';
-    void heroContentEl.offsetWidth; // force reflow to restart animation
-    heroContentEl.style.animation = 'heroZoomIn 1.6s ease both';
     var shineEl = document.getElementById('hero-shine');
+    heroContentEl.style.opacity = '0';
     shineEl.style.animation = 'none';
-    void shineEl.offsetWidth;
-    setTimeout(function(){ shineEl.style.animation = 'heroShine 1.4s ease both'; }, 900);
+
     if(_audioUnlocked) {
       var soundUrl = heroSoundUrl(heroName);
       if(soundUrl) {
@@ -510,6 +507,16 @@ function fadeAudio(el, from, to, durationMs, onDone) {
         ha.play().catch(function(){});
       }
     }
+
+    setTimeout(function() {
+      heroContentEl.style.opacity = '';
+      heroContentEl.style.animation = 'none';
+      void heroContentEl.offsetWidth;
+      heroContentEl.style.animation = 'heroZoomIn 1.9s ease both';
+      void shineEl.offsetWidth;
+      setTimeout(function(){ shineEl.style.animation = 'heroShine 1.4s ease both'; }, 1000);
+    }, 500);
+
     await wait(4400);
   }
 
