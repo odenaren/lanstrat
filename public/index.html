@@ -249,7 +249,6 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
   <div class="page-header">
     <h2>Matchhistorik</h2>
     <span style="color:var(--text-dim);font-size:13px">Klicka på en match för detaljer &amp; itemtips</span>
-    <button onclick="importDraftPools()" style="margin-left:8px;padding:6px 14px;background:rgba(76,175,80,.12);border:1px solid #4caf5066;color:#4caf50;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s">📥 Importera pooler</button>
     <button onclick="openLanModal()" style="margin-left:auto;padding:6px 14px;background:rgba(200,155,60,.15);border:1px solid var(--gold-dim);color:var(--gold);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s">⚔️ Inför lanet</button>
     <button onclick="clearAllMemory()" style="margin-left:auto;padding:6px 14px;background:none;border:1px solid #c0392b44;color:var(--red);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='#c0392b44'">Rensa minne</button>
   </div>
@@ -308,6 +307,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
   <div class="modal" style="width:440px">
     <h3>Infor lanet</h3>
     <p style="color:var(--text-dim);font-size:13px;margin-bottom:20px;line-height:1.6">Valj vad du vill nullstalla. Spelarna behalles.</p>
+    <button onclick="importDraftPools()" style="width:100%;padding:12px 14px;margin-bottom:20px;background:rgba(76,175,80,.1);border:1px solid #4caf5066;color:#4caf50;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;border-radius:4px;transition:all .15s">📥 Importera hjältepooler från /pool</button>
     <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">
       <label style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer">
         <input type="checkbox" id="lan-clear-pools" style="width:16px;height:16px;accent-color:var(--gold)">
