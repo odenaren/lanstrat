@@ -434,10 +434,12 @@ function fadeAudio(el, from, to, durationMs, onDone) {
   document.getElementById('splash-wild').style.display = 'none';
   show('splash');
   if(_audioUnlocked) {
-    var ga = document.getElementById('game-audio');
-    ga.src = '/sounds/announcer/game_' + gameNumber + '.mp3';
-    ga.currentTime = 0;
-    ga.play().catch(function(){});
+    setTimeout(function() {
+      var ga = document.getElementById('game-audio');
+      ga.src = '/sounds/announcer/game_' + gameNumber + '.mp3';
+      ga.currentTime = 0;
+      ga.play().catch(function(){});
+    }, 1200);
   }
 
   // Vänta på match-data (max 30 sek)
