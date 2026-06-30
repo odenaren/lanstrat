@@ -315,6 +315,8 @@ async function runReveal(matchId, gameNumber) {
 
 var _pendingMatchId = null;
 
+var _lastReplayToken = null;
+
 // Polling
 var _pollGenerating = false;
 setInterval(async function() {
@@ -330,11 +332,15 @@ setInterval(async function() {
       _pollGenerating = false;
       var matchId = status.latestMatchId;
       // Trigga bara om detta är ett annat ID än det vi sett innan generating:true
-      if(matchId && matchId !== _lastMatchId) {
+      var matchId = status.latestMatchId;
+      var isNewMatch = matchId && matchId !== _lastMatchId;
+      var isReplay = status.replayToken && status.replayToken !== _lastReplayToken;
+      if(isNewMatch || isReplay) {
         _lastMatchId = matchId;
-        var allResp = await fetch('/api/matches');
-        var allMatches = await allResp.json();
-        var gameNumber = allMatches.length;
+        _lastReplayToken = status.replayToken;
+        var mResp = await fetch('/api/matches/' + matchId);
+        var mData = await mResp.json();
+        var gameNumber = mData.gameNumber || 1;
         runReveal(matchId, gameNumber);
       }
     }
