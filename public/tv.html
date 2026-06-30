@@ -496,11 +496,11 @@ function fadeAudio(el, from, to, durationMs, onDone) {
     var heroContentEl = document.getElementById('hero-content');
     heroContentEl.style.animation = 'none';
     void heroContentEl.offsetWidth; // force reflow to restart animation
-    heroContentEl.style.animation = 'heroZoomIn .7s ease both';
+    heroContentEl.style.animation = 'heroZoomIn 1.6s ease both';
     var shineEl = document.getElementById('hero-shine');
     shineEl.style.animation = 'none';
     void shineEl.offsetWidth;
-    setTimeout(function(){ shineEl.style.animation = 'heroShine 1s ease both'; }, 350);
+    setTimeout(function(){ shineEl.style.animation = 'heroShine 1.4s ease both'; }, 900);
     if(_audioUnlocked) {
       var soundUrl = heroSoundUrl(heroName);
       if(soundUrl) {
