@@ -105,7 +105,6 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .strategy-placeholder .icon{font-size:48px;opacity:.3;}
 .strategy-raw{font-size:14px;color:var(--text);line-height:1.7;white-space:pre-wrap;}
 .strategy-raw h2,.strategy-raw h3{color:var(--gold);font-family:'Rajdhani',sans-serif;letter-spacing:.06em;text-transform:uppercase;margin:18px 0 8px;}
-.strategy-raw table tr:hover td{background:rgba(200,155,60,.05);}
 .strategy-raw strong{color:var(--gold-light);}
 .dots{display:inline-flex;gap:4px;}
 .dot{width:6px;height:6px;background:var(--gold);border-radius:50%;animation:bounce 1.2s infinite;}
@@ -388,6 +387,7 @@ const HEROES = [
   {id:42,name:"Bloodseeker",attr:"agi",roles:["Carry","Jungle","Offlane"]},
   {id:43,name:"Bounty Hunter",attr:"agi",roles:["Support","Carry"]},
   {id:44,name:"Bristleback",attr:"agi",roles:["Offlane"]},
+  {id:145,name:"Broodmother",attr:"agi",roles:["Offlane","Jungle","Carry"]},
   {id:45,name:"Clinkz",attr:"agi",roles:["Carry","Mid"]},
   {id:46,name:"Drow Ranger",attr:"agi",roles:["Carry"]},
   {id:47,name:"Ember Spirit",attr:"agi",roles:["Mid","Carry"]},
@@ -413,7 +413,7 @@ const HEROES = [
   {id:67,name:"Sniper",attr:"agi",roles:["Carry","Mid"]},
   {id:68,name:"Spectre",attr:"agi",roles:["Carry"]},
   {id:69,name:"Templar Assassin",attr:"agi",roles:["Mid","Carry"]},
-  {id:70,name:"Terror Blade",attr:"agi",roles:["Carry"]},
+  {id:70,name:"Terrorblade",attr:"agi",roles:["Carry"]},
   {id:71,name:"Troll Warlord",attr:"agi",roles:["Carry"]},
   {id:72,name:"Ursa",attr:"agi",roles:["Carry","Jungle"]},
   {id:73,name:"Viper",attr:"agi",roles:["Mid","Offlane"]},
@@ -446,6 +446,7 @@ const HEROES = [
   {id:106,name:"Outworld Destroyer",attr:"int",roles:["Mid","Carry"]},
   {id:107,name:"Pugna",attr:"int",roles:["Mid","Support"]},
   {id:108,name:"Queen of Pain",attr:"int",roles:["Mid","Carry"]},
+  {id:146,name:"Puck",attr:"int",roles:["Mid","Offlane"]},
   {id:109,name:"Rubick",attr:"int",roles:["Support"]},
   {id:110,name:"Shadow Demon",attr:"int",roles:["Support"]},
   {id:111,name:"Shadow Shaman",attr:"int",roles:["Support"]},
@@ -470,6 +471,7 @@ const HEROES = [
   {id:139,name:"Techies",attr:"int",roles:["Support","Mid"]},
   {id:141,name:"Void Spirit",attr:"uni",roles:["Mid","Offlane"]},
   {id:143,name:"Ringmaster",attr:"uni",roles:["Support"]},
+  {id:144,name:"Largo",attr:"str",roles:["Support"]},
 ];
 const seenNames = new Set();
 const HERO_LIST = HEROES.filter(h => { if(seenNames.has(h.name))return false; seenNames.add(h.name); return true; }).sort((a,b)=>a.name.localeCompare(b.name));
@@ -494,7 +496,7 @@ const HERO_SLUGS = {
   111:"shadow_shaman",112:"silencer",113:"skywrath_mage",114:"storm_spirit",115:"tinker",
   116:"vengefulspirit",117:"venomancer",118:"warlock",119:"windrunner",120:"winter_wyvern",
   121:"witch_doctor",122:"zuus",130:"abaddon",131:"alchemist",132:"doom_bringer",
-  135:"kez",136:"marci",137:"monkey_king",138:"snapfire",139:"techies",141:"void_spirit",143:"ringmaster"
+  135:"kez",136:"marci",137:"monkey_king",138:"snapfire",139:"techies",141:"void_spirit",143:"ringmaster",144:"largo",145:"broodmother",146:"puck"
 };
 // These 4 heroes have confirmed working URLs
 const CDN = 'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/';
