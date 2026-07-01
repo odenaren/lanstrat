@@ -23,7 +23,7 @@ app.use((req, res, next) => {
 });
 app.use(express.static(path.join(__dirname, 'public')));
 
-const BIN_IDS = { players: null, matches: null };
+const BIN_IDS = { players: null, matches: null, draftpools: null };
 
 async function jsonbinRequest(method, path, body) {
   const headers = {
@@ -76,7 +76,7 @@ async function createBin(key, initial) {
 }
 
 async function initBins() {
-  for (const key of ['players', 'matches']) {
+  for (const key of ['players', 'matches', 'draftpools']) {
     const envId = process.env['JSONBIN_' + key.toUpperCase() + '_ID'];
     if (envId) {
       BIN_IDS[key] = envId;
@@ -90,6 +90,8 @@ async function initBins() {
 
 async function readPlayers() { const r = await getBin('players'); return (r && r.data) ? r.data : []; }
 async function writePlayers(data) { await setBin('players', { data }); }
+async function readDraftPools() { const r = await getBin('draftpools'); return (r && r.data) ? r.data : []; }
+async function writeDraftPools(data) { await setBin('draftpools', { data }); }
 async function readMatches() { const r = await getBin('matches'); return (r && r.data) ? r.data : []; }
 async function writeMatches(data) { await setBin('matches', { data }); }
 
@@ -162,6 +164,41 @@ app.post('/api/players/reset-pools', async (req, res) => {
     players.forEach(p => { p.heroes = []; p.challengePool = []; });
     await writePlayers(players);
     res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── DRAFT POOLS (för /pool-sidan, helt separat från skarp spelardata) ──
+app.get('/api/draftpools', async (req, res) => {
+  try { res.json(await readDraftPools()); }
+  catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/draftpools/:name/heroes', async (req, res) => {
+  try {
+    let pools = await readDraftPools();
+    let entry = pools.find(p => p.name === req.params.name);
+    if (!entry) {
+      entry = { name: req.params.name, heroes: [] };
+      pools.push(entry);
+    }
+    entry.heroes = req.body.heroes || [];
+    await writeDraftPools(pools);
+    res.json(entry);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Importera draft pools till skarp spelardata (körs manuellt strax före LAN)
+app.post('/api/draftpools/import', async (req, res) => {
+  try {
+    const draftPools = await readDraftPools();
+    const players = await readPlayers();
+    let imported = 0;
+    draftPools.forEach(dp => {
+      const p = players.find(p => p.name === dp.name);
+      if (p) { p.heroes = dp.heroes || []; imported++; }
+    });
+    await writePlayers(players);
+    res.json({ ok: true, imported, total: draftPools.length });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -336,6 +373,7 @@ app.post('/api/items', async (req, res) => {
 });
 
 app.get('/tv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'tv.html')));
+app.get('/pool', (req, res) => res.sendFile(path.join(__dirname, 'public', 'pool.html')));
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 

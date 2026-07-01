@@ -307,6 +307,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
   <div class="modal" style="width:440px">
     <h3>Infor lanet</h3>
     <p style="color:var(--text-dim);font-size:13px;margin-bottom:20px;line-height:1.6">Valj vad du vill nullstalla. Spelarna behalles.</p>
+    <button onclick="importDraftPools()" style="width:100%;padding:12px 14px;margin-bottom:20px;background:rgba(76,175,80,.1);border:1px solid #4caf5066;color:#4caf50;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;border-radius:4px;transition:all .15s">📥 Importera hjältepooler från /pool</button>
     <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">
       <label style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer">
         <input type="checkbox" id="lan-clear-pools" style="width:16px;height:16px;accent-color:var(--gold)">
@@ -833,7 +834,7 @@ function renderMatchPage() {
     item.className='player-toggle'+(matchPlayers.has(i)?' active':'');
     const poolIgnored = ignorePlayerPools.has(i);
     const heroesText = poolIgnored
-      ? '<span style="text-decoration:line-through;opacity:.5">'+(p.heroes||[]).length+' hjältar</span> <span style="color:#9b59b6;font-size:11px">🎲 FRITT</span>'
+      ? '<span style="text-decoration:line-through;opacity:.5">'+(p.heroes||[]).length+' hjältar</span>'
       : (p.heroes||[]).length+' hjältar';
     const poolBtn = matchPlayers.has(i)
       ? '<button onclick="togglePlayerPool(event,'+i+')" style="background:none;border:1px solid '+(poolIgnored?'#8e44ad88':'var(--border)')+';color:'+(poolIgnored?'#9b59b6':'var(--text-dim)')+';font-size:11px;padding:3px 8px;border-radius:3px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.04em;white-space:nowrap">'+(poolIgnored?'🎲 FRITT':'📋 POOL')+'</button>'
@@ -1655,6 +1656,18 @@ function getShareUrl(playerIndex) {
 }
 
 // ===================== LAN MODAL =====================
+async function importDraftPools() {
+  if(!confirm('Importera hjältepooler från /pool-sidan? Detta skriver över spelarnas nuvarande hero-pool med vad de valt på den separata sidan.')) return;
+  try {
+    var result = await apiFetch('/draftpools/import', {method:'POST'});
+    players = await apiFetch('/players');
+    renderHome();
+    alert('Importerade pooler för ' + result.imported + ' av ' + result.total + ' spelare.');
+  } catch(e) {
+    alert('Import misslyckades: ' + e.message);
+  }
+}
+
 function openLanModal() {
   document.getElementById('lan-clear-pools').checked = false;
   document.getElementById('lan-clear-history').checked = false;
