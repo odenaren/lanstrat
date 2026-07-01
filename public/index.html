@@ -759,7 +759,7 @@ function renderHeroGrid() {
       c.className='hero-card'+(currentSelected.has(h.id)?' selected':'');
       const img = heroImg(h.id);
       c.innerHTML=img
-        ? `<img src="${img}" data-fallback="${heroImgFallback(h.id)||''}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top" loading="lazy" onerror="this.src=this.dataset.fallback;this.onerror=null;"><div class="hero-name" style="background:linear-gradient(transparent,rgba(0,0,0,.9))">${h.name}</div>`
+        ? `<img src="${img}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top" loading="lazy"><div class="hero-name" style="background:linear-gradient(transparent,rgba(0,0,0,.9))">${h.name}</div>`
         : `<div class="hero-bg">${ATTR_ICONS[h.attr]}</div><div class="hero-name">${h.name}</div>`;
       c.onclick=()=>{
         if(currentSelected.has(h.id)){currentSelected.delete(h.id);c.classList.remove('selected');}
