@@ -15,7 +15,7 @@ app.use((req, res, next) => {
     "script-src 'self' 'unsafe-inline'; " +
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src https://fonts.gstatic.com; " +
-    "img-src 'self' https://cdn.dota2.com https://cdn.cloudflare.steamstatic.com https://steamcdn-a.akamaihd.net data:; " +
+    "img-src 'self' https://cdn.dota2.com https://cdn.cloudflare.steamstatic.com https://cdn.steamstatic.com https://steamcdn-a.akamaihd.net data:; " +
     "connect-src 'self'; " +
     "media-src 'self'"
   );
