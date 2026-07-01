@@ -105,6 +105,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .strategy-placeholder .icon{font-size:48px;opacity:.3;}
 .strategy-raw{font-size:14px;color:var(--text);line-height:1.7;white-space:pre-wrap;}
 .strategy-raw h2,.strategy-raw h3{color:var(--gold);font-family:'Rajdhani',sans-serif;letter-spacing:.06em;text-transform:uppercase;margin:18px 0 8px;}
+.strategy-raw table tr:hover td{background:rgba(200,155,60,.05);}
 .strategy-raw strong{color:var(--gold-light);}
 .dots{display:inline-flex;gap:4px;}
 .dot{width:6px;height:6px;background:var(--gold);border-radius:50%;animation:bounce 1.2s infinite;}
@@ -1833,6 +1834,29 @@ async function openDetail(id) {
 
 function mdToHtml(md) {
   if(!md) return '';
+
+  // Convert markdown tables before other replacements
+  md = md.replace(/(\|.+\|\n)((?:\|[-: ]+\|)+\n)((?:\|.+\|\n?)*)/g, function(match, header, separator, rows) {
+    var headerCells = header.trim().split('|').filter(function(c){ return c.trim() !== ''; });
+    var rowLines = rows.trim().split('\n').filter(function(r){ return r.trim() !== ''; });
+    var html = '<table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;">';
+    html += '<thead><tr>';
+    headerCells.forEach(function(cell) {
+      html += '<th style="padding:6px 10px;text-align:left;border-bottom:1px solid var(--gold-dim);color:var(--gold);font-family:Rajdhani,sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">' + cell.trim() + '</th>';
+    });
+    html += '</tr></thead><tbody>';
+    rowLines.forEach(function(row) {
+      var cells = row.trim().split('|').filter(function(c){ return c.trim() !== ''; });
+      html += '<tr>';
+      cells.forEach(function(cell) {
+        html += '<td style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text);">' + cell.trim() + '</td>';
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+  });
+
   return md
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
