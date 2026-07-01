@@ -500,21 +500,13 @@ const HERO_SLUGS = {
 };
 // These 4 heroes have confirmed working URLs
 const CDN = 'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/';
-const HERO_IMG_OVERRIDES = {
-  13: CDN+'kunkka.png',
-  35: CDN+'undying.png',
-  90: CDN+'enchantress.png',
-  99: CDN+'lion.png',
-};
 function heroImg(id) {
-  if(HERO_IMG_OVERRIDES[+id]) return HERO_IMG_OVERRIDES[+id];
   const slug = HERO_SLUGS[+id];
   if(!slug) return null;
   return 'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/'+slug+'.png';
 }
 function heroImgFallback(id) {
-  if(HERO_IMG_OVERRIDES[id]) return HERO_IMG_OVERRIDES[id];
-  const slug = HERO_SLUGS[id];
+  const slug = HERO_SLUGS[+id];
   return slug ? 'https://cdn.dota2.com/apps/dota2/images/heroes/'+slug+'_full.png' : null;
 }
 function heroImgByName(name) {
