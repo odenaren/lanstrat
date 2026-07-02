@@ -1187,6 +1187,7 @@ async function generateStrategy() {
     // Strategy text (bygg men visa ej än)
     var stratDiv = document.createElement('div');
     stratDiv.className = 'strategy-raw';
+    stratDiv.style.opacity = '0';
     stratDiv.innerHTML = mdToHtml(cleanText);
     areaDiv.appendChild(stratDiv);
 
@@ -1247,7 +1248,11 @@ async function generateStrategy() {
     areaDiv.insertBefore(portraitRow, stratDiv);
     area.appendChild(areaDiv);
     areaDiv.style.transition = 'opacity .5s ease';
-    setTimeout(function(){ areaDiv.style.opacity = '1'; }, 20);
+    setTimeout(function(){
+      areaDiv.style.opacity = '1';
+      stratDiv.style.transition = 'opacity .5s ease';
+      stratDiv.style.opacity = '1';
+    }, 20);
 
     _pollGenerating = false;
     if(genBtn) { genBtn.disabled=false; genBtn.textContent='Generera ny strategi'; }
