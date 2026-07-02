@@ -1829,10 +1829,13 @@ async function openDetail(id) {
 function mdToHtml(md) {
   if(!md) return '';
 
+  // Ta bort ensamma --- rader (horisontella linjer)
+  md = md.replace(/^---+\s*$/gm, '');
+
   // Convert markdown tables before other replacements
   md = md.replace(/(\|.+\|\n)((?:\|[-: ]+\|)+\n)((?:\|.+\|\n?)*)/g, function(match, header, separator, rows) {
     var headerCells = header.trim().split('|').filter(function(c){ return c.trim() !== ''; });
-    var rowLines = rows.trim().split('\n').filter(function(r){ return r.trim() !== ''; });
+    var rowLines = rows.trim().split('\n').filter(function(r){ return r.trim() !== '' && !r.match(/^\|[-: |]+\|$/); });
     var html = '<table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;">';
     html += '<thead><tr>';
     headerCells.forEach(function(cell) {
