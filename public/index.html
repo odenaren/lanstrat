@@ -911,6 +911,7 @@ async function generateStrategy() {
 
   const genBtn = document.getElementById('gen-btn');
   if(genBtn) { genBtn.disabled=true; genBtn.textContent='Genererar...'; }
+  window._locallyGenerating = true;
   apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:true})}).catch(()=>{});
 
   // Wildcard: roughly 1 in 4 chance (25%), marked separately
@@ -1251,9 +1252,11 @@ async function generateStrategy() {
     }, 20);
 
     _pollGenerating = false;
+    window._locallyGenerating = false;
     if(genBtn) { genBtn.disabled=false; genBtn.textContent='Generera ny strategi'; }
   } catch(err){
     _pollGenerating = false;
+    window._locallyGenerating = false;
     apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:false})}).catch(()=>{});
     if(genBtn) { genBtn.disabled=false; genBtn.textContent='Generera strategi ('+n+' spelare)'; }
     area.innerHTML='<div class="strategy-placeholder"><div class="icon">&#9888;</div><p>Fel: '+err.message+'</p></div>';
@@ -1389,6 +1392,8 @@ function startPolling() {
         _pollGenerating = false;
         if(genBtn) { genBtn.disabled=false; }
         if(itemBtn) { itemBtn.disabled=false; }
+        // Hoppa över renderStrategyFromMatch om vi just genererat själva (animationen körs)
+        if(window._locallyGenerating) return;
         var matchIdToLoad = currentMatchId || status.latestMatchId;
         if(matchIdToLoad) {
           try {
