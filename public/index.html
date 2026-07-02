@@ -1200,8 +1200,7 @@ async function generateStrategy() {
     } else {
       splash.appendChild(splashName);
     }
-    area.innerHTML = '';
-    area.appendChild(splash);
+    area.replaceChildren(splash);
 
     // STEG 2: Efter 2s – hero reveal en i taget, halv viewport
     await new Promise(function(r){ setTimeout(r, 2000); });
@@ -1231,8 +1230,7 @@ async function generateStrategy() {
       reveal.appendChild(revHeroName);
       reveal.appendChild(revPlayerName);
 
-      area.innerHTML = '';
-      area.appendChild(reveal);
+      area.replaceChildren(reveal);
       await new Promise(function(r){ setTimeout(r, 1800); });
     }
 
@@ -1243,9 +1241,8 @@ async function generateStrategy() {
     stratDiv.innerHTML = mdToHtml(cleanText);
     areaDiv.appendChild(stratDiv);
 
-    area.innerHTML = '';
     areaDiv.style.opacity = '0';
-    area.appendChild(areaDiv);
+    area.replaceChildren(areaDiv);
     areaDiv.style.transition = 'opacity .5s ease';
     setTimeout(function(){
       areaDiv.style.opacity = '1';
