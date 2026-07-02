@@ -1182,14 +1182,8 @@ async function generateStrategy() {
       pWrap.appendChild(playerNameEl);
       portraitRow.appendChild(pWrap);
     });
+    // Strategy text (byggs EFTER hero-reveal, inte innan)
     areaDiv.appendChild(portraitRow);
-
-    // Strategy text (bygg men visa ej än)
-    var stratDiv = document.createElement('div');
-    stratDiv.className = 'strategy-raw';
-    stratDiv.style.opacity = '0';
-    stratDiv.innerHTML = mdToHtml(cleanText);
-    areaDiv.appendChild(stratDiv);
 
     // STEG 1: Visa strateginamnet stort och ensamt
     var splash = document.createElement('div');
@@ -1243,9 +1237,14 @@ async function generateStrategy() {
     }
 
     // STEG 3: Visa hela strategin
+    var stratDiv = document.createElement('div');
+    stratDiv.className = 'strategy-raw';
+    stratDiv.style.opacity = '0';
+    stratDiv.innerHTML = mdToHtml(cleanText);
+    areaDiv.appendChild(stratDiv);
+
     area.innerHTML = '';
     areaDiv.style.opacity = '0';
-    areaDiv.insertBefore(portraitRow, stratDiv);
     area.appendChild(areaDiv);
     areaDiv.style.transition = 'opacity .5s ease';
     setTimeout(function(){
