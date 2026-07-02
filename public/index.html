@@ -914,7 +914,7 @@ async function generateStrategy() {
   apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:true})}).catch(()=>{});
 
   // Wildcard: roughly 1 in 4 chance (25%), marked separately
-  const isWildcard = Math.random() < 0.25;
+  const isWildcard = Math.random() < 0.15;
 
   const area=document.getElementById('strategy-area');
   area.innerHTML=`<div class="thinking"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div> ${isWildcard?'🎲 Slumpar en vild strategi...':'Genererar strategi för '+n+' spelare...'}</div>`;
@@ -962,7 +962,7 @@ async function generateStrategy() {
   const draftNames = active.map(p=>p.name).join(', ');
   // Pick a random presentation style
   const STYLES = [
-    { name: 'standard', instruction: 'Presentera strategin på ett tydligt och professionellt sätt med rubriker och struktur.' },
+    { name: 'standard', instruction: 'Presentera strategin med rubriker och struktur. Inkludera EARLY GAME, MID GAME, LATE GAME och WIN CONDITION som egna sektioner. Konkret och handlingsbart.' },
     { name: 'militärbrief', instruction: 'Presentera strategin som en militär operationsbrief. Använd militärt språk och terminologi. Ge operationen ett kodnamn. Kaptenen kallas Befälhavare. Strukturera som: OPERATION, SITUATIONSANALYS, UPPDRAG, GENOMFÖRANDE, SLUTMÅL.' },
     { name: 'sportkommentator', instruction: 'Presentera strategin som en entusiastisk sportkommentator. Energisk, dramatisk ton. Lyft fram varje spelares styrkor. Ha med en förväntad match-höjdpunkt.' },
     { name: 'managerbrev', instruction: 'Skriv strategin som ett brev från lagets coach. Personlig ton, adressera varje spelare vid namn. Avsluta med ett motiverande slutord. Börja med Kära lag,' },
@@ -1041,7 +1041,7 @@ async function generateStrategy() {
     + '\n\nKAPTENSBRIEFING_START'
     + '\n[MAX 4 meningar. Kaptenen laser hogt. Vem spelar vad, spelstil, win condition. Enkelt.]'
     + '\nKAPTENSBRIEFING_END'
-    + '\n\nSedan strategin - MAX 3 rubriker, kortfattat och konkret. Inga lange listor. Direkt pa sak. Anvand svenska.'
+    + '\n\nSedan strategin - skriv på svenska, konkret och handlingsbart. Låt presentationsstilen styra struktur och längd helt. Ingen fast mall — stilen avgör allt. Inkludera spelplan för early, mid och late game samt win condition, men forma det efter stilen.'
 
   try {
     const resp=await fetch('/api/strategy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
