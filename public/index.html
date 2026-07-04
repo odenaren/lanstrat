@@ -937,6 +937,13 @@ async function generateStrategy() {
     recentlyPlayed[p.name] = played.slice(0, 3);
   });
 
+  const heroesToday = [];
+  memoryMatches.forEach(function(m){
+    if(!m.draft || !m.createdAt) return;
+    if(Date.now() - new Date(m.createdAt).getTime() > 24*3600*1000) return;
+    Object.values(m.draft).forEach(function(h){ if(h && heroesToday.indexOf(h) === -1) heroesToday.push(h); });
+  });
+
   const poolSummary=active.map(p=>{
     const playerIdx = players.indexOf(p);
     const ignored = ignoreAllPools || ignorePlayerPools.has(active.indexOf(p));
@@ -1033,6 +1040,7 @@ async function generateStrategy() {
     + '\n\nLANING-KONTEXT:\n' + getLaningCtx(n)
     + '\n\nPRESENTATIONSSTIL: ' + chosenStyle.instruction
     + '\n\nVIKTIG REGEL: Undvik nyligen spelade hjaltar per spelare (listas ovan). Prioritera variation.'
+    + (heroesToday.length ? '\n\nHJALTAR SOM REDAN SPELATS IDAG (oavsett spelare): ' + heroesToday.join(', ') + '. Valj i forsta hand hjaltar som INTE finns i listan, dar poolerna tillater det.' : '')
     + (captainNotes ? '\n\nKAPTENENS INSTRUKTIONER: ' + captainNotes : '')
     + '\n\nSpelarna heter: ' + draftNames
     + '\n\nSvara i EXAKT detta format:'
