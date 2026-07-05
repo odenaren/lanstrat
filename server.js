@@ -21,6 +21,18 @@ app.use((req, res, next) => {
   );
   next();
 });
+const SITE_PASSWORD = process.env.SITE_PASSWORD;
+app.use((req, res, next) => {
+  if (!SITE_PASSWORD) return next();
+  const auth = req.headers.authorization || '';
+  if (auth.startsWith('Basic ')) {
+    const decoded = Buffer.from(auth.slice(6), 'base64').toString('utf8');
+    const password = decoded.slice(decoded.indexOf(':') + 1);
+    if (password === SITE_PASSWORD) return next();
+  }
+  res.setHeader('WWW-Authenticate', 'Basic realm="Dreamhack Skyrup"');
+  res.status(401).send('Authentication required');
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 const BIN_IDS = { players: null, matches: null, draftpools: null };
