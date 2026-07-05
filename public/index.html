@@ -178,6 +178,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
     <button class="nav-tab active" onclick="showPage('home')">Hero Pool</button>
     <button class="nav-tab" onclick="showPage('match')">Strats</button>
     <button class="nav-tab" onclick="showPage('history')">History</button>
+    <button class="nav-tab" onclick="showPage('stats')">Stats</button>
   </div>
 </nav>
 
@@ -253,6 +254,15 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
     <button onclick="clearAllMemory()" style="margin-left:auto;padding:6px 14px;background:none;border:1px solid #c0392b44;color:var(--red);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='#c0392b44'">Rensa minne</button>
   </div>
   <div id="history-list" class="history-grid"></div>
+</div>
+
+<!-- STATS -->
+<div id="page-stats" class="page">
+  <div class="page-header">
+    <h2>Statistik</h2>
+    <span style="color:var(--text-dim);font-size:13px">Sammanställning av genererade matcher — arketyper avslöjade</span>
+  </div>
+  <div id="stats-content"></div>
 </div>
 
 <!-- MATCH DETAIL -->
@@ -549,12 +559,13 @@ function showPage(id) {
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   document.querySelectorAll('.nav-tab').forEach(t=>{
-    const map={home:'spelare',match:'matchen',history:'historik'};
+    const map={home:'hero pool',match:'strats',history:'history',stats:'stats'};
     if(t.textContent.trim().toLowerCase()===map[id]) t.classList.add('active');
   });
   if(id==='home') loadPlayers();
   if(id==='match') loadPlayers().then(()=>renderMatchPage());
   if(id==='history') loadHistory();
+  if(id==='stats') loadStats();
 }
 
 // ===================== HOME =====================
@@ -1101,7 +1112,8 @@ async function generateStrategy() {
       draft:currentDraft,
       name:strategyName,
       wildcard:isWildcard,
-      style:chosenStyle.name
+      style:chosenStyle.name,
+      archetype:chosenArchetype.id
     })});
     currentMatchId=match.id;
 
@@ -1465,6 +1477,151 @@ async function loadHistory() {
     list.appendChild(el);
   });
 }
+// ===================== STATS =====================
+var ARCHETYPE_LABELS = {
+  deathball:{name:'Deathball',desc:'Alla fem pushar som en enhet, vinn före 25 min'},
+  snowball:{name:'Early Snowball',desc:'Dominera laning, konstanta kills före 15 min'},
+  gank:{name:'Gank & Dominate',desc:'Roaming supports stryper alla lanes'},
+  teamfight:{name:'Teamfight',desc:'Vänta på rätt fight med starka ultimates'},
+  pickoff:{name:'Pick-off',desc:'Jaga ensamma fiender, undvik 5v5'},
+  poke:{name:'Poke & Siege',desc:'Chip damage på avstånd, tvinga dåliga fights'},
+  lategame:{name:'Late Game Scaling',desc:'Farma lugnt, explodera vid 35+ min'},
+  splitpush:{name:'Splitpush',desc:'En pushar ensam, resten distraherar'},
+  chaos:{name:'Chaos & Disruption',desc:'Ingen plan — oförutsägbarhet är vapnet'},
+  objective:{name:'Objective Control',desc:'Bara torn, Roshan och byggnader'},
+  towerdive:{name:'Tower Dive Heavy',desc:'Dyk under torn från level 3'},
+  global:{name:'Global Presence',desc:'Teleports och globala ultimates överallt'},
+  magicimmune:{name:'Magic Immune',desc:'BKB-fokus, rakt igenom spells'}
+};
+function statBar(label, sub, count, total, w, l) {
+  var pct = total ? Math.round(count/total*100) : 0;
+  var res = (w+l) ? ' <span style="color:#2ecc71">'+w+'V</span>–<span style="color:#e74c3c">'+l+'F</span>' : '';
+  return '<div style="margin-bottom:10px">'
+    + '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><span><strong>'+label+'</strong>'+(sub?' <span style="color:var(--text-dim);font-size:11px">'+sub+'</span>':'')+'</span><span style="color:var(--text-dim)">'+count+' st ('+pct+'%)'+res+'</span></div>'
+    + '<div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:var(--gold);border-radius:3px"></div></div>'
+    + '</div>';
+}
+async function loadStats() {
+  var el = document.getElementById('stats-content');
+  el.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:48px">Laddar…</div>';
+  var matches = [];
+  try { matches = await apiFetch('/matches'); } catch(e) {}
+  if(!matches.length) {
+    el.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:48px">Inga matcher att analysera ännu</div>';
+    return;
+  }
+  var total = matches.length;
+  var wins = matches.filter(function(m){return m.result==='win';}).length;
+  var losses = matches.filter(function(m){return m.result==='loss';}).length;
+  var wildcards = matches.filter(function(m){return m.wildcard;}).length;
+  var decided = wins + losses;
+  var winrate = decided ? Math.round(wins/decided*100) : null;
+
+  // Hero picks
+  var heroCount = {}, playerStats = {}, totalPicks = 0;
+  matches.forEach(function(m){
+    var d = m.draft || {};
+    Object.keys(d).forEach(function(pl){
+      var h = d[pl];
+      if(!h) return;
+      totalPicks++;
+      heroCount[h] = (heroCount[h]||0)+1;
+      if(!playerStats[pl]) playerStats[pl] = {matches:0, heroes:{}, wins:0, losses:0};
+      playerStats[pl].matches++;
+      playerStats[pl].heroes[h] = (playerStats[pl].heroes[h]||0)+1;
+      if(m.result==='win') playerStats[pl].wins++;
+      if(m.result==='loss') playerStats[pl].losses++;
+    });
+  });
+  var uniqueHeroes = Object.keys(heroCount).length;
+  var repeats = totalPicks - uniqueHeroes;
+
+  // Archetype & style distribution
+  var archCount = {}, styleCount = {};
+  matches.forEach(function(m){
+    var a = m.archetype || '_unknown';
+    if(!archCount[a]) archCount[a] = {count:0, w:0, l:0};
+    archCount[a].count++;
+    if(m.result==='win') archCount[a].w++;
+    if(m.result==='loss') archCount[a].l++;
+    var s = m.style || 'standard';
+    if(!styleCount[s]) styleCount[s] = {count:0, w:0, l:0};
+    styleCount[s].count++;
+    if(m.result==='win') styleCount[s].w++;
+    if(m.result==='loss') styleCount[s].l++;
+  });
+
+  var html = '';
+  // Summary cards
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px">';
+  [[total,'Matcher'],
+   [wins+'–'+losses+(winrate!==null?' ('+winrate+'%)':''),'Vinster–Förluster'],
+   [uniqueHeroes+' / '+totalPicks,'Unika hjältar / picks'],
+   [wildcards,'Wild cards']
+  ].forEach(function(c){
+    html += '<div class="card" style="text-align:center;padding:16px"><div style="font-family:Rajdhani,sans-serif;font-size:26px;font-weight:700;color:var(--gold)">'+c[0]+'</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em">'+c[1]+'</div></div>';
+  });
+  html += '</div>';
+
+  // Archetypes revealed
+  html += '<div class="card" style="margin-bottom:20px"><div class="section-title">Arketyper — nu avslöjade 🎭</div>'
+    + '<p style="color:var(--text-dim);font-size:12px;margin:0 0 14px">Varje strategi byggdes i hemlighet på en av 13 arketyper. Så här fördelade de sig:</p>';
+  Object.keys(archCount).sort(function(a,b){return archCount[b].count-archCount[a].count;}).forEach(function(a){
+    var info = ARCHETYPE_LABELS[a];
+    var label = a==='_unknown' ? 'Okänd (äldre match)' : (info?info.name:a);
+    var desc = a==='_unknown' ? 'sparades inte förr' : (info?info.desc:'');
+    html += statBar(label, desc, archCount[a].count, total, archCount[a].w, archCount[a].l);
+  });
+  html += '</div>';
+
+  // Presentation styles
+  html += '<div class="card" style="margin-bottom:20px"><div class="section-title">Presentationsstilar</div>';
+  Object.keys(styleCount).sort(function(a,b){return styleCount[b].count-styleCount[a].count;}).forEach(function(s){
+    html += statBar(s, '', styleCount[s].count, total, styleCount[s].w, styleCount[s].l);
+  });
+  html += '</div>';
+
+  // Hero variation
+  var repeated = Object.keys(heroCount).filter(function(h){return heroCount[h]>1;}).sort(function(a,b){return heroCount[b]-heroCount[a];});
+  html += '<div class="card" style="margin-bottom:20px"><div class="section-title">Hjältevariation</div>'
+    + '<p style="color:var(--text-dim);font-size:12px;margin:0 0 14px">'+uniqueHeroes+' unika hjältar på '+totalPicks+' picks — '+repeats+' picks var repriser. '+(repeated.length?'Hjältar som återkom:':'Inga hjältar upprepades! 🏆')+'</p>';
+  if(repeated.length){
+    html += '<div style="display:flex;flex-wrap:wrap;gap:8px">';
+    repeated.forEach(function(h){
+      var img = heroImgByName(h);
+      html += '<div style="text-align:center;width:64px"><div style="width:64px;height:36px;border-radius:3px;overflow:hidden;background:var(--surface2);border:1px solid var(--border)">'+(img?'<img src="'+img+'" style="width:100%;height:100%;object-fit:cover;object-position:center top" loading="lazy">':'')+'</div><div style="font-size:9px;color:var(--text-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+h+'</div><div style="font-size:11px;color:var(--gold);font-weight:700">'+heroCount[h]+'×</div></div>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // Per player
+  html += '<div class="card" style="margin-bottom:20px"><div class="section-title">Per spelare</div>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;text-align:left"><th style="padding:6px 8px">Spelare</th><th style="padding:6px 8px">Matcher</th><th style="padding:6px 8px">V–F</th><th style="padding:6px 8px">Unika hjältar</th><th style="padding:6px 8px">Variation</th><th style="padding:6px 8px">Mest spelad</th></tr></thead><tbody>';
+  Object.keys(playerStats).sort(function(a,b){return playerStats[b].matches-playerStats[a].matches;}).forEach(function(pl){
+    var ps = playerStats[pl];
+    var uniq = Object.keys(ps.heroes).length;
+    var varPct = ps.matches ? Math.round(uniq/ps.matches*100) : 0;
+    var fav = Object.keys(ps.heroes).sort(function(a,b){return ps.heroes[b]-ps.heroes[a];})[0];
+    var favCount = fav ? ps.heroes[fav] : 0;
+    html += '<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px;font-weight:600">'+pl+'</td><td style="padding:6px 8px">'+ps.matches+'</td><td style="padding:6px 8px"><span style="color:#2ecc71">'+ps.wins+'</span>–<span style="color:#e74c3c">'+ps.losses+'</span></td><td style="padding:6px 8px">'+uniq+'</td><td style="padding:6px 8px;color:'+(varPct===100?'#2ecc71':varPct>=75?'var(--gold)':'#e74c3c')+'">'+varPct+'%</td><td style="padding:6px 8px;color:var(--text-dim)">'+(favCount>1?fav+' ('+favCount+'×)':'—')+'</td></tr>';
+  });
+  html += '</tbody></table></div>';
+
+  // Match reveal list
+  html += '<div class="card"><div class="section-title">Match för match — vad låg bakom?</div>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;text-align:left"><th style="padding:6px 8px">#</th><th style="padding:6px 8px">Strategi</th><th style="padding:6px 8px">Arketyp</th><th style="padding:6px 8px">Stil</th><th style="padding:6px 8px">Resultat</th></tr></thead><tbody>';
+  matches.forEach(function(m){
+    var info = m.archetype ? ARCHETYPE_LABELS[m.archetype] : null;
+    var arch = info ? info.name : (m.archetype || '—');
+    var res = m.result==='win' ? '<span style="color:#2ecc71">Vinst</span>' : m.result==='loss' ? '<span style="color:#e74c3c">Förlust</span>' : '<span style="color:var(--text-dim)">—</span>';
+    html += '<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px;color:var(--text-dim)">'+(m.gameNumber||'')+'</td><td style="padding:6px 8px;font-weight:600;color:'+(m.wildcard?'#9b59b6':'var(--gold)')+'">'+(m.name||'(namnlös)')+(m.wildcard?' 🎲':'')+'</td><td style="padding:6px 8px">'+arch+'</td><td style="padding:6px 8px;color:var(--text-dim)">'+(m.style||'standard')+'</td><td style="padding:6px 8px">'+res+'</td></tr>';
+  });
+  html += '</tbody></table></div>';
+
+  el.innerHTML = html;
+}
+
 async function replayOnTv(matchId) {
   try {
     await apiFetch('/replay/' + matchId, {method:'POST'});
