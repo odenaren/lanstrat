@@ -178,6 +178,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
     <button class="nav-tab active" onclick="showPage('home')">Hero Pool</button>
     <button class="nav-tab" onclick="showPage('match')">Strats</button>
     <button class="nav-tab" onclick="showPage('history')">History</button>
+    <button class="nav-tab" onclick="showPage('stats')">Stats</button>
   </div>
 </nav>
 
@@ -253,6 +254,15 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
     <button onclick="clearAllMemory()" style="margin-left:auto;padding:6px 14px;background:none;border:1px solid #c0392b44;color:var(--red);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='#c0392b44'">Rensa minne</button>
   </div>
   <div id="history-list" class="history-grid"></div>
+</div>
+
+<!-- STATS -->
+<div id="page-stats" class="page">
+  <div class="page-header">
+    <h2>Statistik</h2>
+    <span style="color:var(--text-dim);font-size:13px">Sammanställning av genererade matcher — arketyper avslöjade</span>
+  </div>
+  <div id="stats-content"></div>
 </div>
 
 <!-- MATCH DETAIL -->
@@ -387,6 +397,7 @@ const HEROES = [
   {id:42,name:"Bloodseeker",attr:"agi",roles:["Carry","Jungle","Offlane"]},
   {id:43,name:"Bounty Hunter",attr:"agi",roles:["Support","Carry"]},
   {id:44,name:"Bristleback",attr:"agi",roles:["Offlane"]},
+  {id:145,name:"Broodmother",attr:"agi",roles:["Offlane","Jungle","Carry"]},
   {id:45,name:"Clinkz",attr:"agi",roles:["Carry","Mid"]},
   {id:46,name:"Drow Ranger",attr:"agi",roles:["Carry"]},
   {id:47,name:"Ember Spirit",attr:"agi",roles:["Mid","Carry"]},
@@ -412,7 +423,7 @@ const HEROES = [
   {id:67,name:"Sniper",attr:"agi",roles:["Carry","Mid"]},
   {id:68,name:"Spectre",attr:"agi",roles:["Carry"]},
   {id:69,name:"Templar Assassin",attr:"agi",roles:["Mid","Carry"]},
-  {id:70,name:"Terror Blade",attr:"agi",roles:["Carry"]},
+  {id:70,name:"Terrorblade",attr:"agi",roles:["Carry"]},
   {id:71,name:"Troll Warlord",attr:"agi",roles:["Carry"]},
   {id:72,name:"Ursa",attr:"agi",roles:["Carry","Jungle"]},
   {id:73,name:"Viper",attr:"agi",roles:["Mid","Offlane"]},
@@ -445,6 +456,7 @@ const HEROES = [
   {id:106,name:"Outworld Destroyer",attr:"int",roles:["Mid","Carry"]},
   {id:107,name:"Pugna",attr:"int",roles:["Mid","Support"]},
   {id:108,name:"Queen of Pain",attr:"int",roles:["Mid","Carry"]},
+  {id:146,name:"Puck",attr:"int",roles:["Mid","Offlane"]},
   {id:109,name:"Rubick",attr:"int",roles:["Support"]},
   {id:110,name:"Shadow Demon",attr:"int",roles:["Support"]},
   {id:111,name:"Shadow Shaman",attr:"int",roles:["Support"]},
@@ -469,6 +481,7 @@ const HEROES = [
   {id:139,name:"Techies",attr:"int",roles:["Support","Mid"]},
   {id:141,name:"Void Spirit",attr:"uni",roles:["Mid","Offlane"]},
   {id:143,name:"Ringmaster",attr:"uni",roles:["Support"]},
+  {id:144,name:"Largo",attr:"str",roles:["Support"]},
 ];
 const seenNames = new Set();
 const HERO_LIST = HEROES.filter(h => { if(seenNames.has(h.name))return false; seenNames.add(h.name); return true; }).sort((a,b)=>a.name.localeCompare(b.name));
@@ -493,25 +506,17 @@ const HERO_SLUGS = {
   111:"shadow_shaman",112:"silencer",113:"skywrath_mage",114:"storm_spirit",115:"tinker",
   116:"vengefulspirit",117:"venomancer",118:"warlock",119:"windrunner",120:"winter_wyvern",
   121:"witch_doctor",122:"zuus",130:"abaddon",131:"alchemist",132:"doom_bringer",
-  135:"kez",136:"marci",137:"monkey_king",138:"snapfire",139:"techies",141:"void_spirit",143:"ringmaster"
+  135:"kez",136:"marci",137:"monkey_king",138:"snapfire",139:"techies",141:"void_spirit",143:"ringmaster",144:"largo",145:"broodmother",146:"puck"
 };
 // These 4 heroes have confirmed working URLs
 const CDN = 'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/';
-const HERO_IMG_OVERRIDES = {
-  13: CDN+'kunkka.png',
-  35: CDN+'undying.png',
-  90: CDN+'enchantress.png',
-  99: CDN+'lion.png',
-};
 function heroImg(id) {
-  if(HERO_IMG_OVERRIDES[+id]) return HERO_IMG_OVERRIDES[+id];
   const slug = HERO_SLUGS[+id];
   if(!slug) return null;
   return 'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/'+slug+'.png';
 }
 function heroImgFallback(id) {
-  if(HERO_IMG_OVERRIDES[id]) return HERO_IMG_OVERRIDES[id];
-  const slug = HERO_SLUGS[id];
+  const slug = HERO_SLUGS[+id];
   return slug ? 'https://cdn.dota2.com/apps/dota2/images/heroes/'+slug+'_full.png' : null;
 }
 function heroImgByName(name) {
@@ -554,12 +559,13 @@ function showPage(id) {
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   document.querySelectorAll('.nav-tab').forEach(t=>{
-    const map={home:'spelare',match:'matchen',history:'historik'};
+    const map={home:'hero pool',match:'strats',history:'history',stats:'stats'};
     if(t.textContent.trim().toLowerCase()===map[id]) t.classList.add('active');
   });
   if(id==='home') loadPlayers();
   if(id==='match') loadPlayers().then(()=>renderMatchPage());
   if(id==='history') loadHistory();
+  if(id==='stats') loadStats();
 }
 
 // ===================== HOME =====================
@@ -764,7 +770,7 @@ function renderHeroGrid() {
       c.className='hero-card'+(currentSelected.has(h.id)?' selected':'');
       const img = heroImg(h.id);
       c.innerHTML=img
-        ? `<img src="${img}" data-fallback="${heroImgFallback(h.id)||''}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top" loading="lazy" onerror="this.src=this.dataset.fallback;this.onerror=null;"><div class="hero-name" style="background:linear-gradient(transparent,rgba(0,0,0,.9))">${h.name}</div>`
+        ? `<img src="${img}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top" loading="lazy"><div class="hero-name" style="background:linear-gradient(transparent,rgba(0,0,0,.9))">${h.name}</div>`
         : `<div class="hero-bg">${ATTR_ICONS[h.attr]}</div><div class="hero-name">${h.name}</div>`;
       c.onclick=()=>{
         if(currentSelected.has(h.id)){currentSelected.delete(h.id);c.classList.remove('selected');}
@@ -916,10 +922,11 @@ async function generateStrategy() {
 
   const genBtn = document.getElementById('gen-btn');
   if(genBtn) { genBtn.disabled=true; genBtn.textContent='Genererar...'; }
+  window._locallyGenerating = true;
   apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:true})}).catch(()=>{});
 
   // Wildcard: roughly 1 in 4 chance (25%), marked separately
-  const isWildcard = Math.random() < 0.25;
+  const isWildcard = Math.random() < 0.15;
 
   const area=document.getElementById('strategy-area');
   area.innerHTML=`<div class="thinking"><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div> ${isWildcard?'🎲 Slumpar en vild strategi...':'Genererar strategi för '+n+' spelare...'}</div>`;
@@ -939,6 +946,13 @@ async function generateStrategy() {
       if(hero) played.push(hero);
     });
     recentlyPlayed[p.name] = played.slice(0, 3);
+  });
+
+  const heroesToday = [];
+  memoryMatches.forEach(function(m){
+    if(!m.draft || !m.createdAt) return;
+    if(Date.now() - new Date(m.createdAt).getTime() > 24*3600*1000) return;
+    Object.values(m.draft).forEach(function(h){ if(h && heroesToday.indexOf(h) === -1) heroesToday.push(h); });
   });
 
   const poolSummary=active.map(p=>{
@@ -967,7 +981,7 @@ async function generateStrategy() {
   const draftNames = active.map(p=>p.name).join(', ');
   // Pick a random presentation style
   const STYLES = [
-    { name: 'standard', instruction: 'Presentera strategin på ett tydligt och professionellt sätt med rubriker och struktur.' },
+    { name: 'standard', instruction: 'Presentera strategin med rubriker och struktur. Inkludera EARLY GAME, MID GAME, LATE GAME och WIN CONDITION som egna sektioner. Konkret och handlingsbart.' },
     { name: 'militärbrief', instruction: 'Presentera strategin som en militär operationsbrief. Använd militärt språk och terminologi. Ge operationen ett kodnamn. Kaptenen kallas Befälhavare. Strukturera som: OPERATION, SITUATIONSANALYS, UPPDRAG, GENOMFÖRANDE, SLUTMÅL.' },
     { name: 'sportkommentator', instruction: 'Presentera strategin som en entusiastisk sportkommentator. Energisk, dramatisk ton. Lyft fram varje spelares styrkor. Ha med en förväntad match-höjdpunkt.' },
     { name: 'managerbrev', instruction: 'Skriv strategin som ett brev från lagets coach. Personlig ton, adressera varje spelare vid namn. Avsluta med ett motiverande slutord. Börja med Kära lag,' },
@@ -1037,6 +1051,7 @@ async function generateStrategy() {
     + '\n\nLANING-KONTEXT:\n' + getLaningCtx(n)
     + '\n\nPRESENTATIONSSTIL: ' + chosenStyle.instruction
     + '\n\nVIKTIG REGEL: Undvik nyligen spelade hjaltar per spelare (listas ovan). Prioritera variation.'
+    + (heroesToday.length ? '\n\nHJALTAR SOM REDAN SPELATS IDAG (oavsett spelare): ' + heroesToday.join(', ') + '. Valj i forsta hand hjaltar som INTE finns i listan, dar poolerna tillater det.' : '')
     + (captainNotes ? '\n\nKAPTENENS INSTRUKTIONER: ' + captainNotes : '')
     + '\n\nSpelarna heter: ' + draftNames
     + '\n\nSvara i EXAKT detta format:'
@@ -1046,7 +1061,7 @@ async function generateStrategy() {
     + '\n\nKAPTENSBRIEFING_START'
     + '\n[MAX 4 meningar. Kaptenen laser hogt. Vem spelar vad, spelstil, win condition. Enkelt.]'
     + '\nKAPTENSBRIEFING_END'
-    + '\n\nSedan strategin - MAX 3 rubriker, kortfattat och konkret. Inga lange listor. Direkt pa sak. Anvand svenska.'
+    + '\n\nSedan strategin - skriv på svenska, konkret och handlingsbart. Låt presentationsstilen styra struktur och längd helt. Ingen fast mall — stilen avgör allt. Inkludera spelplan för early, mid och late game samt win condition, men forma det efter stilen.'
 
   try {
     const resp=await fetch('/api/strategy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
@@ -1097,7 +1112,8 @@ async function generateStrategy() {
       draft:currentDraft,
       name:strategyName,
       wildcard:isWildcard,
-      style:chosenStyle.name
+      style:chosenStyle.name,
+      archetype:chosenArchetype.id
     })});
     currentMatchId=match.id;
 
@@ -1187,13 +1203,8 @@ async function generateStrategy() {
       pWrap.appendChild(playerNameEl);
       portraitRow.appendChild(pWrap);
     });
+    // Strategy text (byggs EFTER hero-reveal, inte innan)
     areaDiv.appendChild(portraitRow);
-
-    // Strategy text (bygg men visa ej än)
-    var stratDiv = document.createElement('div');
-    stratDiv.className = 'strategy-raw';
-    stratDiv.innerHTML = mdToHtml(cleanText);
-    areaDiv.appendChild(stratDiv);
 
     // STEG 1: Visa strateginamnet stort och ensamt
     var splash = document.createElement('div');
@@ -1210,8 +1221,7 @@ async function generateStrategy() {
     } else {
       splash.appendChild(splashName);
     }
-    area.innerHTML = '';
-    area.appendChild(splash);
+    area.replaceChildren(splash);
 
     // STEG 2: Efter 2s – hero reveal en i taget, halv viewport
     await new Promise(function(r){ setTimeout(r, 2000); });
@@ -1241,23 +1251,32 @@ async function generateStrategy() {
       reveal.appendChild(revHeroName);
       reveal.appendChild(revPlayerName);
 
-      area.innerHTML = '';
-      area.appendChild(reveal);
+      area.replaceChildren(reveal);
       await new Promise(function(r){ setTimeout(r, 1800); });
     }
 
     // STEG 3: Visa hela strategin
-    area.innerHTML = '';
+    var stratDiv = document.createElement('div');
+    stratDiv.className = 'strategy-raw';
+    stratDiv.style.opacity = '0';
+    stratDiv.innerHTML = mdToHtml(cleanText);
+    areaDiv.appendChild(stratDiv);
+
     areaDiv.style.opacity = '0';
-    areaDiv.insertBefore(portraitRow, stratDiv);
-    area.appendChild(areaDiv);
+    area.replaceChildren(areaDiv);
     areaDiv.style.transition = 'opacity .5s ease';
-    setTimeout(function(){ areaDiv.style.opacity = '1'; }, 20);
+    setTimeout(function(){
+      areaDiv.style.opacity = '1';
+      stratDiv.style.transition = 'opacity .5s ease';
+      stratDiv.style.opacity = '1';
+    }, 20);
 
     _pollGenerating = false;
+    window._locallyGenerating = false;
     if(genBtn) { genBtn.disabled=false; genBtn.textContent='Generera ny strategi'; }
   } catch(err){
     _pollGenerating = false;
+    window._locallyGenerating = false;
     apiFetch('/status/generating', {method:'POST', body:JSON.stringify({generating:false})}).catch(()=>{});
     if(genBtn) { genBtn.disabled=false; genBtn.textContent='Generera strategi ('+n+' spelare)'; }
     area.innerHTML='<div class="strategy-placeholder"><div class="icon">&#9888;</div><p>Fel: '+err.message+'</p></div>';
@@ -1393,6 +1412,8 @@ function startPolling() {
         _pollGenerating = false;
         if(genBtn) { genBtn.disabled=false; }
         if(itemBtn) { itemBtn.disabled=false; }
+        // Hoppa över renderStrategyFromMatch om vi just genererat själva (animationen körs)
+        if(window._locallyGenerating) return;
         var matchIdToLoad = currentMatchId || status.latestMatchId;
         if(matchIdToLoad) {
           try {
@@ -1456,6 +1477,192 @@ async function loadHistory() {
     list.appendChild(el);
   });
 }
+// ===================== STATS =====================
+var ARCHETYPE_LABELS = {
+  deathball:{name:'Deathball',desc:'Alla fem pushar som en enhet, vinn före 25 min'},
+  snowball:{name:'Early Snowball',desc:'Dominera laning, konstanta kills före 15 min'},
+  gank:{name:'Gank & Dominate',desc:'Roaming supports stryper alla lanes'},
+  teamfight:{name:'Teamfight',desc:'Vänta på rätt fight med starka ultimates'},
+  pickoff:{name:'Pick-off',desc:'Jaga ensamma fiender, undvik 5v5'},
+  poke:{name:'Poke & Siege',desc:'Chip damage på avstånd, tvinga dåliga fights'},
+  lategame:{name:'Late Game Scaling',desc:'Farma lugnt, explodera vid 35+ min'},
+  splitpush:{name:'Splitpush',desc:'En pushar ensam, resten distraherar'},
+  chaos:{name:'Chaos & Disruption',desc:'Ingen plan — oförutsägbarhet är vapnet'},
+  objective:{name:'Objective Control',desc:'Bara torn, Roshan och byggnader'},
+  towerdive:{name:'Tower Dive Heavy',desc:'Dyk under torn från level 3'},
+  global:{name:'Global Presence',desc:'Teleports och globala ultimates överallt'},
+  magicimmune:{name:'Magic Immune',desc:'BKB-fokus, rakt igenom spells'}
+};
+function statBar(label, sub, count, total, w, l) {
+  var pct = total ? Math.round(count/total*100) : 0;
+  var res = (w+l) ? ' <span style="color:#2ecc71">'+w+'V</span>–<span style="color:#e74c3c">'+l+'F</span>' : '';
+  return '<div style="margin-bottom:10px">'
+    + '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><span><strong>'+label+'</strong>'+(sub?' <span style="color:var(--text-dim);font-size:11px">'+sub+'</span>':'')+'</span><span style="color:var(--text-dim)">'+count+' st ('+pct+'%)'+res+'</span></div>'
+    + '<div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:var(--gold);border-radius:3px"></div></div>'
+    + '</div>';
+}
+async function loadStats() {
+  var el = document.getElementById('stats-content');
+  el.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:48px">Laddar…</div>';
+  var matches = [];
+  try { matches = await apiFetch('/matches'); } catch(e) {}
+  if(!matches.length) {
+    el.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:48px">Inga matcher att analysera ännu</div>';
+    return;
+  }
+  var total = matches.length;
+  var wins = matches.filter(function(m){return m.result==='win';}).length;
+  var losses = matches.filter(function(m){return m.result==='loss';}).length;
+  var wildcards = matches.filter(function(m){return m.wildcard;}).length;
+  var decided = wins + losses;
+  var winrate = decided ? Math.round(wins/decided*100) : null;
+
+  // Hero picks
+  var heroCount = {}, playerStats = {}, totalPicks = 0;
+  matches.forEach(function(m){
+    var d = m.currentDraft || m.draft || {};
+    Object.keys(d).forEach(function(pl){
+      var h = d[pl];
+      if(!h) return;
+      totalPicks++;
+      heroCount[h] = (heroCount[h]||0)+1;
+      if(!playerStats[pl]) playerStats[pl] = {matches:0, heroes:{}, wins:0, losses:0};
+      playerStats[pl].matches++;
+      playerStats[pl].heroes[h] = (playerStats[pl].heroes[h]||0)+1;
+      if(m.result==='win') playerStats[pl].wins++;
+      if(m.result==='loss') playerStats[pl].losses++;
+    });
+  });
+  var uniqueHeroes = Object.keys(heroCount).length;
+  var repeats = totalPicks - uniqueHeroes;
+
+  // Archetype & style distribution
+  var archCount = {}, styleCount = {};
+  matches.forEach(function(m){
+    var a = m.archetype || '_unknown';
+    if(!archCount[a]) archCount[a] = {count:0, w:0, l:0};
+    archCount[a].count++;
+    if(m.result==='win') archCount[a].w++;
+    if(m.result==='loss') archCount[a].l++;
+    var s = m.style || 'standard';
+    if(!styleCount[s]) styleCount[s] = {count:0, w:0, l:0};
+    styleCount[s].count++;
+    if(m.result==='win') styleCount[s].w++;
+    if(m.result==='loss') styleCount[s].l++;
+  });
+
+  var html = '';
+  // Summary cards
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px">';
+  [[total,'Matcher'],
+   [wins+'–'+losses+(winrate!==null?' ('+winrate+'%)':''),'Vinster–Förluster'],
+   [uniqueHeroes+' / '+totalPicks,'Unika hjältar / picks'],
+   [wildcards,'Wild cards']
+  ].forEach(function(c){
+    html += '<div class="card" style="text-align:center;padding:16px"><div style="font-family:Rajdhani,sans-serif;font-size:26px;font-weight:700;color:var(--gold)">'+c[0]+'</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em">'+c[1]+'</div></div>';
+  });
+  html += '</div>';
+
+  // Archetypes revealed
+  var unknownCount = matches.filter(function(m){return !m.archetype;}).length;
+  var guessedCount = matches.filter(function(m){return m.archetypeGuessed;}).length;
+  html += '<div class="card" style="margin-bottom:20px"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div class="section-title" style="margin-bottom:0;border-bottom:none;padding-bottom:0">Arketyper — nu avslöjade 🎭</div>'
+    + (unknownCount ? '<button id="analyze-arch-btn" onclick="analyzeArchetypes()" style="padding:6px 14px;background:rgba(200,155,60,.15);border:1px solid var(--gold-dim);color:var(--gold);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px">🔍 Analysera '+unknownCount+' äldre matcher</button>' : '')
+    + '</div>'
+    + '<p style="color:var(--text-dim);font-size:12px;margin:10px 0 14px">Varje strategi byggdes i hemlighet på en av 13 arketyper. Så här fördelade de sig:'
+    + (guessedCount ? '<br>🔍 = '+guessedCount+' arketyper är AI-gissade i efterhand från strategitexten, inte sparade fakta.' : '')
+    + '</p>';
+  Object.keys(archCount).sort(function(a,b){return archCount[b].count-archCount[a].count;}).forEach(function(a){
+    var info = ARCHETYPE_LABELS[a];
+    var label = a==='_unknown' ? 'Okänd (äldre match)' : (info?info.name:a);
+    var desc = a==='_unknown' ? 'sparades inte förr' : (info?info.desc:'');
+    html += statBar(label, desc, archCount[a].count, total, archCount[a].w, archCount[a].l);
+  });
+  html += '</div>';
+
+  // Presentation styles
+  html += '<div class="card" style="margin-bottom:20px"><div class="section-title">Presentationsstilar</div>';
+  Object.keys(styleCount).sort(function(a,b){return styleCount[b].count-styleCount[a].count;}).forEach(function(s){
+    html += statBar(s, '', styleCount[s].count, total, styleCount[s].w, styleCount[s].l);
+  });
+  html += '</div>';
+
+  // Hero variation
+  var repeated = Object.keys(heroCount).filter(function(h){return heroCount[h]>1;}).sort(function(a,b){return heroCount[b]-heroCount[a];});
+  html += '<div class="card" style="margin-bottom:20px"><div class="section-title">Hjältevariation</div>'
+    + '<p style="color:var(--text-dim);font-size:12px;margin:0 0 14px">'+uniqueHeroes+' unika hjältar på '+totalPicks+' picks — '+repeats+' picks var repriser. '+(repeated.length?'Hjältar som återkom:':'Inga hjältar upprepades! 🏆')+'</p>';
+  if(repeated.length){
+    html += '<div style="display:flex;flex-wrap:wrap;gap:8px">';
+    repeated.forEach(function(h){
+      var img = heroImgByName(h);
+      html += '<div style="text-align:center;width:64px"><div style="width:64px;height:36px;border-radius:3px;overflow:hidden;background:var(--surface2);border:1px solid var(--border)">'+(img?'<img src="'+img+'" style="width:100%;height:100%;object-fit:cover;object-position:center top" loading="lazy">':'')+'</div><div style="font-size:9px;color:var(--text-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+h+'</div><div style="font-size:11px;color:var(--gold);font-weight:700">'+heroCount[h]+'×</div></div>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // Per player
+  html += '<div class="card" style="margin-bottom:20px"><div class="section-title">Per spelare</div>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;text-align:left"><th style="padding:6px 8px">Spelare</th><th style="padding:6px 8px">Matcher</th><th style="padding:6px 8px">V–F</th><th style="padding:6px 8px">Unika hjältar</th><th style="padding:6px 8px">Variation</th><th style="padding:6px 8px">Mest spelad</th></tr></thead><tbody>';
+  Object.keys(playerStats).sort(function(a,b){return playerStats[b].matches-playerStats[a].matches;}).forEach(function(pl){
+    var ps = playerStats[pl];
+    var uniq = Object.keys(ps.heroes).length;
+    var varPct = ps.matches ? Math.round(uniq/ps.matches*100) : 0;
+    var fav = Object.keys(ps.heroes).sort(function(a,b){return ps.heroes[b]-ps.heroes[a];})[0];
+    var favCount = fav ? ps.heroes[fav] : 0;
+    html += '<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px;font-weight:600">'+pl+'</td><td style="padding:6px 8px">'+ps.matches+'</td><td style="padding:6px 8px"><span style="color:#2ecc71">'+ps.wins+'</span>–<span style="color:#e74c3c">'+ps.losses+'</span></td><td style="padding:6px 8px">'+uniq+'</td><td style="padding:6px 8px;color:'+(varPct===100?'#2ecc71':varPct>=75?'var(--gold)':'#e74c3c')+'">'+varPct+'%</td><td style="padding:6px 8px;color:var(--text-dim)">'+(favCount>1?fav+' ('+favCount+'×)':'—')+'</td></tr>';
+  });
+  html += '</tbody></table></div>';
+
+  // Match reveal list
+  html += '<div class="card"><div class="section-title">Match för match — vad låg bakom?</div>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;text-align:left"><th style="padding:6px 8px">#</th><th style="padding:6px 8px">Strategi</th><th style="padding:6px 8px">Arketyp</th><th style="padding:6px 8px">Stil</th><th style="padding:6px 8px">Resultat</th></tr></thead><tbody>';
+  matches.forEach(function(m){
+    var info = m.archetype ? ARCHETYPE_LABELS[m.archetype] : null;
+    var arch = (info ? info.name : (m.archetype || '—')) + (m.archetypeGuessed ? ' 🔍' : '');
+    var res = m.result==='win' ? '<span style="color:#2ecc71">Vinst</span>' : m.result==='loss' ? '<span style="color:#e74c3c">Förlust</span>' : '<span style="color:var(--text-dim)">—</span>';
+    html += '<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px;color:var(--text-dim)">'+(m.gameNumber||'')+'</td><td style="padding:6px 8px;font-weight:600;color:'+(m.wildcard?'#9b59b6':'var(--gold)')+'">'+(m.name||'(namnlös)')+(m.wildcard?' 🎲':'')+'</td><td style="padding:6px 8px">'+arch+'</td><td style="padding:6px 8px;color:var(--text-dim)">'+(m.style||'standard')+'</td><td style="padding:6px 8px">'+res+'</td></tr>';
+  });
+  html += '</tbody></table></div>';
+
+  el.innerHTML = html;
+}
+
+async function analyzeArchetypes() {
+  var btn = document.getElementById('analyze-arch-btn');
+  if(btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+  var matches = [];
+  try { matches = await apiFetch('/matches'); } catch(e) {}
+  var todo = matches.filter(function(m){ return !m.archetype && (m.currentStrategy || m.strategy); });
+  var archList = Object.keys(ARCHETYPE_LABELS).map(function(id){
+    return id + ': ' + ARCHETYPE_LABELS[id].name + ' — ' + ARCHETYPE_LABELS[id].desc;
+  }).join('\n');
+  var validIds = Object.keys(ARCHETYPE_LABELS);
+  var done = 0, failed = 0;
+  for(var i = 0; i < todo.length; i++) {
+    var m = todo[i];
+    if(btn) btn.textContent = 'Analyserar ' + (i+1) + ' / ' + todo.length + '…';
+    var stratText = (m.currentStrategy || m.strategy || '').slice(0, 4000);
+    var prompt = 'Du ar en Dota 2-expert. Nedan finns en genererad draft-strategi. Den skrevs ursprungligen utifran EN av foljande 13 arketyper. Las texten och avgor vilken arketyp den bygger pa.'
+      + '\n\nARKETYPER:\n' + archList
+      + '\n\nSTRATEGINAMN: ' + (m.name || '(namnlos)')
+      + '\nBRIEFING: ' + (m.briefing || '')
+      + '\n\nSTRATEGITEXT:\n' + stratText
+      + '\n\nSvara ENDAST med arketypens id (ett enda ord fran listan, t.ex. deathball). Ingen annan text.';
+    try {
+      var resp = await apiFetch('/strategy', {method:'POST', body:JSON.stringify({prompt:prompt, maxTokens:20})});
+      var answer = (resp.text || '').trim().toLowerCase();
+      var matched = validIds.find(function(id){ return answer.indexOf(id) !== -1; });
+      if(matched) {
+        await apiFetch('/matches/' + m.id + '/archetype', {method:'PUT', body:JSON.stringify({archetype:matched, guessed:true})});
+        done++;
+      } else { failed++; }
+    } catch(e) { failed++; }
+  }
+  if(btn) btn.textContent = 'Klart: ' + done + ' klassade' + (failed ? ', ' + failed + ' misslyckades' : '');
+  setTimeout(loadStats, 1500);
+}
+
 async function replayOnTv(matchId) {
   try {
     await apiFetch('/replay/' + matchId, {method:'POST'});
@@ -1833,6 +2040,32 @@ async function openDetail(id) {
 
 function mdToHtml(md) {
   if(!md) return '';
+
+  // Ta bort ensamma --- rader (horisontella linjer)
+  md = md.replace(/^---+\s*$/gm, '');
+
+  // Convert markdown tables before other replacements
+  md = md.replace(/(\|.+\|\n)((?:\|[-: ]+\|)+\n)((?:\|.+\|\n?)*)/g, function(match, header, separator, rows) {
+    var headerCells = header.trim().split('|').filter(function(c){ return c.trim() !== ''; });
+    var rowLines = rows.trim().split('\n').filter(function(r){ return r.trim() !== '' && !r.match(/^\|[-: |]+\|$/); });
+    var html = '<table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;">';
+    html += '<thead><tr>';
+    headerCells.forEach(function(cell) {
+      html += '<th style="padding:6px 10px;text-align:left;border-bottom:1px solid var(--gold-dim);color:var(--gold);font-family:Rajdhani,sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">' + cell.trim() + '</th>';
+    });
+    html += '</tr></thead><tbody>';
+    rowLines.forEach(function(row) {
+      var cells = row.trim().split('|').filter(function(c){ return c.trim() !== ''; });
+      html += '<tr>';
+      cells.forEach(function(cell) {
+        html += '<td style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text);">' + cell.trim() + '</td>';
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+  });
+
   return md
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')

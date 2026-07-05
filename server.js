@@ -15,11 +15,23 @@ app.use((req, res, next) => {
     "script-src 'self' 'unsafe-inline'; " +
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src https://fonts.gstatic.com; " +
-    "img-src 'self' https://cdn.dota2.com https://cdn.cloudflare.steamstatic.com https://steamcdn-a.akamaihd.net data:; " +
+    "img-src 'self' https://cdn.dota2.com https://cdn.cloudflare.steamstatic.com https://cdn.steamstatic.com https://steamcdn-a.akamaihd.net data:; " +
     "connect-src 'self'; " +
     "media-src 'self'"
   );
   next();
+});
+const SITE_PASSWORD = process.env.SITE_PASSWORD;
+app.use((req, res, next) => {
+  if (!SITE_PASSWORD) return next();
+  const auth = req.headers.authorization || '';
+  if (auth.startsWith('Basic ')) {
+    const decoded = Buffer.from(auth.slice(6), 'base64').toString('utf8');
+    const password = decoded.slice(decoded.indexOf(':') + 1);
+    if (password === SITE_PASSWORD) return next();
+  }
+  res.setHeader('WWW-Authenticate', 'Basic realm="Dreamhack Skyrup"');
+  res.status(401).send('Authentication required');
 });
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -233,7 +245,7 @@ app.get('/api/matches', async (req, res) => {
 });
 
 app.post('/api/matches', async (req, res) => {
-  const { players, strategy, briefing, captainNotes, draft, name, wildcard, style } = req.body;
+  const { players, strategy, briefing, captainNotes, draft, name, wildcard, style, archetype } = req.body;
   try {
     const matches = await readMatches();
     const gameNumber = matches.length + 1;
@@ -246,6 +258,7 @@ app.post('/api/matches', async (req, res) => {
       captainNotes: captainNotes || '',
       wildcard: !!wildcard,
       style: style || 'standard',
+      archetype: archetype || null,
       players,
       strategy,
       draft,
@@ -319,6 +332,18 @@ app.put('/api/matches/:id/result', async (req, res) => {
     const match = matches.find(m => m.id === req.params.id);
     if (!match) return res.status(404).json({ error: 'Not found' });
     match.result = req.body.result || null;
+    await writeMatches(matches);
+    res.json(match);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/matches/:id/archetype', async (req, res) => {
+  try {
+    const matches = await readMatches();
+    const match = matches.find(m => m.id === req.params.id);
+    if (!match) return res.status(404).json({ error: 'Not found' });
+    match.archetype = req.body.archetype || null;
+    match.archetypeGuessed = !!req.body.guessed;
     await writeMatches(matches);
     res.json(match);
   } catch(e) { res.status(500).json({ error: e.message }); }

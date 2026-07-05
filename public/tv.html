@@ -17,8 +17,9 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
 @keyframes slideUp{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:translateY(0)}}
 @keyframes heroZoomIn{0%{opacity:0;transform:scale(.85)}60%{opacity:1}100%{opacity:1;transform:scale(1)}}
 @keyframes heroShine{0%{transform:translateX(-150%) skewX(-20deg)}100%{transform:translateX(250%) skewX(-20deg)}}
-@keyframes heroSpot1{0%{transform:rotate(-25deg) translateX(-250px);opacity:0}15%{opacity:.6}50%{transform:rotate(15deg) translateX(250px);opacity:.9}85%{opacity:.6}100%{transform:rotate(-25deg) translateX(-250px);opacity:0}}
-@keyframes heroSpot2{0%{transform:rotate(20deg) translateX(220px);opacity:0}20%{opacity:.5}50%{transform:rotate(-20deg) translateX(-220px);opacity:.8}80%{opacity:.5}100%{transform:rotate(20deg) translateX(220px);opacity:0}}
+@keyframes heroSpot1{0%{transform:rotate(-30deg) translateX(-300px);opacity:0}15%{opacity:.9}50%{transform:rotate(20deg) translateX(300px);opacity:1}85%{opacity:.9}100%{transform:rotate(-30deg) translateX(-300px);opacity:0}}
+@keyframes heroSpot2{0%{transform:rotate(25deg) translateX(280px);opacity:0}20%{opacity:.8}50%{transform:rotate(-25deg) translateX(-280px);opacity:1}80%{opacity:.8}100%{transform:rotate(25deg) translateX(280px);opacity:0}}
+@keyframes heroSpot3{0%{transform:rotate(-10deg) translateX(-100px);opacity:0}25%{opacity:.7}50%{transform:rotate(10deg) translateX(100px);opacity:.9}75%{opacity:.7}100%{transform:rotate(-10deg) translateX(-100px);opacity:0}}
 @keyframes stratNameFadeIn{from{opacity:0;transform:translateY(15px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
 @keyframes zoomIn{from{opacity:0;transform:scale(1.08)}to{opacity:1;transform:scale(1)}}
 @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
@@ -45,7 +46,7 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
 #hero-img-wrap{width:min(600px,70vw);height:min(340px,40vw);border-radius:12px;overflow:hidden;border:2px solid var(--gold-dim);box-shadow:0 0 80px rgba(200,155,60,.3);position:relative;}
 #hero-img-wrap img{width:100%;height:100%;object-fit:cover;object-position:center top;}
 .hero-shine{position:absolute;top:0;left:0;width:60%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent);pointer-events:none;}
-.hero-spotlight{position:absolute;width:280px;height:560px;background:linear-gradient(180deg,rgba(200,155,60,.1) 0%,transparent 100%);border-radius:50%;pointer-events:none;transform-origin:bottom center;}
+.hero-spotlight{position:absolute;width:380px;height:700px;background:linear-gradient(180deg,rgba(200,155,60,.25) 0%,rgba(200,155,60,.05) 60%,transparent 100%);border-radius:50%;pointer-events:none;transform-origin:bottom center;}
 #hero-name-tv{font-size:clamp(36px,6vw,72px);font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.12em;margin-top:32px;}
 #player-name-tv{font-size:clamp(18px,2.5vw,32px);color:var(--text-dim);letter-spacing:.25em;text-transform:uppercase;margin-top:8px;}
 #pick-counter{position:absolute;bottom:40px;right:60px;font-size:18px;color:var(--text-dim);letter-spacing:.1em;}
@@ -123,6 +124,7 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
     <div id="hero-bg"></div>
     <div class="hero-spotlight" style="top:-150px;left:25%;animation:heroSpot1 7s ease-in-out infinite;"></div>
     <div class="hero-spotlight" style="top:-150px;left:60%;animation:heroSpot2 8.5s ease-in-out infinite;"></div>
+    <div class="hero-spotlight" style="top:-150px;left:42%;animation:heroSpot3 11s ease-in-out infinite;"></div>
     <div id="hero-content">
       <div id="hero-img-wrap"><img id="hero-img-tv" src="" alt=""><div class="hero-shine" id="hero-shine"></div></div>
       <div id="hero-name-tv"></div>
