@@ -337,6 +337,18 @@ app.put('/api/matches/:id/result', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+app.put('/api/matches/:id/archetype', async (req, res) => {
+  try {
+    const matches = await readMatches();
+    const match = matches.find(m => m.id === req.params.id);
+    if (!match) return res.status(404).json({ error: 'Not found' });
+    match.archetype = req.body.archetype || null;
+    match.archetypeGuessed = !!req.body.guessed;
+    await writeMatches(matches);
+    res.json(match);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.put('/api/matches/:id/memory', async (req, res) => {
   try {
     const matches = await readMatches();
