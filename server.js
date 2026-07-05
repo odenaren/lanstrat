@@ -245,7 +245,7 @@ app.get('/api/matches', async (req, res) => {
 });
 
 app.post('/api/matches', async (req, res) => {
-  const { players, strategy, briefing, captainNotes, draft, name, wildcard, style } = req.body;
+  const { players, strategy, briefing, captainNotes, draft, name, wildcard, style, archetype } = req.body;
   try {
     const matches = await readMatches();
     const gameNumber = matches.length + 1;
@@ -258,6 +258,7 @@ app.post('/api/matches', async (req, res) => {
       captainNotes: captainNotes || '',
       wildcard: !!wildcard,
       style: style || 'standard',
+      archetype: archetype || null,
       players,
       strategy,
       draft,
