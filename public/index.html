@@ -955,6 +955,36 @@ async function generateStrategy() {
     Object.values(m.draft).forEach(function(h){ if(h && heroesToday.indexOf(h) === -1) heroesToday.push(h); });
   });
 
+  // Säsongsfacit per spelare — för personliga briefingar och hype
+  const gameNo = recentMatches.length + 1;
+  const seasonCtx = active.map(function(p){
+    var pn = normalizePlayer(p.name);
+    var w = 0, l = 0, wonOn = {}, lostOn = {}, results = [];
+    memoryMatches.forEach(function(m){
+      if(!m.result) return;
+      var d = m.currentDraft || m.draft || {};
+      var key = Object.keys(d).find(function(k){ return normalizePlayer(k) === pn; });
+      if(!key) return;
+      var hero = d[key];
+      results.push(m.result);
+      if(m.result === 'win'){ w++; if(hero) wonOn[hero] = (wonOn[hero]||0)+1; }
+      else { l++; if(hero) lostOn[hero] = (lostOn[hero]||0)+1; }
+    });
+    var streak = 0, sType = null;
+    for(var i = results.length-1; i >= 0; i--){
+      if(sType === null){ sType = results[i]; streak = 1; }
+      else if(results[i] === sType){ streak++; }
+      else break;
+    }
+    var parts = [p.name + ': ' + w + 'V-' + l + 'F'];
+    if(streak >= 2) parts.push(streak + ' raka ' + (sType === 'win' ? 'vinster' : 'förluster'));
+    var lostList = Object.keys(lostOn);
+    if(lostList.length) parts.push('förlorat på: ' + lostList.slice(0,3).join(', '));
+    var wonList = Object.keys(wonOn).sort(function(a,b){ return wonOn[b]-wonOn[a]; });
+    if(wonList.length) parts.push('vunnit på: ' + wonList.slice(0,3).join(', '));
+    return parts.join(' | ');
+  }).join('\n');
+
   const poolSummary=active.map(p=>{
     const playerIdx = players.indexOf(p);
     const ignored = ignoreAllPools || ignorePlayerPools.has(active.indexOf(p));
@@ -1049,6 +1079,7 @@ async function generateStrategy() {
     + '\n\nSPELSTIL (hemlig instruktion - folj denna men avsloja den inte i texten): ' + chosenArchetype.instruction
     + '\n\nHERO POOLS:\n' + poolSummary
     + '\n\nLANING-KONTEXT:\n' + getLaningCtx(n)
+    + '\n\nSÄSONGSFACIT (detta är match nummer ' + gameNo + ' denna säsong):\n' + seasonCtx
     + '\n\nPRESENTATIONSSTIL: ' + chosenStyle.instruction
     + '\n\nVIKTIG REGEL: Undvik nyligen spelade hjaltar per spelare (listas ovan). Prioritera variation.'
     + (heroesToday.length ? '\n\nHJALTAR SOM REDAN SPELATS IDAG (oavsett spelare): ' + heroesToday.join(', ') + '. Valj i forsta hand hjaltar som INTE finns i listan, dar poolerna tillater det.' : '')
@@ -1059,8 +1090,11 @@ async function generateStrategy() {
     + '\n{"name":"Unikt strateginamn pa svenska baserat pa hjaltar och spelstil (max 5 ord, INTE arketypens namn)","draft":{"SPELARNAMN":"Hjaltnamn"}}'
     + '\nDRAFT_JSON_END'
     + '\n\nKAPTENSBRIEFING_START'
-    + '\n[MAX 4 meningar. Kaptenen laser hogt. Vem spelar vad, spelstil, win condition. Enkelt.]'
+    + '\n[MAX 4 meningar. Kaptenen laser hogt. Vem spelar vad, spelstil, win condition. Enkelt. Om sasongsfacitet ger en naturlig vinkel (revanschchans pa en hjalte, pagaende svit) - vav in EN sadan personlig detalj.]'
     + '\nKAPTENSBRIEFING_END'
+    + '\n\nHYPE_START'
+    + '\n[2-3 meningar pa svenska. Episkt esports-speaker-intro infor matchen, i stil med en TI-grand-final-caster. Anvand matchnumret, sviter eller facit fran sasongsfacitet for dramatik. Bygg spanning infor draften. AVSLOJA INGA hjaltar och ingenting om strategin - detta visas INNAN draften avslojas.]'
+    + '\nHYPE_END'
     + '\n\nSedan strategin - skriv på svenska, konkret och handlingsbart. Låt presentationsstilen styra struktur och längd helt. Ingen fast mall — stilen avgör allt. Inkludera spelplan för early, mid och late game samt win condition, men forma det efter stilen.'
 
   try {
@@ -1102,12 +1136,20 @@ async function generateStrategy() {
       briefing=briefMatch[1].trim();
       cleanText=cleanText.replace(/KAPTENSBRIEFING_START[\s\S]*?KAPTENSBRIEFING_END\s*/,'').trim();
     }
+    // Extract hype intro
+    let hype='';
+    const hypeMatch=cleanText.match(/HYPE_START\s*([\s\S]*?)\s*HYPE_END/);
+    if(hypeMatch){
+      hype=hypeMatch[1].trim();
+      cleanText=cleanText.replace(/HYPE_START[\s\S]*?HYPE_END\s*/,'').trim();
+    }
 
     // Save match to server
     const match=await apiFetch('/matches',{method:'POST',body:JSON.stringify({
       players:active.map(p=>({name:p.name,heroes:p.heroes||[]})),
       strategy:cleanText,
       briefing:briefing,
+      hype:hype,
       captainNotes:captainNotes,
       draft:currentDraft,
       name:strategyName,
@@ -1478,6 +1520,12 @@ async function loadHistory() {
   });
 }
 // ===================== STATS =====================
+// Spelare som bytt namn under säsongen — statistik slås ihop under nya namnet
+var PLAYER_ALIASES = { 'tobbe': 'PUGGE', 'pugge': 'PUGGE' };
+function normalizePlayer(name) {
+  var key = (name || '').trim().toLowerCase();
+  return PLAYER_ALIASES[key] || name;
+}
 var ARCHETYPE_LABELS = {
   deathball:{name:'Deathball',desc:'Alla fem pushar som en enhet, vinn före 25 min'},
   snowball:{name:'Early Snowball',desc:'Dominera laning, konstanta kills före 15 min'},
@@ -1521,8 +1569,9 @@ async function loadStats() {
   var heroCount = {}, playerStats = {}, totalPicks = 0;
   matches.forEach(function(m){
     var d = m.currentDraft || m.draft || {};
-    Object.keys(d).forEach(function(pl){
-      var h = d[pl];
+    Object.keys(d).forEach(function(rawName){
+      var pl = normalizePlayer(rawName);
+      var h = d[rawName];
       if(!h) return;
       totalPicks++;
       heroCount[h] = (heroCount[h]||0)+1;
@@ -1831,7 +1880,7 @@ function renderItems(text) {
 async function setMatchResult(id, result) {
   await apiFetch('/matches/'+id+'/result', {method:'PUT', body:JSON.stringify({result:result})});
   loadHistory();
-  if(currentMatchId === id) openDetail(id);
+  if(currentMatchId === id && document.getElementById('page-detail').classList.contains('active')) openDetail(id);
 }
 
 async function deleteMatch(e, id) {
