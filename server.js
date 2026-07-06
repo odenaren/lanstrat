@@ -245,7 +245,7 @@ app.get('/api/matches', async (req, res) => {
 });
 
 app.post('/api/matches', async (req, res) => {
-  const { players, strategy, briefing, captainNotes, draft, name, wildcard, style, archetype } = req.body;
+  const { players, strategy, briefing, briefingEn, captainNotes, draft, name, wildcard, style, archetype, hype } = req.body;
   try {
     const matches = await readMatches();
     const gameNumber = matches.length + 1;
@@ -255,6 +255,8 @@ app.post('/api/matches', async (req, res) => {
       gameNumber: gameNumber,
       name: name || '',
       briefing: briefing || '',
+      briefingEn: briefingEn || '',
+      hype: hype || '',
       captainNotes: captainNotes || '',
       wildcard: !!wildcard,
       style: style || 'standard',
@@ -380,7 +382,7 @@ async function callClaude(prompt, maxTokens = 1500) {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
+    body: JSON.stringify({ model: 'claude-fable-5', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
   });
   const data = await response.json();
   if (data.error) throw new Error(data.error.message);
