@@ -338,6 +338,21 @@ function heroImgUrl(heroName) {
   return CDN + slug + '.png';
 }
 
+// Spelar announcer-ljudet för hype-intron. Resolvar true när rösten talat klart,
+// false om ljudet inte kunde starta inom 8 sek (då styr texttiden istället).
+function playHypeAudio(matchId) {
+  return new Promise(function(resolve) {
+    var a = new Audio('/api/hype-audio/' + matchId);
+    var started = false, settled = false;
+    function settle(v){ if(!settled){ settled = true; resolve(v); } }
+    var giveUp = setTimeout(function(){ if(!started){ try{ a.pause(); }catch(e){} settle(false); } }, 8000);
+    a.onplaying = function(){ started = true; clearTimeout(giveUp); };
+    a.onended = function(){ settle(true); };
+    a.onerror = function(){ clearTimeout(giveUp); settle(false); };
+    a.play().catch(function(){ clearTimeout(giveUp); settle(false); });
+  });
+}
+
 function show(id) {
   ['idle','welcome','splash','hero-reveal','briefing-screen','hype-screen','overview'].forEach(function(s){
     var el = document.getElementById(s);
@@ -522,11 +537,19 @@ function fadeAudio(el, from, to, durationMs, onDone) {
 
   await wait(5200);
 
-  // STEG 1.5: Hype-intro (om matchen har en)
+  // STEG 1.5: Hype-intro med live announcer (om matchen har en)
   if(m.hype) {
     document.getElementById('hype-text').textContent = m.hype;
     show('hype-screen');
-    await wait(Math.max(9000, Math.min(16000, m.hype.length * 60)));
+    var textMs = Math.max(9000, Math.min(16000, m.hype.length * 60));
+    var hypeT0 = Date.now();
+    var voicePlayed = await playHypeAudio(matchId);
+    if(voicePlayed) {
+      await wait(1000); // kort paus efter sista ordet
+    } else {
+      var leftMs = textMs - (Date.now() - hypeT0);
+      if(leftMs > 0) await wait(leftMs);
+    }
   }
 
   // STEG 2: Hero reveal
