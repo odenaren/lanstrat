@@ -214,6 +214,39 @@ app.post('/api/draftpools/import', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── ELEVENLABS TTS (hype announcer) ──────────────────
+const hypeAudioCache = new Map();
+async function generateHypeAudio(matchId, text) {
+  const key = process.env.ELEVENLABS_API_KEY;
+  const voiceId = process.env.ELEVENLABS_VOICE_ID;
+  if (!key || !voiceId || !text) return null;
+  const res = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + voiceId, {
+    method: 'POST',
+    headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: text, model_id: 'eleven_multilingual_v2' })
+  });
+  if (!res.ok) throw new Error('ElevenLabs ' + res.status + ': ' + await res.text());
+  const buf = Buffer.from(await res.arrayBuffer());
+  hypeAudioCache.set(matchId, buf);
+  if (hypeAudioCache.size > 20) hypeAudioCache.delete(hypeAudioCache.keys().next().value);
+  return buf;
+}
+
+app.get('/api/hype-audio/:id', async (req, res) => {
+  try {
+    let buf = hypeAudioCache.get(req.params.id);
+    if (!buf) {
+      const matches = await readMatches();
+      const match = matches.find(m => m.id === req.params.id);
+      if (!match || !match.hype) return res.status(404).json({ error: 'No hype text for this match' });
+      buf = await generateHypeAudio(req.params.id, match.hype);
+      if (!buf) return res.status(503).json({ error: 'TTS not configured' });
+    }
+    res.set('Content-Type', 'audio/mpeg');
+    res.send(buf);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── STATUS (polling) ─────────────────────────────────
 let serverStatus = { generating: false, latestMatchId: null, replayToken: null };
 app.get('/api/status', (req, res) => res.json(serverStatus));
@@ -270,6 +303,8 @@ app.post('/api/matches', async (req, res) => {
     matches.unshift(match);
     await writeMatches(matches);
     serverStatus.latestMatchId = match.id;
+    // Generera announcer-ljud i bakgrunden — klart innan TV:n når hype-skärmen
+    if (match.hype) generateHypeAudio(match.id, match.hype).catch(e => console.error('Hype TTS:', e.message));
     res.json(match);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
