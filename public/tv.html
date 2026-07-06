@@ -134,8 +134,13 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
   </div>
 
   <div id="briefing-screen">
-    <div class="brief-title">⚔ Kaptensbriefing</div>
+    <div class="brief-title">⚔ Captain's Briefing</div>
     <div class="brief-text" id="brief-text"></div>
+  </div>
+
+  <div id="hype-screen" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:80px;text-align:center;gap:32px;">
+    <div class="brief-title" style="font-size:20px;font-weight:700;color:var(--gold);letter-spacing:.2em;text-transform:uppercase;">🎙 Tonight</div>
+    <div class="brief-text" id="hype-text" style="font-size:clamp(24px,3.2vw,44px);line-height:1.7;color:var(--text);max-width:1100px;font-style:italic;"></div>
   </div>
 
   <div id="overview">
@@ -334,7 +339,7 @@ function heroImgUrl(heroName) {
 }
 
 function show(id) {
-  ['idle','welcome','splash','hero-reveal','briefing-screen','overview'].forEach(function(s){
+  ['idle','welcome','splash','hero-reveal','briefing-screen','hype-screen','overview'].forEach(function(s){
     var el = document.getElementById(s);
     el.style.display = 'none';
     el.style.animation = '';
@@ -493,7 +498,7 @@ function fadeAudio(el, from, to, durationMs, onDone) {
 
   var draft = m.currentDraft || m.draft || {};
   var stratName = m.name || 'Draft Strategi';
-  var briefing = m.briefing || '';
+  var briefing = m.briefingEn || m.briefing || '';
   var isWildcard = !!m.wildcard;
   var playerNames = Object.keys(draft);
 
@@ -516,6 +521,13 @@ function fadeAudio(el, from, to, durationMs, onDone) {
   splashNameEl.style.animation = 'stratNameFadeIn 1.3s ease both';
 
   await wait(5200);
+
+  // STEG 1.5: Hype-intro (om matchen har en)
+  if(m.hype) {
+    document.getElementById('hype-text').textContent = m.hype;
+    show('hype-screen');
+    await wait(Math.max(9000, Math.min(16000, m.hype.length * 60)));
+  }
 
   // STEG 2: Hero reveal
   for(var i = 0; i < playerNames.length; i++) {
