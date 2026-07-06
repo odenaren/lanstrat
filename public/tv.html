@@ -138,9 +138,12 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
     <div class="brief-text" id="brief-text"></div>
   </div>
 
-  <div id="hype-screen" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:80px;text-align:center;gap:32px;">
+  <div id="hype-screen" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:60px;text-align:center;gap:28px;">
     <div class="brief-title" style="font-size:20px;font-weight:700;color:var(--gold);letter-spacing:.2em;text-transform:uppercase;">🎙 Tonight</div>
-    <div class="brief-text" id="hype-text" style="font-size:clamp(24px,3.2vw,44px);line-height:1.7;color:var(--text);max-width:1100px;font-style:italic;"></div>
+    <div id="hype-matchno" style="display:none;font-size:clamp(64px,9vw,140px);font-weight:800;color:var(--gold);letter-spacing:.06em;line-height:1;text-shadow:0 0 60px rgba(200,155,60,.35);"></div>
+    <div id="hype-tagline" style="display:none;font-size:clamp(22px,2.6vw,36px);font-style:italic;color:var(--text);letter-spacing:.04em;"></div>
+    <div id="hype-players" style="display:none;flex-wrap:wrap;justify-content:center;gap:18px;max-width:1200px;"></div>
+    <div class="brief-text" id="hype-text" style="display:none;font-size:clamp(24px,3.2vw,44px);line-height:1.7;color:var(--text);max-width:1100px;font-style:italic;"></div>
   </div>
 
   <div id="overview">
@@ -336,6 +339,41 @@ function heroImgUrl(heroName) {
   var key = heroName.toLowerCase().trim();
   var slug = slugs[key] || key.replace(/['\s]+/g,'_').replace(/-/g,'_');
   return CDN + slug + '.png';
+}
+
+// Ritar fight card-grafiken: stort matchnummer, tagline och spelarnas facit
+function renderFightCard(m, gameNumber) {
+  document.getElementById('hype-text').style.display = 'none';
+  var noEl = document.getElementById('hype-matchno');
+  noEl.textContent = 'MATCH ' + (m.gameNumber || gameNumber);
+  noEl.style.display = 'block';
+  var tagEl = document.getElementById('hype-tagline');
+  if(m.hypeTagline) { tagEl.textContent = '"' + m.hypeTagline + '"'; tagEl.style.display = 'block'; }
+  else tagEl.style.display = 'none';
+  var plEl = document.getElementById('hype-players');
+  plEl.innerHTML = '';
+  var cards = m.fightCard || [];
+  cards.forEach(function(s){
+    var card = document.createElement('div');
+    card.style.cssText = 'min-width:150px;padding:16px 20px;border:1px solid var(--gold-dim);border-radius:6px;background:rgba(200,155,60,.06);';
+    var nameDiv = document.createElement('div');
+    nameDiv.style.cssText = 'font-size:20px;font-weight:700;color:var(--text);letter-spacing:.04em;';
+    nameDiv.textContent = s.name;
+    var recDiv = document.createElement('div');
+    recDiv.style.cssText = 'font-size:30px;font-weight:800;color:var(--gold);margin-top:4px;';
+    recDiv.textContent = s.w + ' \u2013 ' + s.l;
+    card.appendChild(nameDiv);
+    card.appendChild(recDiv);
+    if(s.streak >= 2) {
+      var stDiv = document.createElement('div');
+      var isWin = s.sType === 'win';
+      stDiv.style.cssText = 'font-size:15px;font-weight:700;margin-top:4px;color:' + (isWin ? '#2ecc71' : '#e74c3c') + ';';
+      stDiv.textContent = (isWin ? '\uD83D\uDD25 ' : '\u2744\uFE0F ') + s.streak + (isWin ? 'W' : 'L') + ' streak';
+      card.appendChild(stDiv);
+    }
+    plEl.appendChild(card);
+  });
+  plEl.style.display = cards.length ? 'flex' : 'none';
 }
 
 // Spelar announcer-ljudet för hype-intron. Resolvar true när rösten talat klart,
@@ -537,15 +575,36 @@ function fadeAudio(el, from, to, durationMs, onDone) {
 
   await wait(5200);
 
-  // STEG 1.5: Hype-intro med live announcer (om matchen har en)
-  if(m.hype) {
-    document.getElementById('hype-text').textContent = m.hype;
+  // STEG 1.5: Hype-intro med live announcer
+  var hasBroadcast = !!(m.hypeSpoken || m.hypeTagline || (m.fightCard && m.fightCard.length));
+  if(hasBroadcast) {
+    // Broadcast-läge: fight card-grafik medan announcern talar
+    renderFightCard(m, gameNumber);
+    show('hype-screen');
+    var spokenLen = (m.hypeSpoken || '').length;
+    var estMs = spokenLen ? Math.max(10000, Math.min(22000, spokenLen * 55)) : 10000;
+    var bT0 = Date.now();
+    var bPlayed = await playHypeAudio(matchId);
+    if(bPlayed) {
+      await wait(1000); // kort paus efter sista ordet
+    } else {
+      var bLeft = estMs - (Date.now() - bT0);
+      if(bLeft > 0) await wait(bLeft);
+    }
+  } else if(m.hype) {
+    // Legacy-läge: äldre matcher med hype-text på skärmen
+    document.getElementById('hype-matchno').style.display = 'none';
+    document.getElementById('hype-tagline').style.display = 'none';
+    document.getElementById('hype-players').style.display = 'none';
+    var htEl = document.getElementById('hype-text');
+    htEl.textContent = m.hype;
+    htEl.style.display = 'block';
     show('hype-screen');
     var textMs = Math.max(9000, Math.min(16000, m.hype.length * 60));
     var hypeT0 = Date.now();
     var voicePlayed = await playHypeAudio(matchId);
     if(voicePlayed) {
-      await wait(1000); // kort paus efter sista ordet
+      await wait(1000);
     } else {
       var leftMs = textMs - (Date.now() - hypeT0);
       if(leftMs > 0) await wait(leftMs);
