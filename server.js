@@ -223,7 +223,11 @@ async function generateHypeAudio(matchId, text) {
   const res = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + voiceId, {
     method: 'POST',
     headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: text, model_id: 'eleven_multilingual_v2' })
+    body: JSON.stringify({
+      text: text,
+      model_id: 'eleven_multilingual_v2',
+      voice_settings: { stability: 0.4, similarity_boost: 0.8, style: 0.55 }
+    })
   });
   if (!res.ok) throw new Error('ElevenLabs ' + res.status + ': ' + await res.text());
   const buf = Buffer.from(await res.arrayBuffer());
@@ -238,8 +242,9 @@ app.get('/api/hype-audio/:id', async (req, res) => {
     if (!buf) {
       const matches = await readMatches();
       const match = matches.find(m => m.id === req.params.id);
-      if (!match || !match.hype) return res.status(404).json({ error: 'No hype text for this match' });
-      buf = await generateHypeAudio(req.params.id, match.hype);
+      const spoken = match && (match.hypeSpoken || match.hype);
+      if (!spoken) return res.status(404).json({ error: 'No hype text for this match' });
+      buf = await generateHypeAudio(req.params.id, spoken);
       if (!buf) return res.status(503).json({ error: 'TTS not configured' });
     }
     res.set('Content-Type', 'audio/mpeg');
@@ -278,7 +283,7 @@ app.get('/api/matches', async (req, res) => {
 });
 
 app.post('/api/matches', async (req, res) => {
-  const { players, strategy, briefing, briefingEn, captainNotes, draft, name, wildcard, style, archetype, hype } = req.body;
+  const { players, strategy, briefing, briefingEn, captainNotes, draft, name, wildcard, style, archetype, hype, hypeSpoken, hypeTagline, fightCard } = req.body;
   try {
     const matches = await readMatches();
     const gameNumber = matches.length + 1;
@@ -290,6 +295,9 @@ app.post('/api/matches', async (req, res) => {
       briefing: briefing || '',
       briefingEn: briefingEn || '',
       hype: hype || '',
+      hypeSpoken: hypeSpoken || '',
+      hypeTagline: hypeTagline || '',
+      fightCard: fightCard || null,
       captainNotes: captainNotes || '',
       wildcard: !!wildcard,
       style: style || 'standard',
@@ -304,7 +312,8 @@ app.post('/api/matches', async (req, res) => {
     await writeMatches(matches);
     serverStatus.latestMatchId = match.id;
     // Generera announcer-ljud i bakgrunden — klart innan TV:n når hype-skärmen
-    if (match.hype) generateHypeAudio(match.id, match.hype).catch(e => console.error('Hype TTS:', e.message));
+    const spokenText = match.hypeSpoken || match.hype;
+    if (spokenText) generateHypeAudio(match.id, spokenText).catch(e => console.error('Hype TTS:', e.message));
     res.json(match);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
