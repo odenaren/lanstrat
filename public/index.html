@@ -1092,8 +1092,11 @@ async function generateStrategy() {
     + '\n\nKAPTENSBRIEFING_START'
     + '\n[MAX 4 meningar. Kaptenen laser hogt. Vem spelar vad, spelstil, win condition. Enkelt. Om sasongsfacitet ger en naturlig vinkel (revanschchans pa en hjalte, pagaende svit) - vav in EN sadan personlig detalj.]'
     + '\nKAPTENSBRIEFING_END'
+    + '\n\nBRIEFING_EN_START'
+    + '\n[The same captain briefing translated to ENGLISH with energetic esports broadcast tone. MAX 4 sentences. Keep player names and hero names exactly as they are.]'
+    + '\nBRIEFING_EN_END'
     + '\n\nHYPE_START'
-    + '\n[2-3 meningar pa svenska. Episkt esports-speaker-intro infor matchen, i stil med en TI-grand-final-caster. Anvand matchnumret, sviter eller facit fran sasongsfacitet for dramatik. Bygg spanning infor draften. AVSLOJA INGA hjaltar och ingenting om strategin - detta visas INNAN draften avslojas.]'
+    + '\n[2-3 sentences in ENGLISH. Epic esports announcer intro before the match, in the style of a TI grand final caster. Use the match number, streaks or records from the season stats for drama. Build tension before the draft. DO NOT reveal any heroes or anything about the strategy - this is shown BEFORE the draft is revealed.]'
     + '\nHYPE_END'
     + '\n\nSedan strategin - skriv på svenska, konkret och handlingsbart. Låt presentationsstilen styra struktur och längd helt. Ingen fast mall — stilen avgör allt. Inkludera spelplan för early, mid och late game samt win condition, men forma det efter stilen.'
 
@@ -1136,6 +1139,13 @@ async function generateStrategy() {
       briefing=briefMatch[1].trim();
       cleanText=cleanText.replace(/KAPTENSBRIEFING_START[\s\S]*?KAPTENSBRIEFING_END\s*/,'').trim();
     }
+    // Extract English briefing (for TV)
+    let briefingEn='';
+    const briefEnMatch=cleanText.match(/BRIEFING_EN_START\s*([\s\S]*?)\s*BRIEFING_EN_END/);
+    if(briefEnMatch){
+      briefingEn=briefEnMatch[1].trim();
+      cleanText=cleanText.replace(/BRIEFING_EN_START[\s\S]*?BRIEFING_EN_END\s*/,'').trim();
+    }
     // Extract hype intro
     let hype='';
     const hypeMatch=cleanText.match(/HYPE_START\s*([\s\S]*?)\s*HYPE_END/);
@@ -1149,6 +1159,7 @@ async function generateStrategy() {
       players:active.map(p=>({name:p.name,heroes:p.heroes||[]})),
       strategy:cleanText,
       briefing:briefing,
+      briefingEn:briefingEn,
       hype:hype,
       captainNotes:captainNotes,
       draft:currentDraft,
