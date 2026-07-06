@@ -91,7 +91,6 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
   </div>
 
   <audio id="welcome-audio" src="/sounds/announcer/welcome.mp3" preload="auto"></audio>
-  <audio id="game-audio" src="/sounds/announcer/game_1.mp3" preload="auto"></audio>
   <audio id="hero-audio" src="/sounds/announcer/welcome.mp3" preload="auto"></audio>
   <audio id="bg-music" src="/sounds/music/background.mp3" preload="auto" loop></audio>
 
@@ -431,7 +430,7 @@ function unlockAudio() {
   _audioUnlocked = true;
 
   // Lås upp varje audio-element explicit (krävs av iOS Safari m.fl. mobilwebbläsare)
-  var audioIds = ['welcome-audio', 'game-audio', 'hero-audio', 'bg-music'];
+  var audioIds = ['welcome-audio', 'hero-audio', 'bg-music'];
   audioIds.forEach(function(id) {
     var el = document.getElementById(id);
     if(!el) return;
@@ -517,18 +516,10 @@ function fadeAudio(el, from, to, durationMs, onDone) {
     await wait(2000);
   }
 
-  // STEG 1: Strateginamnet + game_N.mp3
+  // STEG 1: Strateginamnet (AI-announcern presenterar matchen i hype-steget)
   document.getElementById('splash-name').textContent = '';
   document.getElementById('splash-wild').style.display = 'none';
   show('splash');
-  if(_audioUnlocked) {
-    setTimeout(function() {
-      var ga = document.getElementById('game-audio');
-      ga.src = '/sounds/announcer/game_' + gameNumber + '.mp3';
-      ga.currentTime = 0;
-      ga.play().catch(function(){});
-    }, 2000);
-  }
 
   // Vänta på match-data (max 30 sek)
   var m = null;
