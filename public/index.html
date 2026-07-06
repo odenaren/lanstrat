@@ -971,7 +971,8 @@ async function generateStrategy() {
       else { l++; if(hero) lostOn[hero] = (lostOn[hero]||0)+1; }
     });
     var streak = 0, sType = null;
-    for(var i = results.length-1; i >= 0; i--){
+    // matches-arrayen har nyaste matchen först — aktuell svit räknas därför framifrån
+    for(var i = 0; i < results.length; i++){
       if(sType === null){ sType = results[i]; streak = 1; }
       else if(results[i] === sType){ streak++; }
       else break;
