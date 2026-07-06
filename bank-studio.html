@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DHS Bank Studio</title>
+<style>
+:root { --bg:#0d0f12; --surface:#16191f; --surface2:#1e222a; --border:#2a2f3a; --gold:#c89b3c; --gold-dim:#8a6b2a; --text:#e6e2d8; --dim:#8a8f9a; --green:#2ecc71; --red:#e74c3c; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; font-size:14px; }
+header { padding:16px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; }
+h1 { margin:0; font-size:18px; color:var(--gold); letter-spacing:.1em; text-transform:uppercase; }
+main { display:grid; grid-template-columns:220px 1fr; min-height:calc(100vh - 60px); }
+#sidebar { border-right:1px solid var(--border); padding:16px; }
+#content { padding:20px 24px; max-width:900px; }
+.evbtn { display:flex; justify-content:space-between; width:100%; padding:9px 12px; margin-bottom:4px; background:none; border:1px solid transparent; color:var(--text); text-align:left; cursor:pointer; border-radius:4px; font-size:13px; }
+.evbtn:hover { background:var(--surface); }
+.evbtn.active { background:var(--surface2); border-color:var(--gold-dim); color:var(--gold); }
+.evbtn .cnt { color:var(--dim); font-size:11px; }
+button.act { padding:8px 16px; background:rgba(200,155,60,.15); border:1px solid var(--gold-dim); color:var(--gold); cursor:pointer; border-radius:4px; font-weight:600; font-size:13px; }
+button.act:hover { background:rgba(200,155,60,.28); }
+button.act:disabled { opacity:.4; cursor:default; }
+button.small { padding:4px 10px; font-size:12px; background:var(--surface2); border:1px solid var(--border); color:var(--text); cursor:pointer; border-radius:3px; }
+button.small:hover { border-color:var(--gold-dim); }
+.line { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+.line input[type=text] { flex:1; padding:8px 10px; background:var(--surface); border:1px solid var(--border); color:var(--text); border-radius:4px; font-size:13px; }
+.dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+.dot.done { background:var(--green); }
+.dot.todo { background:var(--dim); opacity:.5; }
+select { padding:7px 10px; background:var(--surface); border:1px solid var(--border); color:var(--text); border-radius:4px; }
+.row { display:flex; gap:12px; align-items:center; margin:14px 0; flex-wrap:wrap; }
+.muted { color:var(--dim); font-size:12px; }
+#progress { display:none; margin:14px 0; }
+#pbar { height:8px; background:var(--surface2); border-radius:4px; overflow:hidden; }
+#pfill { height:100%; width:0%; background:var(--gold); transition:width .3s; }
+#voices input { width:230px; padding:7px 10px; background:var(--surface); border:1px solid var(--border); color:var(--text); border-radius:4px; font-size:12px; margin-left:8px; }
+#voices label { display:block; margin-bottom:8px; }
+details { margin-bottom:18px; border:1px solid var(--border); border-radius:6px; padding:12px 16px; background:var(--surface); }
+summary { cursor:pointer; color:var(--gold); font-weight:600; }
+#toast { position:fixed; bottom:20px; right:20px; padding:12px 18px; background:var(--surface2); border:1px solid var(--gold-dim); border-radius:6px; display:none; max-width:400px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎙 DHS Bank Studio</h1>
+  <div class="row" style="margin:0">
+    <span id="stats" class="muted"></span>
+    <button class="act" id="genbtn" onclick="generateMissing()">Generera saknade filer</button>
+  </div>
+</header>
+<main>
+  <div id="sidebar">
+    <div id="evlist"></div>
+    <div class="row">
+      <input type="text" id="newev" placeholder="nytt_event_namn" style="width:100%;padding:8px 10px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:12px">
+    </div>
+    <button class="act" style="width:100%" onclick="addEvent()">+ Lägg till event</button>
+  </div>
+  <div id="content">
+    <details id="voicebox">
+      <summary>Röster (voice-ID:n och mappning)</summary>
+      <div id="voices" style="margin-top:12px"></div>
+      <button class="small" onclick="saveConfig()">Spara röster</button>
+    </details>
+    <div id="progress"><div class="muted" id="ptext"></div><div id="pbar"><div id="pfill"></div></div></div>
+    <div id="editor"></div>
+  </div>
+</main>
+<div id="toast"></div>
+<script>
+var state = { lines:{}, config:{voices:{},eventVoice:{}}, files:[] };
+var currentEvent = null;
+var previewAudio = null;
+
+function toast(msg, ms) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  clearTimeout(t._h);
+  t._h = setTimeout(function(){ t.style.display='none'; }, ms || 3000);
+}
+
+function fileName(ev, i) { return ev + '_' + String(i+1).padStart(2,'0') + '.mp3'; }
+function hasFile(ev, i) { return state.files.indexOf(fileName(ev,i)) !== -1; }
+
+async function api(path, body, raw) {
+  var opts = body ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)} : {};
+  var res = await fetch(path, opts);
+  if(!res.ok) { var e = await res.json().catch(function(){return {error:res.status};}); throw new Error(e.error||res.status); }
+  return raw ? res : res.json();
+}
+
+async function load() {
+  state = await api('/api/state');
+  if(!currentEvent || !state.lines[currentEvent]) currentEvent = Object.keys(state.lines)[0] || null;
+  render();
+  if(!state.apiKeySet) toast('API-nyckel ej satt — redigering funkar, men inte generering/lyssning', 6000);
+}
+
+function render() {
+  var events = Object.keys(state.lines);
+  var total = 0, done = 0;
+  events.forEach(function(ev){ state.lines[ev].forEach(function(_,i){ total++; if(hasFile(ev,i)) done++; }); });
+  document.getElementById('stats').textContent = done + ' / ' + total + ' filer genererade';
+
+  var list = document.getElementById('evlist');
+  list.innerHTML = '';
+  events.forEach(function(ev){
+    var d = state.lines[ev].filter(function(_,i){ return hasFile(ev,i); }).length;
+    var b = document.createElement('button');
+    b.className = 'evbtn' + (ev===currentEvent?' active':'');
+    b.onclick = function(){ currentEvent = ev; render(); };
+    var s1 = document.createElement('span'); s1.textContent = ev;
+    var s2 = document.createElement('span'); s2.className='cnt'; s2.textContent = d + '/' + state.lines[ev].length;
+    b.appendChild(s1); b.appendChild(s2);
+    list.appendChild(b);
+  });
+
+  renderVoices();
+  renderEditor();
+}
+
+function renderVoices() {
+  var box = document.getElementById('voices');
+  box.innerHTML = '';
+  ['generic1','generic2','intense','analytic'].forEach(function(k){
+    var lab = document.createElement('label');
+    lab.textContent = k + ':';
+    var inp = document.createElement('input');
+    inp.value = state.config.voices[k] || '';
+    inp.placeholder = 'voice-ID';
+    inp.oninput = function(){ state.config.voices[k] = inp.value.trim(); };
+    lab.appendChild(inp);
+    box.appendChild(lab);
+  });
+}
+
+function renderEditor() {
+  var ed = document.getElementById('editor');
+  ed.innerHTML = '';
+  if(!currentEvent) { ed.innerHTML = '<p class="muted">Lägg till ett event i vänsterspalten för att börja.</p>'; return; }
+
+  var head = document.createElement('div');
+  head.className = 'row';
+  var h = document.createElement('h2');
+  h.textContent = currentEvent;
+  h.style.cssText = 'margin:0;font-size:20px;color:var(--gold)';
+  head.appendChild(h);
+
+  var sel = document.createElement('select');
+  ['duo','generic1','generic2','intense','analytic'].forEach(function(v){
+    var o = document.createElement('option');
+    o.value = v; o.textContent = 'Röst: ' + v;
+    if((state.config.eventVoice[currentEvent]||'duo')===v) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.onchange = function(){
+    if(sel.value==='duo') delete state.config.eventVoice[currentEvent];
+    else state.config.eventVoice[currentEvent] = sel.value;
+    saveConfig(true);
+    toast('Röst sparad. OBS: redan genererade filer behåller gamla rösten — använd "Radera filer" och generera om.', 5000);
+  };
+  head.appendChild(sel);
+
+  var del = document.createElement('button');
+  del.className = 'small';
+  del.textContent = 'Radera filer för detta event';
+  del.onclick = async function(){
+    if(!confirm('Radera alla mp3-filer för ' + currentEvent + '? (replikerna behålls)')) return;
+    var r = await api('/api/delete-event-files', {event: currentEvent});
+    toast(r.deleted + ' filer raderade');
+    load();
+  };
+  head.appendChild(del);
+  ed.appendChild(head);
+
+  var note = document.createElement('p');
+  note.className = 'muted';
+  note.textContent = 'Grön prick = mp3 finns. Ordningen styr filnamnet (rad 1 = _01) — lägg helst till nya repliker sist, ta inte bort mitt i om filer redan genererats.';
+  ed.appendChild(note);
+
+  // AI-generering av repliker
+  var aiBox = document.createElement('div');
+  aiBox.style.cssText = 'border:1px solid var(--gold-dim);border-radius:6px;padding:12px 14px;margin-bottom:16px;background:rgba(200,155,60,.05)';
+  var aiLabel = document.createElement('div');
+  aiLabel.style.cssText = 'color:var(--gold);font-weight:600;margin-bottom:8px';
+  aiLabel.textContent = '✨ Låt AI:n skriva replikerna';
+  aiBox.appendChild(aiLabel);
+  var descInp = document.createElement('input');
+  descInp.type = 'text';
+  descInp.placeholder = 'Beskriv eventet kort, t.ex. "our team killed the tormentor, a tough neutral objective that drops a shard"';
+  descInp.value = state.config.eventDesc && state.config.eventDesc[currentEvent] || '';
+  descInp.style.cssText = 'width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:4px;margin-bottom:8px';
+  descInp.onchange = function(){
+    if(!state.config.eventDesc) state.config.eventDesc = {};
+    state.config.eventDesc[currentEvent] = descInp.value;
+    saveConfig(true);
+  };
+  aiBox.appendChild(descInp);
+  var aiRow = document.createElement('div');
+  aiRow.className = 'row';
+  aiRow.style.margin = '0';
+  var cntSel = document.createElement('select');
+  [4,6,8,10,12].forEach(function(n){
+    var o = document.createElement('option');
+    o.value = n; o.textContent = n + ' repliker';
+    if(n===8) o.selected = true;
+    cntSel.appendChild(o);
+  });
+  aiRow.appendChild(cntSel);
+  var aiBtn = document.createElement('button');
+  aiBtn.className = 'act';
+  aiBtn.textContent = 'Generera repliker';
+  aiBtn.onclick = async function(){
+    aiBtn.disabled = true;
+    aiBtn.textContent = 'AI:n skriver…';
+    try {
+      var r = await api('/api/suggest-lines', {
+        event: currentEvent,
+        description: descInp.value,
+        count: parseInt(cntSel.value, 10),
+        existing: state.lines[currentEvent]
+      });
+      state.lines[currentEvent] = state.lines[currentEvent].concat(r.lines);
+      await saveLines();
+      toast(r.lines.length + ' repliker tillagda — läs igenom, redigera fritt, ta bort de svaga');
+      render();
+    } catch(e){ toast('Fel: ' + e.message, 6000); }
+    aiBtn.disabled = false;
+    aiBtn.textContent = 'Generera repliker';
+  };
+  aiRow.appendChild(aiBtn);
+  aiBox.appendChild(aiRow);
+  ed.appendChild(aiBox);
+
+  state.lines[currentEvent].forEach(function(text, i){
+    var row = document.createElement('div');
+    row.className = 'line';
+    var dot = document.createElement('div');
+    dot.className = 'dot ' + (hasFile(currentEvent,i)?'done':'todo');
+    dot.title = fileName(currentEvent,i);
+    row.appendChild(dot);
+    var inp = document.createElement('input');
+    inp.type = 'text';
+    inp.value = text;
+    inp.onchange = function(){ state.lines[currentEvent][i] = inp.value; saveLines(); };
+    row.appendChild(inp);
+
+    if(hasFile(currentEvent,i)) {
+      var play = document.createElement('button');
+      play.className = 'small';
+      play.textContent = '▶';
+      play.title = 'Spela genererad fil';
+      play.onclick = function(){ playUrl('/bank/' + fileName(currentEvent,i)); };
+      row.appendChild(play);
+    } else {
+      var prev = document.createElement('button');
+      prev.className = 'small';
+      prev.textContent = '👂';
+      prev.title = 'Förhandslyssna (förbrukar tecken, sparas inte)';
+      prev.onclick = async function(){
+        prev.disabled = true;
+        try {
+          var res = await api('/api/preview', {text: inp.value, event: currentEvent, index: i}, true);
+          var blob = await res.blob();
+          playUrl(URL.createObjectURL(blob));
+        } catch(e){ toast('Fel: ' + e.message); }
+        prev.disabled = false;
+      };
+      row.appendChild(prev);
+    }
+
+    var rm = document.createElement('button');
+    rm.className = 'small';
+    rm.textContent = '✕';
+    rm.title = 'Ta bort replik';
+    rm.onclick = function(){
+      state.lines[currentEvent].splice(i,1);
+      saveLines();
+      render();
+    };
+    row.appendChild(rm);
+    ed.appendChild(row);
+  });
+
+  var addRow = document.createElement('div');
+  addRow.className = 'row';
+  var addInp = document.createElement('input');
+  addInp.type = 'text';
+  addInp.placeholder = 'Ny replik… (Enter för att lägga till)';
+  addInp.style.cssText = 'flex:1;padding:8px 10px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:4px';
+  addInp.onkeydown = function(e){
+    if(e.key==='Enter' && addInp.value.trim()){
+      state.lines[currentEvent].push(addInp.value.trim());
+      addInp.value = '';
+      saveLines();
+      render();
+    }
+  };
+  addRow.appendChild(addInp);
+  ed.appendChild(addRow);
+}
+
+function playUrl(url) {
+  if(previewAudio) previewAudio.pause();
+  previewAudio = new Audio(url);
+  previewAudio.play();
+}
+
+async function saveLines() { await api('/api/lines', state.lines); }
+async function saveConfig(silent) { await api('/api/config', state.config); if(!silent) toast('Röster sparade'); }
+
+function addEvent() {
+  var name = document.getElementById('newev').value.trim().toLowerCase().replace(/[^a-z0-9_]/g,'_');
+  if(!name) return;
+  if(state.lines[name]) { toast('Eventet finns redan'); return; }
+  state.lines[name] = [];
+  document.getElementById('newev').value = '';
+  currentEvent = name;
+  saveLines();
+  render();
+}
+
+async function generateMissing() {
+  var todo = [];
+  Object.keys(state.lines).forEach(function(ev){
+    state.lines[ev].forEach(function(_,i){ if(!hasFile(ev,i)) todo.push({event:ev,index:i}); });
+  });
+  if(!todo.length) { toast('Allt är redan genererat!'); return; }
+  var btn = document.getElementById('genbtn');
+  btn.disabled = true;
+  var prog = document.getElementById('progress');
+  prog.style.display = 'block';
+  var failed = 0;
+  for(var i=0;i<todo.length;i++){
+    document.getElementById('ptext').textContent = 'Genererar ' + (i+1) + ' / ' + todo.length + ': ' + fileName(todo[i].event, todo[i].index);
+    document.getElementById('pfill').style.width = Math.round(i/todo.length*100) + '%';
+    try { await api('/api/generate-one', todo[i]); }
+    catch(e){ failed++; toast('Fel på ' + fileName(todo[i].event,todo[i].index) + ': ' + e.message, 5000); }
+    await new Promise(function(r){ setTimeout(r, 1200); });
+  }
+  document.getElementById('pfill').style.width = '100%';
+  document.getElementById('ptext').textContent = 'Klart: ' + (todo.length-failed) + ' genererade' + (failed ? ', ' + failed + ' misslyckades' : '');
+  btn.disabled = false;
+  load();
+}
+
+load();
+</script>
+</body>
+</html>

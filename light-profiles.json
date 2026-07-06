@@ -1,0 +1,284 @@
+{
+  "match_start": {
+    "priority": 5,
+    "variants": [
+      {
+        "name": "match_start_light_a",
+        "color": "#00E5FF",
+        "pattern": "fade",
+        "intensity": 60,
+        "duration_s": 5,
+        "mood": "electric anticipation building up"
+      },
+      {
+        "name": "match_start_light_b",
+        "color": "#00BFFF",
+        "pattern": "pulse",
+        "intensity": 55,
+        "duration_s": 4,
+        "mood": "steady heartbeat before battle"
+      },
+      {
+        "name": "match_start_light_c",
+        "color": "#40C4FF",
+        "pattern": "flash",
+        "intensity": 65,
+        "duration_s": 3,
+        "mood": "sharp crackle of readiness"
+      }
+    ]
+  },
+  "first_blood": {
+    "priority": 7,
+    "variants": [
+      {
+        "name": "first_blood_light_a",
+        "color": "#FF0000",
+        "pattern": "flash",
+        "intensity": 85,
+        "duration_s": 4,
+        "mood": "sudden violent crimson shock"
+      },
+      {
+        "name": "first_blood_light_b",
+        "color": "#D50000",
+        "pattern": "strobe",
+        "intensity": 80,
+        "duration_s": 3,
+        "mood": "rapid blood-red jolts"
+      },
+      {
+        "name": "first_blood_light_c",
+        "color": "#FF1744",
+        "pattern": "pulse",
+        "intensity": 75,
+        "duration_s": 4,
+        "mood": "hot pulsing adrenaline surge"
+      }
+    ]
+  },
+  "tower_fall": {
+    "priority": 3,
+    "variants": [
+      {
+        "name": "tower_fall_light_a",
+        "color": "#FF8C00",
+        "pattern": "fade",
+        "intensity": 45,
+        "duration_s": 3,
+        "mood": "warm rubble settling glow"
+      },
+      {
+        "name": "tower_fall_light_b",
+        "color": "#FFA726",
+        "pattern": "pulse",
+        "intensity": 40,
+        "duration_s": 3,
+        "mood": "gentle amber collapse rumble"
+      },
+      {
+        "name": "tower_fall_light_c",
+        "color": "#FB8C00",
+        "pattern": "flash",
+        "intensity": 50,
+        "duration_s": 2,
+        "mood": "brief burnt-orange impact"
+      }
+    ]
+  },
+  "killstreak_3": {
+    "priority": 3,
+    "variants": [
+      {
+        "name": "killstreak_3_light_a",
+        "color": "#FF5252",
+        "pattern": "pulse",
+        "intensity": 45,
+        "duration_s": 3,
+        "mood": "warming embers of momentum"
+      },
+      {
+        "name": "killstreak_3_light_b",
+        "color": "#FF6E40",
+        "pattern": "flash",
+        "intensity": 50,
+        "duration_s": 2,
+        "mood": "quick spark of heat"
+      }
+    ]
+  },
+  "killstreak_5": {
+    "priority": 6,
+    "variants": [
+      {
+        "name": "killstreak_5_light_a",
+        "color": "#FF3D00",
+        "pattern": "strobe",
+        "intensity": 70,
+        "duration_s": 4,
+        "mood": "blazing unstoppable fire streak"
+      },
+      {
+        "name": "killstreak_5_light_b",
+        "color": "#FF1744",
+        "pattern": "pulse",
+        "intensity": 75,
+        "duration_s": 5,
+        "mood": "relentless burning red drumbeat"
+      },
+      {
+        "name": "killstreak_5_light_c",
+        "color": "#F44336",
+        "pattern": "flash",
+        "intensity": 70,
+        "duration_s": 4,
+        "mood": "fierce escalating crimson bursts"
+      }
+    ]
+  },
+  "rampage": {
+    "priority": 10,
+    "variants": [
+      {
+        "name": "rampage_light_a",
+        "color": "#FF0000",
+        "pattern": "strobe",
+        "intensity": 100,
+        "duration_s": 8,
+        "mood": "total blood-red arena chaos"
+      },
+      {
+        "name": "rampage_light_b",
+        "color": "#C62828",
+        "pattern": "flash",
+        "intensity": 95,
+        "duration_s": 7,
+        "mood": "savage pounding crimson fury"
+      },
+      {
+        "name": "rampage_light_c",
+        "color": "#FF1744",
+        "pattern": "strobe",
+        "intensity": 100,
+        "duration_s": 9,
+        "mood": "blinding relentless massacre celebration"
+      }
+    ]
+  },
+  "roshan": {
+    "priority": 6,
+    "variants": [
+      {
+        "name": "roshan_light_a",
+        "color": "#8E24AA",
+        "pattern": "pulse",
+        "intensity": 70,
+        "duration_s": 5,
+        "mood": "deep mythic purple power"
+      },
+      {
+        "name": "roshan_light_b",
+        "color": "#7B1FA2",
+        "pattern": "fade",
+        "intensity": 65,
+        "duration_s": 6,
+        "mood": "ancient aegis aura rising"
+      },
+      {
+        "name": "roshan_light_c",
+        "color": "#AB47BC",
+        "pattern": "flash",
+        "intensity": 70,
+        "duration_s": 4,
+        "mood": "arcane violet victory strike"
+      }
+    ]
+  },
+  "victory": {
+    "priority": 10,
+    "variants": [
+      {
+        "name": "victory_light_a",
+        "color": "#FFD700",
+        "pattern": "strobe",
+        "intensity": 100,
+        "duration_s": 12,
+        "mood": "golden arena-erupting triumph blaze"
+      },
+      {
+        "name": "victory_light_b",
+        "color": "#FFC107",
+        "pattern": "pulse",
+        "intensity": 95,
+        "duration_s": 10,
+        "mood": "warm championship glory waves"
+      },
+      {
+        "name": "victory_light_c",
+        "color": "#FFAB00",
+        "pattern": "flash",
+        "intensity": 100,
+        "duration_s": 11,
+        "mood": "explosive golden confetti storm"
+      }
+    ]
+  },
+  "defeat": {
+    "priority": 9,
+    "variants": [
+      {
+        "name": "defeat_light_a",
+        "color": "#1A237E",
+        "pattern": "fade",
+        "intensity": 30,
+        "duration_s": 8,
+        "mood": "slow cold blue heartbreak"
+      },
+      {
+        "name": "defeat_light_b",
+        "color": "#283593",
+        "pattern": "pulse",
+        "intensity": 25,
+        "duration_s": 9,
+        "mood": "dim mournful fading heartbeat"
+      },
+      {
+        "name": "defeat_light_c",
+        "color": "#0D1B4C",
+        "pattern": "fade",
+        "intensity": 20,
+        "duration_s": 10,
+        "mood": "lights dying into silence"
+      }
+    ]
+  },
+  "tormentor_taken": {
+    "priority": 5,
+    "variants": [
+      {
+        "name": "tormentor_taken_light_a",
+        "color": "#00E5D0",
+        "pattern": "pulse",
+        "intensity": 60,
+        "duration_s": 4,
+        "mood": "shimmering shard energy released"
+      },
+      {
+        "name": "tormentor_taken_light_b",
+        "color": "#18FFFF",
+        "pattern": "flash",
+        "intensity": 65,
+        "duration_s": 3,
+        "mood": "crystalline burst finding home"
+      },
+      {
+        "name": "tormentor_taken_light_c",
+        "color": "#64FFDA",
+        "pattern": "fade",
+        "intensity": 55,
+        "duration_s": 5,
+        "mood": "gentle magical shard bestowal"
+      }
+    ]
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "match_start": [
+    "Here we go. Lock it in — the game is LIVE.",
+    "Strategies set... nerves steady... let the battle begin!",
+    "It all starts right here. Good luck — you'll need it.",
+    "The horn sounds. Dreamhack Skyrup is LIVE!",
+    "Deep breaths, everyone... it's game time.",
+    "The draft is done. Now... we find out who wanted it more.",
+    "All eyes on the map. Here — we — GO!",
+    "Another chapter begins. Make it one worth remembering."
+  ],
+  "first_blood": [
+    "FIRST BLOOD! And we are UNDERWAY!",
+    "First blood drawn — that's how you set the tone!",
+    "Oh! First blood already? Someone came to PLAY.",
+    "And there it is... first blood. The floodgates are open.",
+    "FIRST BLOOD! What a start!",
+    "Blood has been spilled — and it will NOT be the last.",
+    "First blood! You could feel that one coming.",
+    "That's the opener! First blood on the board!",
+    "First blood... and the crowd goes WILD!",
+    "A statement kill! First blood!",
+    "First blood! Somebody's laning phase just got a whole lot worse.",
+    "And FIRST BLOOD goes up on the board — beautiful execution!"
+  ],
+  "tower_fall": [
+    "And the tower CRUMBLES!",
+    "Down goes the tower! The map just opened up.",
+    "Another tower bites the dust!",
+    "That tower is GONE — real estate changing hands!",
+    "Timber! The tower falls!",
+    "The tower falls... and the pressure is mounting.",
+    "Structure down! Someone's base is getting nervous.",
+    "And that is a TOWER — gold in the bank!",
+    "The tower didn't stand a chance!",
+    "Brick by brick... the defenses are coming apart."
+  ],
+  "killstreak_3": [
+    "That's THREE in a row — someone's heating up!",
+    "A killing spree! Keep your distance!",
+    "Three kills without dying... the confidence is building.",
+    "Killing spree! This one's feeling dangerous.",
+    "Three straight! The snowball is rolling.",
+    "A spree is forming — can anyone stop it?",
+    "Three kills deep and hungry for more!",
+    "The streak begins... three and counting!"
+  ],
+  "killstreak_5": [
+    "UNSTOPPABLE! Five kills and climbing!",
+    "FIVE in a row! This is getting out of hand!",
+    "Someone call for backup — that's FIVE straight!",
+    "An absolute MENACE — five kills without dying!",
+    "The streak hits FIVE... this is now a problem.",
+    "Five straight kills! The map belongs to them!",
+    "DOMINATING! Five and counting!",
+    "Five kills! At this point... just run."
+  ],
+  "rampage": [
+    "RAMPAAAAGE! ARE YOU KIDDING ME?!",
+    "RAMPAGE! I don't believe what I just saw!",
+    "That... is... a RAMPAGE! Absolute annihilation!",
+    "RAMPAGE! Tell your friends. Tell your family. That just happened.",
+    "A RAMPAGE! One player. Five kills. TOTAL destruction!",
+    "RAMPAGE! This is the stuff of LEGENDS!",
+    "Oh my GOODNESS — RAMPAGE!",
+    "RAMPAGE! Somebody clip that — RIGHT NOW!"
+  ],
+  "roshan": [
+    "Roshan is DOWN! The Aegis changes everything!",
+    "The big guy falls — Aegis secured!",
+    "Roshan has been slain... and the game just tilted.",
+    "Aegis of the Immortal — claimed!",
+    "Roshan falls! Two lives are better than one!",
+    "The pit has been emptied — Roshan is down!"
+  ],
+  "victory": [
+    "VICTORY! The Ancient falls and the arena ERUPTS!",
+    "IT'S OVER! What a performance!",
+    "GG! The throne is DOWN — victory is yours!",
+    "They've DONE IT! Absolute scenes!",
+    "The Ancient explodes... and that is GAME!",
+    "Victory! Write it in the history books!",
+    "GG WP! A win to remember!",
+    "And THAT is how it's done — VICTORY!",
+    "The final blow lands... WINNERS!",
+    "From draft to destruction — a flawless plan pays off. VICTORY!"
+  ],
+  "defeat": [
+    "And the Ancient falls... it's a heartbreaker tonight.",
+    "GG. Not the ending we wanted... but the war continues.",
+    "Defeat... but champions are built in nights like these.",
+    "It slips away... this one is going to sting.",
+    "The throne crumbles. Shake it off — the next draft awaits.",
+    "A hard-fought loss. Heads high — you gave it everything.",
+    "Defeat tonight... revenge tomorrow.",
+    "The Ancient is lost. But the story? Far from over.",
+    "GG... they take this one. Reset. Refocus. Run it back.",
+    "Not tonight... but every legend has a chapter like this."
+  ],
+  "tormentor_taken": [
+    "The Tormentor FALLS... and that shard finds a home!",
+    "Down goes the Tormentor - someone just got a MASSIVE upgrade!",
+    "They cracked it open... free shard, and the tempo shifts!",
+    "The Tormentor is DEAD - that's raw power in someone's pocket now!",
+    "Oh they took it clean... shard secured, no contest!",
+    "That's the Tormentor gone - and this hero just leveled UP!",
+    "Punished by the Tormentor no more... they claim their PRIZE!",
+    "Shard's dropping... shard's dropping - and it's THEIRS!"
+  ]
+}

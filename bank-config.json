@@ -1,0 +1,17 @@
+{
+  "voices": {
+    "generic1": "L9dOHOIEZZqpIpVTGRMX",
+    "generic2": "BKWNPLMZRm7a8Wnez453",
+    "intense": "dbHu481wImqzDVSDOkln",
+    "analytic": "thxIt8KyvIvmcMAH0cUP"
+  },
+  "eventVoice": {
+    "killstreak_5": "intense",
+    "rampage": "intense",
+    "item_rapier": "intense",
+    "defeat": "analytic"
+  },
+  "eventDesc": {
+    "tormentor_taken": "tormentor killed and a powerfull shard is dropped to one hero. "
+  }
+}
