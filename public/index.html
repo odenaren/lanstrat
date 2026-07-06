@@ -955,9 +955,9 @@ async function generateStrategy() {
     Object.values(m.draft).forEach(function(h){ if(h && heroesToday.indexOf(h) === -1) heroesToday.push(h); });
   });
 
-  // Säsongsfacit per spelare — för personliga briefingar och hype
+  // Säsongsfacit per spelare — för personliga briefingar, hype och fight card
   const gameNo = recentMatches.length + 1;
-  const seasonCtx = active.map(function(p){
+  const seasonStats = active.map(function(p){
     var pn = normalizePlayer(p.name);
     var w = 0, l = 0, wonOn = {}, lostOn = {}, results = [];
     memoryMatches.forEach(function(m){
@@ -977,14 +977,17 @@ async function generateStrategy() {
       else if(results[i] === sType){ streak++; }
       else break;
     }
-    var parts = [p.name + ': ' + w + 'V-' + l + 'F'];
-    if(streak >= 2) parts.push(streak + ' raka ' + (sType === 'win' ? 'vinster' : 'förluster'));
-    var lostList = Object.keys(lostOn);
-    if(lostList.length) parts.push('förlorat på: ' + lostList.slice(0,3).join(', '));
-    var wonList = Object.keys(wonOn).sort(function(a,b){ return wonOn[b]-wonOn[a]; });
-    if(wonList.length) parts.push('vunnit på: ' + wonList.slice(0,3).join(', '));
+    var wonList = Object.keys(wonOn).sort(function(a,b){ return wonOn[b]-wonOn[a]; }).slice(0,3);
+    return { name: p.name, w: w, l: l, streak: streak, sType: sType, lostOn: Object.keys(lostOn).slice(0,3), wonOn: wonList };
+  });
+  const seasonCtx = seasonStats.map(function(s){
+    var parts = [s.name + ': ' + s.w + 'V-' + s.l + 'F'];
+    if(s.streak >= 2) parts.push(s.streak + ' raka ' + (s.sType === 'win' ? 'vinster' : 'förluster'));
+    if(s.lostOn.length) parts.push('förlorat på: ' + s.lostOn.join(', '));
+    if(s.wonOn.length) parts.push('vunnit på: ' + s.wonOn.join(', '));
     return parts.join(' | ');
   }).join('\n');
+  const prevNames = recentMatches.map(function(m){ return m.name; }).filter(Boolean).slice(0, 40);
 
   const poolSummary=active.map(p=>{
     const playerIdx = players.indexOf(p);
@@ -1081,6 +1084,7 @@ async function generateStrategy() {
     + '\n\nHERO POOLS:\n' + poolSummary
     + '\n\nLANING-KONTEXT:\n' + getLaningCtx(n)
     + '\n\nSÄSONGSFACIT (detta är match nummer ' + gameNo + ' denna säsong):\n' + seasonCtx
+    + (prevNames.length ? '\n\nTIDIGARE STRATEGINAMN (studera monstren och VARIERA: anvand INTE samma teman, metaforer eller nyckelord som dominerar listan): ' + prevNames.join(', ') : '')
     + '\n\nPRESENTATIONSSTIL: ' + chosenStyle.instruction
     + '\n\nVIKTIG REGEL: Undvik nyligen spelade hjaltar per spelare (listas ovan). Prioritera variation.'
     + (heroesToday.length ? '\n\nHJALTAR SOM REDAN SPELATS IDAG (oavsett spelare): ' + heroesToday.join(', ') + '. Valj i forsta hand hjaltar som INTE finns i listan, dar poolerna tillater det.' : '')
@@ -1096,9 +1100,12 @@ async function generateStrategy() {
     + '\n\nBRIEFING_EN_START'
     + '\n[The same captain briefing translated to ENGLISH with energetic esports broadcast tone. MAX 4 sentences. Keep player names and hero names exactly as they are.]'
     + '\nBRIEFING_EN_END'
-    + '\n\nHYPE_START'
-    + '\n[2-3 sentences in ENGLISH. Epic esports announcer intro before the match, in the style of a TI grand final caster. Use the match number, streaks or records from the season stats for drama. Build tension before the draft. DO NOT reveal any heroes or anything about the strategy - this is shown BEFORE the draft is revealed.]'
-    + '\nHYPE_END'
+    + '\n\nHYPE_SPOKEN_START'
+    + '\n[SPOKEN announcer script in ENGLISH, 3-5 short sentences. This is READ ALOUD by a deep-voiced esports announcer - write for the EAR, not the eye. Use punctuation for pacing: ellipses (...) for dramatic pauses, dashes for beats, short punchy sentences, occasional CAPS for one emphasized word. TI grand final energy. Use the match number, streaks or records for drama. DO NOT reveal any heroes or the strategy.]'
+    + '\nHYPE_SPOKEN_END'
+    + '\n\nHYPE_TAGLINE_START'
+    + '\n[3-6 word ENGLISH tagline for the broadcast graphics, like a boxing fight card. Example style: "The streak ends tonight" or "Redemption has a number". No heroes.]'
+    + '\nHYPE_TAGLINE_END'
     + '\n\nSedan strategin - skriv på svenska, konkret och handlingsbart. Låt presentationsstilen styra struktur och längd helt. Ingen fast mall — stilen avgör allt. Inkludera spelplan för early, mid och late game samt win condition, men forma det efter stilen.'
 
   try {
@@ -1147,12 +1154,17 @@ async function generateStrategy() {
       briefingEn=briefEnMatch[1].trim();
       cleanText=cleanText.replace(/BRIEFING_EN_START[\s\S]*?BRIEFING_EN_END\s*/,'').trim();
     }
-    // Extract hype intro
-    let hype='';
-    const hypeMatch=cleanText.match(/HYPE_START\s*([\s\S]*?)\s*HYPE_END/);
-    if(hypeMatch){
-      hype=hypeMatch[1].trim();
-      cleanText=cleanText.replace(/HYPE_START[\s\S]*?HYPE_END\s*/,'').trim();
+    // Extract spoken hype script + tagline
+    let hypeSpoken='', hypeTagline='';
+    const hsMatch=cleanText.match(/HYPE_SPOKEN_START\s*([\s\S]*?)\s*HYPE_SPOKEN_END/);
+    if(hsMatch){
+      hypeSpoken=hsMatch[1].trim();
+      cleanText=cleanText.replace(/HYPE_SPOKEN_START[\s\S]*?HYPE_SPOKEN_END\s*/,'').trim();
+    }
+    const htMatch=cleanText.match(/HYPE_TAGLINE_START\s*([\s\S]*?)\s*HYPE_TAGLINE_END/);
+    if(htMatch){
+      hypeTagline=htMatch[1].trim();
+      cleanText=cleanText.replace(/HYPE_TAGLINE_START[\s\S]*?HYPE_TAGLINE_END\s*/,'').trim();
     }
 
     // Save match to server
@@ -1161,7 +1173,9 @@ async function generateStrategy() {
       strategy:cleanText,
       briefing:briefing,
       briefingEn:briefingEn,
-      hype:hype,
+      hypeSpoken:hypeSpoken,
+      hypeTagline:hypeTagline,
+      fightCard:seasonStats.map(function(s){ return {name:s.name, w:s.w, l:s.l, streak:s.streak, sType:s.sType}; }),
       captainNotes:captainNotes,
       draft:currentDraft,
       name:strategyName,
