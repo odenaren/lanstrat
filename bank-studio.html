@@ -123,7 +123,7 @@ function render() {
 function renderVoices() {
   var box = document.getElementById('voices');
   box.innerHTML = '';
-  ['generic1','generic2','intense','analytic'].forEach(function(k){
+  ['generic1','generic2','intense','analytic','analytic2','host'].forEach(function(k){
     var lab = document.createElement('label');
     lab.textContent = k + ':';
     var inp = document.createElement('input');
