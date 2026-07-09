@@ -298,6 +298,11 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
       </div>
     </div>
   </div>
+  <!-- OpenDota matchstatistik (visas bara for lankade matcher) -->
+  <div class="card" id="opendota-stats-card" style="display:none;margin-top:20px">
+    <div class="section-title">Matchstatistik <span style="font-size:11px;color:var(--text-dim);text-transform:none;letter-spacing:0;font-family:Inter,sans-serif;font-weight:400">— verifierad data från OpenDota</span></div>
+    <div id="opendota-stats-content"><div style="color:var(--text-dim);text-align:center;padding:32px">Hämtar matchdata…</div></div>
+  </div>
 </div>
 
 <!-- MODAL -->
@@ -1519,6 +1524,15 @@ async function loadHistory() {
     const date=new Date(m.createdAt).toLocaleString('sv-SE',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
     const playerNames=(m.players||[]).map(p=>p.name).join(', ');
     const hasItems=!!m.items;
+    // Lankad till riktig OpenDota-match => visa verifierat resultat istallet for manuella knappar
+    var resultCell;
+    if(m.openDotaMatchId){
+      var vr = m.matchResult==='win';
+      resultCell = '<span title="Verifierad via OpenDota (konfidens: '+(m.matchConfidence||'?')+')" style="padding:4px 12px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border:1px solid '+(vr?'#27ae6088':'#c0392b88')+';background:'+(vr?'rgba(39,174,96,.15)':'rgba(231,76,60,.12)')+';color:'+(vr?'#2ecc71':'#e74c3c')+'">'+(vr?'Vinst':'Förlust')+' ✓</span>';
+    } else {
+      resultCell = '<button onclick="event.stopPropagation();setMatchResult(\''+m.id+'\',\'win\')" style="padding:3px 10px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:all .15s;border:1px solid #27ae6055;background:'+(m.result==='win'?'rgba(39,174,96,.3)':'none')+';color:'+(m.result==='win'?'#2ecc71':'#27ae6088')+'">✓</button>'
+        + '<button onclick="event.stopPropagation();setMatchResult(\''+m.id+'\',\'loss\')" style="padding:3px 10px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:all .15s;border:1px solid #c0392b55;background:'+(m.result==='loss'?'rgba(231,76,60,.2)':'none')+';color:'+(m.result==='loss'?'#e74c3c':'#c0392b88')+'">✗</button>';
+    }
     const el=document.createElement('div');
     el.className='match-entry';
     el.innerHTML=`
@@ -1534,8 +1548,7 @@ async function loadHistory() {
         }).join('')}</div>
       </div>
       <div style="display:flex;gap:5px;align-items:center" onclick="event.stopPropagation()">
-        <button onclick="event.stopPropagation();setMatchResult('${m.id}','win')" style="padding:3px 10px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:all .15s;border:1px solid #27ae6055;background:${m.result==='win'?'rgba(39,174,96,.3)':'none'};color:${m.result==='win'?'#2ecc71':'#27ae6088'}">✓</button>
-        <button onclick="event.stopPropagation();setMatchResult('${m.id}','loss')" style="padding:3px 10px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:all .15s;border:1px solid #c0392b55;background:${m.result==='loss'?'rgba(231,76,60,.2)':'none'};color:${m.result==='loss'?'#e74c3c':'#c0392b88'}">✗</button>
+        ${resultCell}
         <button onclick="event.stopPropagation();replayOnTv('${m.id}')" title="Visa på TV igen" style="padding:8px 14px;border-radius:4px;font-family:Rajdhani,sans-serif;font-size:16px;font-weight:700;cursor:pointer;border:1px solid var(--gold-dim);background:rgba(200,155,60,.08);color:var(--gold);min-width:44px;min-height:36px">📺</button>
       </div>
       <span class="match-entry-badge ${hasItems?'badge-has-items':'badge-no-items'}">${hasItems?'Items klara':'Lägg till motståndare'}</span>
@@ -1575,6 +1588,8 @@ function statBar(label, sub, count, total, w, l) {
     + '<div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:var(--gold);border-radius:3px"></div></div>'
     + '</div>';
 }
+// Verifierat resultat fran OpenDota har foretrade over manuellt ifyllt
+function effResult(m) { return m.matchResult || m.result; }
 async function loadStats() {
   var el = document.getElementById('stats-content');
   el.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:48px">Laddar…</div>';
@@ -1585,8 +1600,8 @@ async function loadStats() {
     return;
   }
   var total = matches.length;
-  var wins = matches.filter(function(m){return m.result==='win';}).length;
-  var losses = matches.filter(function(m){return m.result==='loss';}).length;
+  var wins = matches.filter(function(m){return effResult(m)==='win';}).length;
+  var losses = matches.filter(function(m){return effResult(m)==='loss';}).length;
   var wildcards = matches.filter(function(m){return m.wildcard;}).length;
   var decided = wins + losses;
   var winrate = decided ? Math.round(wins/decided*100) : null;
@@ -1604,8 +1619,8 @@ async function loadStats() {
       if(!playerStats[pl]) playerStats[pl] = {matches:0, heroes:{}, wins:0, losses:0};
       playerStats[pl].matches++;
       playerStats[pl].heroes[h] = (playerStats[pl].heroes[h]||0)+1;
-      if(m.result==='win') playerStats[pl].wins++;
-      if(m.result==='loss') playerStats[pl].losses++;
+      if(effResult(m)==='win') playerStats[pl].wins++;
+      if(effResult(m)==='loss') playerStats[pl].losses++;
     });
   });
   var uniqueHeroes = Object.keys(heroCount).length;
@@ -1617,13 +1632,13 @@ async function loadStats() {
     var a = m.archetype || '_unknown';
     if(!archCount[a]) archCount[a] = {count:0, w:0, l:0};
     archCount[a].count++;
-    if(m.result==='win') archCount[a].w++;
-    if(m.result==='loss') archCount[a].l++;
+    if(effResult(m)==='win') archCount[a].w++;
+    if(effResult(m)==='loss') archCount[a].l++;
     var s = m.style || 'standard';
     if(!styleCount[s]) styleCount[s] = {count:0, w:0, l:0};
     styleCount[s].count++;
-    if(m.result==='win') styleCount[s].w++;
-    if(m.result==='loss') styleCount[s].l++;
+    if(effResult(m)==='win') styleCount[s].w++;
+    if(effResult(m)==='loss') styleCount[s].l++;
   });
 
   var html = '';
@@ -1695,7 +1710,7 @@ async function loadStats() {
   matches.forEach(function(m){
     var info = m.archetype ? ARCHETYPE_LABELS[m.archetype] : null;
     var arch = (info ? info.name : (m.archetype || '—')) + (m.archetypeGuessed ? ' 🔍' : '');
-    var res = m.result==='win' ? '<span style="color:#2ecc71">Vinst</span>' : m.result==='loss' ? '<span style="color:#e74c3c">Förlust</span>' : '<span style="color:var(--text-dim)">—</span>';
+    var res = effResult(m)==='win' ? '<span style="color:#2ecc71">Vinst</span>' : effResult(m)==='loss' ? '<span style="color:#e74c3c">Förlust</span>' : '<span style="color:var(--text-dim)">—</span>';
     html += '<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px;color:var(--text-dim)">'+(m.gameNumber||'')+'</td><td style="padding:6px 8px;font-weight:600;color:'+(m.wildcard?'#9b59b6':'var(--gold)')+'">'+(m.name||'(namnlös)')+(m.wildcard?' 🎲':'')+'</td><td style="padding:6px 8px">'+arch+'</td><td style="padding:6px 8px;color:var(--text-dim)">'+(m.style||'standard')+'</td><td style="padding:6px 8px">'+res+'</td></tr>';
   });
   html += '</tbody></table></div>';
@@ -2017,7 +2032,12 @@ async function openDetail(id) {
 
   // Result buttons
   var resultEl = document.getElementById('match-result-btns');
-  if(resultEl) {
+  if(resultEl && m.openDotaMatchId) {
+    // Lankad till riktig match — visa verifierat resultat, inga manuella knappar
+    var vwin = m.matchResult==='win';
+    resultEl.innerHTML = '<span title="OpenDota match '+m.openDotaMatchId+'" style="padding:7px 18px;border-radius:4px;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border:1px solid '+(vwin?'#27ae6088':'#c0392b88')+';background:'+(vwin?'rgba(39,174,96,.2)':'rgba(231,76,60,.15)')+';color:'+(vwin?'#2ecc71':'#e74c3c')+'">'+(vwin?'Vinst':'Förlust')+' — verifierad</span>'
+      + '<span style="align-self:center;font-size:11px;color:var(--text-dim)">konfidens: '+(m.matchConfidence||'?')+'</span>';
+  } else if(resultEl) {
     resultEl.innerHTML = '';
     var winBtn = document.createElement('button');
     winBtn.style.cssText = 'padding:7px 18px;border-radius:4px;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;border:1px solid #27ae6055;background:'+(m.result==='win'?'rgba(39,174,96,.3)':'none')+';color:'+(m.result==='win'?'#2ecc71':'#27ae60');
@@ -2111,6 +2131,202 @@ async function openDetail(id) {
   }
   document.querySelectorAll('.page').forEach(function(pg){ pg.classList.remove('active'); });
   document.getElementById('page-detail').classList.add('active');
+
+  // OpenDota-statistik for lankade matcher
+  var odCard = document.getElementById('opendota-stats-card');
+  if(m.openDotaMatchId) {
+    odCard.style.display = 'block';
+    document.getElementById('opendota-stats-content').innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:32px">Hämtar matchdata…</div>';
+    loadOpenDotaStats(m);
+  } else {
+    odCard.style.display = 'none';
+  }
+}
+
+// ===================== OPENDOTA MATCHSTATISTIK =====================
+// Tidsforvantningar per arketyp for "strategi vs verklighet"
+var ARCHETYPE_TIME_EXPECTATION = {
+  deathball: { maxMin: 25, claim: 'vinn före 25 min' },
+  snowball:  { maxMin: 25, claim: 'avgör tidigt, före ~25 min' },
+  lategame:  { minMin: 35, claim: 'farma lugnt, explodera vid 35+ min' }
+};
+
+function fmtDuration(sec) {
+  var mm = Math.floor(sec/60), ss = sec%60;
+  return mm + ':' + (ss<10?'0':'') + ss;
+}
+
+async function loadOpenDotaStats(m) {
+  var el = document.getElementById('opendota-stats-content');
+  var od;
+  try {
+    var res = await fetch('https://api.opendota.com/api/matches/' + m.openDotaMatchId);
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    od = await res.json();
+  } catch(err) {
+    el.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:32px">Kunde inte hämta matchdata från OpenDota ('+err.message+')</div>';
+    return;
+  }
+
+  // Vilken sida ar vi? Harleds fran verifierat resultat + radiant_win
+  var weAreRadiant = (m.matchResult==='win') === !!od.radiant_win;
+
+  // Koppla vara spelare (alias) till OpenDota-rader via draftens hjaltar
+  var draft = m.currentDraft || m.draft || {};
+  var ourRows = [];   // { alias, od: playerRow }
+  (m.players||[]).forEach(function(p){
+    var hn = draft[p.name];
+    var h = hn ? HERO_LIST.find(function(x){ return x.name===hn; }) : null;
+    if(!h) return;
+    var row = (od.players||[]).find(function(op){
+      var isRad = op.player_slot < 128;
+      return isRad === weAreRadiant && op.hero_id === h.id;
+    });
+    if(row) ourRows.push({ alias: p.name, od: row });
+  });
+
+  var html = '';
+
+  // --- Rubrikrad: langd, slutstallning, sida ---
+  var ourScore = weAreRadiant ? od.radiant_score : od.dire_score;
+  var theirScore = weAreRadiant ? od.dire_score : od.radiant_score;
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px">';
+  [[fmtDuration(od.duration),'Matchlängd'],
+   [ourScore+'–'+theirScore,'Kills (vi–dom)'],
+   [(weAreRadiant?'Radiant':'Dire'),'Vår sida'],
+   [ourRows.length+'/5','Spelare kopplade']
+  ].forEach(function(c){
+    html += '<div style="text-align:center;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:4px"><div style="font-family:Rajdhani,sans-serif;font-size:22px;font-weight:700;color:var(--gold)">'+c[0]+'</div><div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em">'+c[1]+'</div></div>';
+  });
+  html += '</div>';
+
+  // --- Strategi vs verklighet ---
+  var exp = m.archetype ? ARCHETYPE_TIME_EXPECTATION[m.archetype] : null;
+  var archInfo = m.archetype ? ARCHETYPE_LABELS[m.archetype] : null;
+  if(archInfo) {
+    var durMin = od.duration/60;
+    var verdict = '';
+    if(exp) {
+      if(exp.maxMin && durMin > exp.maxMin) verdict = 'Planen var "'+exp.claim+'" — matchen tog '+fmtDuration(od.duration)+'. Planen höll inte, '+(m.matchResult==='win'?'men ni vann ändå. 😄':'och det kostade. 💀');
+      else if(exp.maxMin) verdict = 'Planen var "'+exp.claim+'" — avgjort på '+fmtDuration(od.duration)+'. Enligt plan. ✅';
+      else if(exp.minMin && durMin < exp.minMin) verdict = 'Planen var "'+exp.claim+'" — matchen tog bara '+fmtDuration(od.duration)+'. Nån glömde säga det till motståndarna.';
+      else if(exp.minMin) verdict = 'Planen var "'+exp.claim+'" — '+fmtDuration(od.duration)+' speltid gav er den sena fasen ni ville ha. ✅';
+    }
+    html += '<div style="background:rgba(200,155,60,.06);border:1px solid var(--gold-dim);border-radius:6px;padding:14px 16px;margin-bottom:20px">'
+      + '<div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--gold);margin-bottom:6px">Strategi vs verklighet</div>'
+      + '<div style="font-size:13px;line-height:1.7">Arketyp: <strong>'+archInfo.name+'</strong> <span style="color:var(--text-dim)">('+archInfo.desc+')</span>'
+      + (verdict ? '<br>'+verdict : '')
+      + '</div></div>';
+  }
+
+  // --- Guldkurva (radiant_gold_adv, inverterad om vi ar Dire) ---
+  var adv = od.radiant_gold_adv;
+  if(adv && adv.length > 1) {
+    var series = adv.map(function(v){ return weAreRadiant ? v : -v; });
+    var W = 640, H = 200, PAD = 28;
+    var maxAbs = Math.max(1000, Math.max.apply(null, series.map(Math.abs)));
+    function xAt(i){ return PAD + i * (W-2*PAD) / (series.length-1); }
+    function yAt(v){ return H/2 - (v/maxAbs) * (H/2 - PAD/2); }
+    var pts = series.map(function(v,i){ return xAt(i).toFixed(1)+','+yAt(v).toFixed(1); }).join(' ');
+
+    var svg = '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">';
+    // nollinje + kvartslinjer
+    svg += '<line x1="'+PAD+'" y1="'+(H/2)+'" x2="'+(W-PAD)+'" y2="'+(H/2)+'" stroke="var(--border)" stroke-width="1" stroke-dasharray="4 4"/>';
+    // 10-minutersmarkeringar
+    for(var t=10; t<series.length; t+=10) {
+      svg += '<line x1="'+xAt(t)+'" y1="'+PAD/2+'" x2="'+xAt(t)+'" y2="'+(H-PAD/2)+'" stroke="var(--border)" stroke-width="0.5"/>';
+      svg += '<text x="'+xAt(t)+'" y="'+(H-4)+'" fill="var(--text-dim)" font-size="9" text-anchor="middle">'+t+' min</text>';
+    }
+    // teamfight-markorer
+    (od.teamfights||[]).forEach(function(tf){
+      var minute = tf.start/60;
+      if(minute < series.length) {
+        svg += '<circle cx="'+xAt(minute)+'" cy="'+yAt(series[Math.round(minute)]||0)+'" r="4" fill="#e74c3c" opacity="0.7"><title>Teamfight vid '+fmtDuration(tf.start)+'</title></circle>';
+      }
+    });
+    // sjalva kurvan
+    svg += '<polyline points="'+pts+'" fill="none" stroke="var(--gold)" stroke-width="2"/>';
+    svg += '<text x="'+PAD+'" y="'+(PAD/2+6)+'" fill="#2ecc71" font-size="10">+ vi leder</text>';
+    svg += '<text x="'+PAD+'" y="'+(H-PAD/2)+'" fill="#e74c3c" font-size="10">− dom leder</text>';
+    svg += '</svg>';
+
+    // storsta ledning / underlage
+    var maxLead = Math.max.apply(null, series);
+    var maxDeficit = Math.min.apply(null, series);
+    var comeback = (m.matchResult==='win' && maxDeficit < -5000) ? ' — comeback från '+Math.round(-maxDeficit/1000)+'k underläge! 🔥'
+                 : (m.matchResult==='loss' && maxLead > 5000) ? ' — tappade en '+Math.round(maxLead/1000)+'k-ledning… 💸' : '';
+
+    html += '<div style="margin-bottom:20px"><div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Guldövertag över tid <span style="color:#e74c3c">●</span> = teamfight'+comeback+'</div>'+svg+'</div>';
+  }
+
+  // --- Utstickare: automatiskt framlyfta extremer over ALLA 10 spelare ---
+  var all = od.players || [];
+  function heroLabel(op) {
+    var slug = HERO_SLUGS[op.hero_id];
+    return slug ? slug.replace(/_/g,' ') : 'hero '+op.hero_id;
+  }
+  function nameFor(op) {
+    var ours = ourRows.find(function(r){ return r.od === op; });
+    if(ours) return '<span style="color:var(--gold);font-weight:700">'+ours.alias+'</span>';
+    return '<span style="color:var(--text-dim)">'+heroLabel(op)+' (motst.)</span>';
+  }
+  var outliers = [];
+  function topBy(metric, label, fmt) {
+    var best = all.reduce(function(a,b){ return (b[metric]||0) > (a[metric]||0) ? b : a; }, all[0]);
+    if(best && best[metric]) outliers.push(nameFor(best)+' — '+label+': <strong>'+(fmt?fmt(best[metric]):best[metric])+'</strong>');
+  }
+  topBy('hero_damage','mest hjälteskada', function(v){ return Math.round(v/1000)+'k'; });
+  topBy('kills','flest kills');
+  topBy('gold_per_min','högst GPM');
+  topBy('tower_damage','mest tornskada', function(v){ return Math.round(v/1000)+'k'; });
+  topBy('deaths','flest dödsfall 💀');
+  topBy('stuns','mest stun-tid', function(v){ return Math.round(v)+'s'; });
+  var fb = all.find(function(p){ return p.firstblood_claimed; });
+  if(fb) outliers.push(nameFor(fb)+' — <strong>first blood</strong> 🩸');
+
+  if(outliers.length) {
+    html += '<div style="margin-bottom:20px"><div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Sticker ut</div><div style="display:flex;flex-wrap:wrap;gap:8px">';
+    outliers.forEach(function(o){
+      html += '<div style="padding:6px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;font-size:12px">'+o+'</div>';
+    });
+    html += '</div></div>';
+  }
+
+  // --- Vara fem: full tabell, med guldmarkering pa lagbasta varden ---
+  if(ourRows.length) {
+    var cols = [
+      ['kills','K'],['deaths','D'],['assists','A'],['gold_per_min','GPM'],['xp_per_min','XPM'],
+      ['net_worth','Net worth'],['hero_damage','Hjälteskada'],['tower_damage','Tornskada'],['teamfight_participation','TF-deltagande']
+    ];
+    var maxima = {};
+    cols.forEach(function(c){
+      maxima[c[0]] = Math.max.apply(null, ourRows.map(function(r){ return r.od[c[0]]||0; }));
+    });
+    html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;text-align:left"><th style="padding:6px 8px">Spelare</th><th style="padding:6px 8px">Hjälte</th>';
+    cols.forEach(function(c){ html += '<th style="padding:6px 8px">'+c[1]+'</th>'; });
+    html += '</tr></thead><tbody>';
+    ourRows.forEach(function(r){
+      var img = heroImg(r.od.hero_id);
+      html += '<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px;font-weight:600">'+r.alias+'</td>'
+        + '<td style="padding:6px 8px">'+(img?'<img src="'+img+'" style="width:40px;height:22px;object-fit:cover;border-radius:2px;vertical-align:middle" loading="lazy">':'')+'</td>';
+      cols.forEach(function(c){
+        var v = r.od[c[0]];
+        var isMax = v != null && v === maxima[c[0]] && ourRows.length > 1;
+        var disp = v == null ? '—'
+          : c[0]==='teamfight_participation' ? Math.round(v*100)+'%'
+          : (c[0]==='hero_damage'||c[0]==='tower_damage'||c[0]==='net_worth') ? Math.round(v/1000)+'k'
+          : v;
+        html += '<td style="padding:6px 8px;'+(isMax?'color:var(--gold);font-weight:700':'')+'">'+disp+'</td>';
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    if(ourRows.length < (m.players||[]).length) {
+      html += '<div style="font-size:11px;color:var(--text-dim);margin-top:8px">Spelare vars hjälte inte kunde matchas mot matchdatan visas inte (hjältbyte efter draft?).</div>';
+    }
+  }
+
+  el.innerHTML = html;
 }
 
 function mdToHtml(md) {
