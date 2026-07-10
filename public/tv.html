@@ -76,10 +76,54 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
 .ov-img img{width:100%;height:100%;object-fit:cover;object-position:center top;}
 .ov-hero{font-size:clamp(14px,1.8vw,22px);font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;}
 .ov-player{font-size:clamp(11px,1.2vw,16px);color:var(--text-dim);letter-spacing:.1em;text-transform:uppercase;}
+/* STUDIO (eftersnack) */
+#studio-screen{display:none;flex-direction:column;padding:48px 64px;gap:24px;width:100%;height:100%;box-sizing:border-box;}
+.studio-header{display:flex;align-items:baseline;gap:20px;border-bottom:1px solid var(--gold-dim);padding-bottom:14px;}
+.studio-badge{font-size:14px;font-weight:700;letter-spacing:.25em;color:#e74c3c;text-transform:uppercase;}
+.studio-title{font-size:clamp(24px,3vw,40px);font-weight:700;color:var(--gold);letter-spacing:.06em;text-transform:uppercase;}
+.studio-headline{font-size:16px;color:var(--text-dim);font-style:italic;margin-left:auto;}
+.studio-main{flex:1;display:grid;grid-template-columns:1fr 380px;gap:40px;align-items:start;min-height:0;}
+.studio-speaker-label{font-size:15px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;margin-bottom:16px;transition:color .3s;}
+.studio-line{font-size:clamp(24px,2.6vw,38px);line-height:1.6;color:var(--text);max-width:900px;min-height:200px;}
+.studio-spotlight{display:flex;flex-direction:column;gap:14px;}
+.spotlight-card{background:rgba(200,155,60,.06);border:1px solid var(--gold-dim);border-radius:8px;padding:16px;display:flex;gap:14px;align-items:center;animation:fadeIn .4s ease both;}
+.spotlight-card img{width:110px;height:62px;object-fit:cover;border-radius:5px;}
+.spotlight-name{font-size:20px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.05em;}
+.spotlight-hero{font-size:12px;color:var(--text-dim);}
+.spotlight-stats{font-size:14px;color:var(--text);margin-top:5px;line-height:1.5;}
+.studio-scoreboard{display:flex;align-items:center;gap:22px;border-top:1px solid var(--border);padding-top:16px;}
+.studio-score{font-size:26px;font-weight:700;color:var(--gold);}
+.studio-heroes{display:flex;gap:8px;}
+.studio-heroes img{width:56px;height:32px;object-fit:cover;border-radius:3px;border:1px solid var(--border);}
+.studio-progress{margin-left:auto;font-size:13px;color:var(--text-dim);letter-spacing:.1em;}
 </style>
 </head>
 <body>
 <div id="screen">
+
+  <!-- STUDIO: eftersnack med panel + spelarspotlights -->
+  <div id="studio-screen">
+    <div class="studio-header">
+      <span class="studio-badge">● Eftersnack</span>
+      <span class="studio-title" id="studio-match-title"></span>
+      <span id="studio-result-badge"></span>
+      <span class="studio-headline" id="studio-headline"></span>
+    </div>
+    <div class="studio-main">
+      <div>
+        <div class="studio-speaker-label" id="studio-speaker"></div>
+        <div class="studio-line" id="studio-line"></div>
+      </div>
+      <div class="studio-spotlight" id="studio-spotlight"></div>
+    </div>
+    <div class="studio-scoreboard">
+      <span class="studio-score" id="studio-score"></span>
+      <span style="color:var(--text-dim);font-size:14px" id="studio-duration"></span>
+      <div class="studio-heroes" id="studio-heroes"></div>
+      <span class="studio-progress" id="studio-progress"></span>
+    </div>
+  </div>
+
 
   <div id="welcome">
     <div class="spotlight" style="animation:spot1 11s ease-in-out infinite;top:-100px;left:30%;"></div>
@@ -391,7 +435,7 @@ function playHypeAudio(matchId) {
 }
 
 function show(id) {
-  ['idle','welcome','splash','hero-reveal','briefing-screen','hype-screen','overview'].forEach(function(s){
+  ['idle','welcome','splash','hero-reveal','briefing-screen','hype-screen','overview','studio-screen'].forEach(function(s){
     var el = document.getElementById(s);
     el.style.display = 'none';
     el.style.animation = '';
@@ -714,6 +758,137 @@ function fadeAudio(el, from, to, durationMs, onDone) {
   _isPlaying = false;
 }
 
+// ══════════ STUDIO: eftersnack med spelarspotlights ══════════
+var SPEAKER_META = {
+  host:     { label: '🎙 HOST', color: 'var(--gold)' },
+  analyst1: { label: '📈 ANALYST — STRATEGI', color: '#c77be0' },
+  analyst2: { label: '📊 ANALYST — SIFFROR', color: '#5aa7e0' }
+};
+
+var _odHeroesTv = null;
+async function tvOdHeroes() {
+  if(_odHeroesTv) return _odHeroesTv;
+  try { var c = localStorage.getItem('odHeroes_v1'); if(c){ _odHeroesTv = JSON.parse(c); return _odHeroesTv; } } catch(e){}
+  var res = await fetch('https://api.opendota.com/api/heroes');
+  var list = await res.json();
+  _odHeroesTv = {};
+  list.forEach(function(h){ _odHeroesTv[h.id] = { name: h.localized_name, slug: h.name.replace('npc_dota_hero_','') }; });
+  try { localStorage.setItem('odHeroes_v1', JSON.stringify(_odHeroesTv)); } catch(e){}
+  return _odHeroesTv;
+}
+function tvHeroImgOd(id) {
+  var h = _odHeroesTv && _odHeroesTv[id];
+  return h ? 'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/' + h.slug + '.png' : null;
+}
+function tvNormHero(n){ return String(n||'').toLowerCase().replace(/[^a-z]/g,''); }
+function tvFmtDur(sec){ var mm=Math.floor(sec/60), ss=Math.round(sec%60); return mm+':' + (ss<10?'0':'')+ss; }
+function tvFmtK(v){ return v==null?'—':(Math.round(v/100)/10)+'k'; }
+
+async function runStudio(strategyMatchId) {
+  if(_isPlaying) return;
+  _isPlaying = true;
+  try {
+    var m = await (await fetch('/api/matches/' + strategyMatchId)).json();
+    var odId = m.openDotaMatchId;
+    var manifest = await (await fetch('/studio/' + odId + '/manifest.json')).json();
+    await tvOdHeroes();
+    var od = await (await fetch('https://api.opendota.com/api/matches/' + odId)).json();
+
+    var weAreRadiant = (m.matchResult === 'win') === !!od.radiant_win;
+    var draft = m.currentDraft || m.draft || {};
+    var rowByAlias = {};
+    var ourOdRows = [];
+    (od.players||[]).forEach(function(p){
+      if((p.player_slot < 128) !== weAreRadiant) return;
+      ourOdRows.push(p);
+      var oh = _odHeroesTv[p.hero_id];
+      if(!oh) return;
+      Object.keys(draft).forEach(function(alias){
+        if(tvNormHero(draft[alias]) === tvNormHero(oh.name)) rowByAlias[alias] = p;
+      });
+    });
+
+    // Header + scoreboard
+    document.getElementById('studio-match-title').textContent = m.name || ('Spel #' + (m.gameNumber||''));
+    document.getElementById('studio-headline').textContent = manifest.headline ? '"' + manifest.headline + '"' : '';
+    var won = m.matchResult === 'win';
+    document.getElementById('studio-result-badge').innerHTML =
+      '<span style="padding:4px 14px;border-radius:4px;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border:1px solid ' + (won?'#27ae6088':'#c0392b88') + ';color:' + (won?'#2ecc71':'#e74c3c') + '">' + (won?'Vinst':'Förlust') + '</span>';
+    var ourScore = weAreRadiant ? od.radiant_score : od.dire_score;
+    var theirScore = weAreRadiant ? od.dire_score : od.radiant_score;
+    document.getElementById('studio-score').textContent = ourScore + ' — ' + theirScore;
+    document.getElementById('studio-duration').textContent = tvFmtDur(od.duration);
+    var heroesEl = document.getElementById('studio-heroes');
+    heroesEl.innerHTML = '';
+    ourOdRows.forEach(function(p){
+      var img = tvHeroImgOd(p.hero_id);
+      if(img){ var el = document.createElement('img'); el.src = img; heroesEl.appendChild(el); }
+    });
+
+    show('studio-screen');
+
+    // Bakgrundsmusik lågt — studion är prat, inte hype
+    var bg = document.getElementById('bg-music');
+    if(_audioUnlocked && bg) {
+      try { bg.currentTime = 0; bg.play().catch(function(){}); fadeAudio(bg, 0, 0.08, 1500); } catch(e){}
+    }
+
+    var spot = document.getElementById('studio-spotlight');
+    spot.innerHTML = '';
+
+    for(var i = 0; i < manifest.segments.length; i++) {
+      var seg = manifest.segments[i];
+      var meta = SPEAKER_META[seg.speaker] || { label: seg.speaker.toUpperCase(), color: 'var(--text)' };
+      var spEl = document.getElementById('studio-speaker');
+      spEl.textContent = meta.label;
+      spEl.style.color = meta.color;
+      var lineEl = document.getElementById('studio-line');
+      lineEl.style.animation = 'none';
+      void lineEl.offsetWidth;
+      lineEl.style.animation = 'fadeIn .35s ease both';
+      lineEl.textContent = seg.text;
+      document.getElementById('studio-progress').textContent = (i+1) + ' / ' + manifest.segments.length;
+
+      // Spotlights: byt panel när nya spelare nämns, behåll annars
+      if(seg.mentions && seg.mentions.length) {
+        spot.innerHTML = '';
+        seg.mentions.forEach(function(alias){
+          var p = rowByAlias[alias];
+          var card = document.createElement('div');
+          card.className = 'spotlight-card';
+          var img = p ? tvHeroImgOd(p.hero_id) : null;
+          var stats = p
+            ? p.kills + '/' + p.deaths + '/' + p.assists + ' &nbsp; ' + p.gold_per_min + ' GPM<br>' + tvFmtK(p.hero_damage) + ' hjälteskada' + (p.firstblood_claimed ? ' &nbsp;🩸 first blood' : '')
+            : '';
+          card.innerHTML = (img ? '<img src="' + img + '">' : '')
+            + '<div><div class="spotlight-name">' + alias + '</div>'
+            + (p && _odHeroesTv[p.hero_id] ? '<div class="spotlight-hero">' + _odHeroesTv[p.hero_id].name + '</div>' : '')
+            + '<div class="spotlight-stats">' + stats + '</div></div>';
+          spot.appendChild(card);
+        });
+      }
+
+      // Spela segmentets ljud, vänta tills det talat klart
+      await new Promise(function(resolve) {
+        var a = new Audio('/studio/' + odId + '/' + seg.file);
+        var settled = false;
+        function done(){ if(!settled){ settled = true; resolve(); } }
+        a.onended = done;
+        a.onerror = function(){ setTimeout(done, Math.min(9000, 2500 + seg.text.length * 55)); };
+        a.play().catch(function(){ setTimeout(done, Math.min(9000, 2500 + seg.text.length * 55)); });
+      });
+      await wait(250);
+    }
+
+    await wait(4000);
+    if(bg) fadeAudio(bg, bg.volume, 0, 2000, function(){ try{ bg.pause(); }catch(e){} });
+  } catch(e) {
+    console.error('Studio:', e);
+  }
+  show('idle');
+  _isPlaying = false;
+}
+
 // Kolla direkt vid sidladdning - registrera befintligt state utan att spela upp det
 var _initDone = false;
 (async function() {
@@ -722,6 +897,7 @@ var _initDone = false;
     var status = await resp.json();
     if(status.latestMatchId) _lastMatchId = status.latestMatchId;
     if(status.replayToken) _lastReplayToken = status.replayToken;
+    if(status.studioToken) _lastStudioToken = status.studioToken;
   } catch(e) {}
   _initDone = true;
 })();
@@ -729,6 +905,7 @@ var _initDone = false;
 var _pendingMatchId = null;
 
 var _lastReplayToken = null;
+var _lastStudioToken = null;
 
 // Polling
 var _pollGenerating = false;
@@ -737,6 +914,13 @@ setInterval(async function() {
   try {
     var resp = await fetch('/api/status');
     var status = await resp.json();
+
+    // Studiosändning kan triggas oavsett generating-status
+    if(status.studioToken && status.studioToken !== _lastStudioToken && !_isPlaying) {
+      _lastStudioToken = status.studioToken;
+      runStudio(status.studioMatchId);
+      return;
+    }
 
     // Repris kan triggas oavsett generating-status
     if(status.replayToken && status.replayToken !== _lastReplayToken && !_isPlaying) {

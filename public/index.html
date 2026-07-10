@@ -303,6 +303,15 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
     <div class="section-title">Matchstatistik <span style="font-size:11px;color:var(--text-dim);text-transform:none;letter-spacing:0;font-family:Inter,sans-serif;font-weight:400">— verifierad data från OpenDota</span></div>
     <div id="opendota-stats-content"><div style="color:var(--text-dim);text-align:center;padding:32px">Hämtar matchdata…</div></div>
   </div>
+  <!-- Studioanalys (visas bara nar en genererad studio finns for matchen) -->
+  <div class="card" id="studio-card" style="display:none;margin-top:20px">
+    <div class="section-title">🎙 Studioanalys <span id="studio-card-headline" style="font-size:12px;color:var(--text-dim);text-transform:none;letter-spacing:0;font-family:Inter,sans-serif;font-weight:400;font-style:italic"></span></div>
+    <div style="display:flex;gap:10px;margin-bottom:14px">
+      <button id="studio-play-btn" class="btn btn-gold" onclick="toggleStudioPlayback()">▶ Spela</button>
+      <button class="btn" onclick="sendStudioToTv(this)">📺 Spela på TV:n</button>
+    </div>
+    <div id="studio-transcript" style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto"></div>
+  </div>
 </div>
 
 <!-- MODAL -->
@@ -2142,6 +2151,7 @@ async function openDetail(id) {
   } else {
     odCard.style.display = 'none';
   }
+  loadStudioPanel(m);
 }
 
 // ===================== OPENDOTA MATCHSTATISTIK =====================
@@ -2650,6 +2660,106 @@ function renderSeasonPlayerTable(selected) {
   });
   html += '</tbody></table></div>';
   host.innerHTML = html;
+}
+
+// ===================== STUDIOANALYS (Playbook-spelaren) =====================
+var _studioState = null; // { m, manifest, playing, idx, audio }
+
+async function loadStudioPanel(m) {
+  var card = document.getElementById('studio-card');
+  card.style.display = 'none';
+  if(_studioState && _studioState.audio) { try{ _studioState.audio.pause(); }catch(e){} }
+  _studioState = null;
+  if(!m.openDotaMatchId) return;
+  var manifest;
+  try {
+    var res = await fetch('/studio/' + m.openDotaMatchId + '/manifest.json');
+    if(!res.ok) return; // ingen studio genererad — kortet forblir dolt
+    manifest = await res.json();
+  } catch(e) { return; }
+  if(!manifest.segments || !manifest.segments.length) return;
+
+  _studioState = { m: m, manifest: manifest, playing: false, idx: -1, audio: null };
+  document.getElementById('studio-card-headline').textContent = manifest.headline ? '— "' + manifest.headline + '"' : '';
+  var SPEAKER_LABELS = { host: ['🎙 HOST','var(--gold)'], analyst1: ['📈 ANALYST 1','#c77be0'], analyst2: ['📊 ANALYST 2','#5aa7e0'] };
+  var tr = document.getElementById('studio-transcript');
+  tr.innerHTML = '';
+  manifest.segments.forEach(function(seg, i){
+    var lbl = SPEAKER_LABELS[seg.speaker] || [seg.speaker, 'var(--text)'];
+    var row = document.createElement('div');
+    row.id = 'studio-seg-' + i;
+    row.style.cssText = 'padding:8px 12px;border-left:3px solid transparent;border-radius:3px;opacity:.55;transition:all .25s;cursor:pointer';
+    row.onclick = function(){ startStudioPlayback(i); };
+    row.innerHTML = '<span style="font-size:10px;font-weight:700;letter-spacing:.08em;color:' + lbl[1] + '">' + lbl[0] + '</span>'
+      + (seg.mentions && seg.mentions.length ? ' <span style="font-size:10px;color:var(--gold)">[' + seg.mentions.join(', ') + ']</span>' : '')
+      + '<div style="font-size:13px;line-height:1.5;margin-top:2px">' + seg.text + '</div>';
+    tr.appendChild(row);
+  });
+  document.getElementById('studio-play-btn').textContent = '▶ Spela';
+  card.style.display = 'block';
+}
+
+function toggleStudioPlayback() {
+  if(!_studioState) return;
+  if(_studioState.playing) stopStudioPlayback();
+  else startStudioPlayback(0);
+}
+
+function stopStudioPlayback() {
+  if(!_studioState) return;
+  _studioState.playing = false;
+  if(_studioState.audio) { try{ _studioState.audio.pause(); }catch(e){} _studioState.audio = null; }
+  document.getElementById('studio-play-btn').textContent = '▶ Spela';
+  highlightStudioSeg(-1);
+}
+
+function highlightStudioSeg(idx) {
+  if(!_studioState) return;
+  _studioState.manifest.segments.forEach(function(_, i){
+    var row = document.getElementById('studio-seg-' + i);
+    if(!row) return;
+    var active = i === idx;
+    row.style.opacity = active ? '1' : '.55';
+    row.style.borderLeftColor = active ? 'var(--gold)' : 'transparent';
+    row.style.background = active ? 'rgba(200,155,60,.07)' : 'none';
+    if(active) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
+}
+
+async function startStudioPlayback(fromIdx) {
+  if(!_studioState) return;
+  stopStudioPlayback();
+  _studioState.playing = true;
+  document.getElementById('studio-play-btn').textContent = '⏹ Stoppa';
+  var s = _studioState;
+  var odId = s.m.openDotaMatchId;
+  for(var i = fromIdx; i < s.manifest.segments.length; i++) {
+    if(!s.playing || _studioState !== s) return;
+    s.idx = i;
+    highlightStudioSeg(i);
+    var seg = s.manifest.segments[i];
+    await new Promise(function(resolve) {
+      var a = new Audio('/studio/' + odId + '/' + seg.file);
+      s.audio = a;
+      var settled = false;
+      function done(){ if(!settled){ settled = true; resolve(); } }
+      a.onended = done;
+      a.onerror = function(){ setTimeout(done, 1500); };
+      a.play().catch(function(){ setTimeout(done, 1500); });
+    });
+    await new Promise(function(r){ setTimeout(r, 200); });
+  }
+  if(_studioState === s) stopStudioPlayback();
+}
+
+async function sendStudioToTv(btn) {
+  if(!_studioState) return;
+  try {
+    var res = await fetch('/api/studio-play/' + _studioState.m.id, { method: 'POST' });
+    var orig = btn.textContent;
+    btn.textContent = res.ok ? '✓ Skickad till TV:n' : '✗ Misslyckades';
+    setTimeout(function(){ btn.textContent = orig; }, 2500);
+  } catch(e) {}
 }
 
 function mdToHtml(md) {
