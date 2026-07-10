@@ -253,6 +253,225 @@ app.get('/api/hype-audio/:id', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── STUDIOANALYS (efterhandsgenerering, samma logik som generate-studio.js) ──
+const STUDIO_DIR = path.join(__dirname, 'public', 'studio');
+const RECAP_HISTORY_FILE = path.join(__dirname, 'recap-history.json');
+let _studioVoices = null;
+function studioVoices() {
+  if (_studioVoices) return _studioVoices;
+  let voices = {};
+  try { voices = JSON.parse(fs.readFileSync(path.join(__dirname, 'bank-config.json'), 'utf8')).voices || {}; } catch(e) {}
+  if (!voices.host) voices.host = 'XAYhxwN5SJaMioCWTDBq';
+  if (!voices.analytic2) voices.analytic2 = 'T7JgacQ8vdcmJYfOsKeH';
+  _studioVoices = voices;
+  return voices;
+}
+const STUDIO_ARCHETYPE_LABELS = {
+  deathball:'Deathball — win before 25 min', snowball:'Early Snowball — dominate laning',
+  gank:'Gank & Dominate', teamfight:'Teamfight — wait for the right fight',
+  pickoff:'Pick-off — hunt isolated enemies', poke:'Poke & Siege', lategame:'Late Game Scaling — explode at 35+',
+  splitpush:'Splitpush', chaos:'Chaos & Disruption', objective:'Objective Control',
+  towerdive:'Tower Dive Heavy', global:'Global Presence', magicimmune:'Magic Immune — BKB focus'
+};
+const STUDIO_NOTABLE_ITEMS = ['rapier','hand_of_midas','black_king_bar','ultimate_scepter','aghanims_shard',
+  'refresher','gem','blink','divine_rapier','radiance','heart','satanic','swift_blink','overwhelming_blink',
+  'arcane_blink','bloodstone','octarine_core','sheepstick','abyssal_blade','moon_shard','travel_boots_2'];
+function studioNormHero(n){ return String(n||'').toLowerCase().replace(/[^a-z]/g,''); }
+
+let _studioHeroCache = null;
+async function studioHeroes() {
+  if (_studioHeroCache) return _studioHeroCache;
+  const heroes = {};
+  const hRes = await fetch('https://api.opendota.com/api/heroes');
+  if (hRes.ok) (await hRes.json()).forEach(h => { heroes[h.id] = h.localized_name; });
+  _studioHeroCache = heroes;
+  return heroes;
+}
+
+async function generateStudioForMatch(strategyMatch, force) {
+  const odId = strategyMatch.openDotaMatchId;
+  const outDir = path.join(STUDIO_DIR, String(odId));
+  const manifestFile = path.join(outDir, 'manifest.json');
+  if (fs.existsSync(manifestFile) && !force) return { alreadyExists: true };
+
+  const voices = studioVoices();
+  if (!voices.analytic) throw new Error('analytic-röst saknas i bank-config.json');
+  const VOICE_MAP = { host: voices.host, analyst1: voices.analytic, analyst2: voices.analytic2 };
+  const SETTINGS_MAP = {
+    host:     { stability: 0.45, similarity_boost: 0.8, style: 0.5 },
+    analyst1: { stability: 0.5,  similarity_boost: 0.8, style: 0.4 },
+    analyst2: { stability: 0.5,  similarity_boost: 0.8, style: 0.45 }
+  };
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  const EL_KEY = process.env.ELEVENLABS_API_KEY;
+  if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY saknas');
+  if (!EL_KEY) throw new Error('ELEVENLABS_API_KEY saknas');
+
+  const heroes = await studioHeroes();
+  const res = await fetch('https://api.opendota.com/api/matches/' + odId);
+  if (!res.ok) throw new Error('OpenDota ' + res.status);
+  const m = await res.json();
+
+  const heroName = id => heroes[id] || ('hero_' + id);
+  const min = t => Math.floor(t / 60);
+  const matchResult = strategyMatch.matchResult || strategyMatch.result;
+  const weAreRadiant = (matchResult === 'win') === !!m.radiant_win;
+  const draft = strategyMatch.currentDraft || strategyMatch.draft || {};
+
+  const aliasByHero = {};
+  Object.keys(draft).forEach(alias => { aliasByHero[studioNormHero(draft[alias])] = alias; });
+
+  const players = (m.players || []).map(p => {
+    const isOurSide = (p.player_slot < 128) === weAreRadiant;
+    const nick = isOurSide ? aliasByHero[studioNormHero(heroName(p.hero_id))] : null;
+    const purchases = (p.purchase_log || []).filter(x => STUDIO_NOTABLE_ITEMS.includes(x.key)).map(x => x.key + '@min' + min(x.time));
+    return {
+      team: p.player_slot < 128 ? 'Radiant' : 'Dire',
+      name: nick || undefined,
+      is_dhs: nick ? true : undefined,
+      hero: heroName(p.hero_id),
+      lane_role: p.lane_role,
+      kda: p.kills + '/' + p.deaths + '/' + p.assists,
+      gpm: p.gold_per_min, xpm: p.xp_per_min, net_worth: p.net_worth,
+      last_hits: p.last_hits, denies: p.denies,
+      hero_damage: p.hero_damage, tower_damage: p.tower_damage, hero_healing: p.hero_healing,
+      obs_placed: p.obs_placed, sen_placed: p.sen_placed,
+      stuns_seconds: p.stuns != null ? Math.round(p.stuns) : null,
+      teamfight_participation: p.teamfight_participation != null ? Math.round(p.teamfight_participation * 100) + '%' : null,
+      buybacks: (p.buyback_log || []).map(b => 'min' + min(b.time)),
+      notable_purchases: purchases,
+      firstblood: p.firstblood_claimed ? true : undefined
+    };
+  });
+
+  const teamfights = (m.teamfights || []).map(tf => ({ at_minute: min(tf.start), deaths: tf.deaths }))
+    .sort((a,b) => b.deaths - a.deaths).slice(0, 4);
+  const roshans = (m.objectives || []).filter(o => o.type === 'CHAT_MESSAGE_ROSHAN_KILL').map(o => 'min' + min(o.time));
+
+  const summary = {
+    dhs_team: weAreRadiant ? 'Radiant' : 'Dire',
+    dhs_result: matchResult,
+    duration_minutes: min(m.duration),
+    winner: m.radiant_win ? 'Radiant' : 'Dire',
+    score: 'Radiant ' + m.radiant_score + ' — ' + m.dire_score + ' Dire',
+    radiant_gold_advantage_per_minute: m.radiant_gold_adv || null,
+    biggest_teamfights: teamfights,
+    roshan_kills: roshans,
+    players: players
+  };
+
+  const strategyContext = {
+    strategy_name: strategyMatch.name || null,
+    archetype: strategyMatch.archetype ? (STUDIO_ARCHETYPE_LABELS[strategyMatch.archetype] || strategyMatch.archetype) : null,
+    wildcard: !!strategyMatch.wildcard,
+    briefing_excerpt: (strategyMatch.briefingEn || strategyMatch.briefing || '').slice(0, 600) || null,
+    planned_draft: draft,
+    captain_notes: strategyMatch.captainNotes || null
+  };
+
+  let history = [];
+  try { history = JSON.parse(fs.readFileSync(RECAP_HISTORY_FILE, 'utf8')); } catch(e) {}
+  const recentAngles = history.slice(-4).flatMap(h => h.angles || []);
+
+  const prompt = 'You are writing the post-match STUDIO segment for an esports broadcast at a private Dota 2 LAN (Dreamhack Skyrup). '
+    + 'Three voices on the panel: HOST (curious, guides the conversation, asks real questions, occasionally challenges), '
+    + 'ANALYST1 (female, the strategic mind: big picture, momentum, macro decisions, what the teams were TRYING to do) and '
+    + 'ANALYST2 (male, the numbers guy: stats, item timings, minute marks, gold curves — grounds every claim in data). '
+    + 'The analysts have different perspectives and are allowed to DISAGREE and push back on each other; the host mediates '
+    + 'and stirs the pot. Make it feel like a real panel, not people taking turns.'
+    + '\n\nUNIQUE ANGLE — THE PLAN: before this match, our team was given a secret AI-generated strategy (see STRATEGY CONTEXT). '
+    + 'The panel KNOWS the plan and the audience loves hearing whether the team actually followed it. Weave the plan-vs-reality '
+    + 'thread naturally into the discussion when the data supports it — did they play the archetype? did the plan survive contact?'
+    + '\n\nStudy the match data and find what is GENUINELY remarkable about THIS match. Let the data decide the story. '
+    + 'Pick the 2-3 threads that matter most in this specific game.'
+    + '\n\nIDENTITY RULES: Players with a "name" field are OUR crew — always refer to them by that nickname. '
+    + 'Players WITHOUT a name are opponents — refer to them ONLY by hero name. The recap is for OUR crowd; '
+    + 'our team is the emotional center regardless of who won.'
+    + '\n\nPERSONAL COLOR: Where the data genuinely earns it, drop a natural personal remark about one of our players — '
+    + 'one or two per recap. NEVER walk through the roster player by player; most of our players should go unmentioned.'
+    + (recentAngles.length ? '\n\nANGLES ALREADY USED in recent recaps tonight (find DIFFERENT threads): ' + recentAngles.join('; ') : '')
+    + '\n\nFormat: 10-14 dialogue lines. HOST opens with a short scene-setting line and closes the segment. '
+    + 'Both analysts must speak multiple times, and at least once react directly to what the OTHER analyst just said. '
+    + 'Written to be SPOKEN: short sentences, ellipses for pauses, at most one CAPS-emphasized word per line. English.'
+    + '\n\nSTRATEGY CONTEXT:\n' + JSON.stringify(strategyContext)
+    + '\n\nMATCH DATA:\n' + JSON.stringify(summary)
+    + '\n\nReply ONLY with JSON, no markdown: {"headline":"4-8 word segment title","dialogue":[{"speaker":"host"|"analyst1"|"analyst2","text":"...","mentions":["exact nicknames of OUR players explicitly mentioned in this line, empty array if none"]}],"angles":["2-4 word label per main thread"]}';
+
+  let recap = null;
+  for (let attempt = 1; attempt <= 2 && !recap; attempt++) {
+    const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-fable-5', max_tokens: 6000, messages: [{ role: 'user', content: prompt }] })
+    });
+    if (!aiRes.ok) throw new Error('Anthropic ' + aiRes.status + ': ' + (await aiRes.text()).slice(0,200));
+    const data = await aiRes.json();
+    const text = (data.content || []).map(c => c.text || '').join('').replace(/```json|```/g, '').trim();
+    try { recap = JSON.parse(text); }
+    catch(e) { if (attempt === 2) throw new Error('Kunde inte tolka AI-svaret'); }
+  }
+  if (!Array.isArray(recap.dialogue) || !recap.dialogue.length) throw new Error('Tomt dialogue-fält från AI');
+
+  const validAliases = new Set(Object.keys(draft));
+  recap.dialogue.forEach(d => { d.mentions = (d.mentions || []).filter(x => validAliases.has(x)); });
+
+  fs.mkdirSync(outDir, { recursive: true });
+
+  const segments = [];
+  for (let i = 0; i < recap.dialogue.length; i++) {
+    const d = recap.dialogue[i];
+    const fname = 'seg_' + String(i).padStart(2, '0') + '.mp3';
+    const fpath = path.join(outDir, fname);
+    if (!fs.existsSync(fpath) || force) {
+      const body = { text: d.text, model_id: 'eleven_multilingual_v2', voice_settings: SETTINGS_MAP[d.speaker] || SETTINGS_MAP.analyst1 };
+      if (i > 0) body.previous_text = recap.dialogue[i-1].text;
+      if (i < recap.dialogue.length - 1) body.next_text = recap.dialogue[i+1].text;
+      const tRes = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + (VOICE_MAP[d.speaker] || voices.analytic), {
+        method: 'POST',
+        headers: { 'xi-api-key': EL_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!tRes.ok) throw new Error('ElevenLabs ' + tRes.status + ' på replik ' + i);
+      fs.writeFileSync(fpath, Buffer.from(await tRes.arrayBuffer()));
+      await new Promise(r => setTimeout(r, 800));
+    }
+    segments.push({ speaker: d.speaker, text: d.text, mentions: d.mentions, file: fname });
+  }
+
+  const manifest = {
+    odMatchId: String(odId),
+    strategyMatchId: strategyMatch.id,
+    strategyName: strategyMatch.name || null,
+    headline: recap.headline || null,
+    generatedAt: new Date().toISOString(),
+    segments: segments,
+    angles: recap.angles || []
+  };
+  fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2));
+
+  history.push({ match_id: String(odId), angles: recap.angles || [], at: new Date().toISOString() });
+  fs.writeFileSync(RECAP_HISTORY_FILE, JSON.stringify(history.slice(-10), null, 2));
+
+  return { ok: true, segments: segments.length };
+}
+
+// Generera studioanalys i efterhand (knapp i Playbook — samma logik som generate-studio.js CLI)
+app.post('/api/studio-generate/:id', async (req, res) => {
+  try {
+    const matches = await readMatches();
+    const match = matches.find(m => m.id === req.params.id);
+    if (!match) return res.status(404).json({ error: 'Match not found' });
+    if (!match.openDotaMatchId) return res.status(400).json({ error: 'Matchen saknar OpenDota-länk — länka matchen först' });
+    serverStatus.generating = true;
+    const result = await generateStudioForMatch(match, !!req.body.force);
+    res.json(result);
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  } finally {
+    serverStatus.generating = false;
+  }
+});
+
 // ── STATUS (polling) ─────────────────────────────────
 let serverStatus = { generating: false, latestMatchId: null, replayToken: null, studioMatchId: null, studioToken: null };
 app.get('/api/status', (req, res) => res.json(serverStatus));
