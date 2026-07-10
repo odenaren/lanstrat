@@ -306,11 +306,18 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
   <!-- Studioanalys (visas bara nar en genererad studio finns for matchen) -->
   <div class="card" id="studio-card" style="display:none;margin-top:20px">
     <div class="section-title">🎙 Studioanalys <span id="studio-card-headline" style="font-size:12px;color:var(--text-dim);text-transform:none;letter-spacing:0;font-family:Inter,sans-serif;font-weight:400;font-style:italic"></span></div>
-    <div style="display:flex;gap:10px;margin-bottom:14px">
-      <button id="studio-play-btn" class="btn btn-gold" onclick="toggleStudioPlayback()">▶ Spela</button>
-      <button class="btn" onclick="sendStudioToTv(this)">📺 Spela på TV:n</button>
+    <div id="studio-generate-row" style="display:none;margin-bottom:14px">
+      <button id="studio-generate-btn" class="btn btn-gold" onclick="generateStudio(this)">✨ Generera analys</button>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:6px">Ingen studioanalys finns för denna match än. Tar ca 1-2 minuter.</div>
     </div>
-    <div id="studio-transcript" style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto"></div>
+    <div id="studio-playback-row" style="display:none">
+      <div style="display:flex;gap:10px;margin-bottom:14px">
+        <button id="studio-play-btn" class="btn btn-gold" onclick="toggleStudioPlayback()">▶ Spela</button>
+        <button class="btn" onclick="sendStudioToTv(this)">📺 Spela på TV:n</button>
+        <button class="btn" onclick="generateStudio(this, true)" title="Skriver över befintlig analys">🔄 Gör om</button>
+      </div>
+      <div id="studio-transcript" style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto"></div>
+    </div>
   </div>
 </div>
 
@@ -2664,20 +2671,33 @@ function renderSeasonPlayerTable(selected) {
 
 // ===================== STUDIOANALYS (Playbook-spelaren) =====================
 var _studioState = null; // { m, manifest, playing, idx, audio }
+var _currentMatch = null; // matchen som visas i detaljvyn just nu (satts av loadStudioPanel)
 
 async function loadStudioPanel(m) {
   var card = document.getElementById('studio-card');
+  var generateRow = document.getElementById('studio-generate-row');
+  var playbackRow = document.getElementById('studio-playback-row');
   card.style.display = 'none';
+  generateRow.style.display = 'none';
+  playbackRow.style.display = 'none';
+  _currentMatch = m;
   if(_studioState && _studioState.audio) { try{ _studioState.audio.pause(); }catch(e){} }
   _studioState = null;
-  if(!m.openDotaMatchId) return;
-  var manifest;
+  if(!m.openDotaMatchId) return; // matchen ar inte lankad an — inget att gora har
+
+  var manifest = null;
   try {
     var res = await fetch('/studio/' + m.openDotaMatchId + '/manifest.json');
-    if(!res.ok) return; // ingen studio genererad — kortet forblir dolt
-    manifest = await res.json();
-  } catch(e) { return; }
-  if(!manifest.segments || !manifest.segments.length) return;
+    if(res.ok) manifest = await res.json();
+  } catch(e) {}
+
+  if(!manifest || !manifest.segments || !manifest.segments.length) {
+    // Ingen studio genererad an — visa knappen istallet for att dolja kortet
+    card.style.display = 'block';
+    generateRow.style.display = 'block';
+    document.getElementById('studio-card-headline').textContent = '';
+    return;
+  }
 
   _studioState = { m: m, manifest: manifest, playing: false, idx: -1, audio: null };
   document.getElementById('studio-card-headline').textContent = manifest.headline ? '— "' + manifest.headline + '"' : '';
@@ -2697,6 +2717,30 @@ async function loadStudioPanel(m) {
   });
   document.getElementById('studio-play-btn').textContent = '▶ Spela';
   card.style.display = 'block';
+  playbackRow.style.display = 'block';
+}
+
+async function generateStudio(btn, force) {
+  var m = _currentMatch || (_studioState && _studioState.m);
+  if(!m) return;
+  var orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ Genererar… (kan ta 1-2 min)';
+  try {
+    var res = await fetch('/api/studio-generate/' + m.id, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ force: !!force })
+    });
+    var data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'Okänt fel');
+    await loadStudioPanel(m);
+  } catch(e) {
+    alert('Kunde inte generera studioanalys: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
 }
 
 function toggleStudioPlayback() {
