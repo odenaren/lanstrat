@@ -827,10 +827,11 @@ async function runStudio(strategyMatchId) {
 
     show('studio-screen');
 
-    // Bakgrundsmusik lågt — studion är prat, inte hype
+    // Ingen bakgrundsmusik i studion — den fran drafting phase ar for energisk.
+    // Fada ut om den redan spelar fran en tidigare skarm.
     var bg = document.getElementById('bg-music');
-    if(_audioUnlocked && bg) {
-      try { bg.currentTime = 0; bg.play().catch(function(){}); fadeAudio(bg, 0, 0.08, 1500); } catch(e){}
+    if(bg && !bg.paused) {
+      try { fadeAudio(bg, bg.volume, 0, 800); setTimeout(function(){ try{ bg.pause(); }catch(e){} }, 900); } catch(e){}
     }
 
     var spot = document.getElementById('studio-spotlight');

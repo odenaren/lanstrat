@@ -1815,24 +1815,24 @@ async function replaceAllBanned() {
   var promptParts = [
     'Du ar en Dota 2 draft-expert. Ersatt bannlysta hjaltar sa snabbt som mojligt.',
     '',
-    'STRATEGI (behall win condition och spelstil): ' + (m.currentStrategy||m.strategy||'').substring(0, 800),
+    'STRATEGI (valj hjaltar som passar denna win condition och spelstil): ' + (m.currentStrategy||m.strategy||'').substring(0, 800),
     '',
     'ERSATT: ' + bannedList,
     'POOLER: ' + poolList,
     'EJ VALBARA: ' + [...currentBanned].join(', '),
     '',
-    'Svara KORT:',
-    '1. **[SPELARNAMN]: [NY HJALTE]** - varfor (en mening per spelare)',
-    '2. Uppdaterad strategi - bara andra det som paverkas av hjaltbytet, behall resten ordagrant.',
+    'Svara ENDAST med ersattningarna, en rad per spelare:',
+    '**[SPELARNAMN]: [NY HJALTE]** — en mening om varfor och hur hjalten fyller samma roll i planen.',
+    'Skriv INGET annat — ingen omskriven strategi, ingen inledning.',
     '',
-    'Anvand svenska. Var kortfattad.'
+    'Anvand svenska.'
   ];
 
   try {
     var resp = await fetch('/api/strategy', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({prompt: promptParts.join('\n'), maxTokens: 800})
+      body:JSON.stringify({prompt: promptParts.join('\n'), maxTokens: 500})
     });
     var data = await resp.json();
     if(data.error) throw new Error(data.error);
@@ -1850,11 +1850,18 @@ async function replaceAllBanned() {
       }
     });
 
+    // Behall HELA den ursprungliga strategin — lagg draftandringen som en logg under,
+    // sa att caster/studio/statistik behaller all ursprunglig info
+    var baseStrategy = m.currentStrategy || m.strategy || '';
+    var updatedStrategy = baseStrategy
+      + '\n\n---\n### Draftändring efter bans (' + bannedList + ')\n'
+      + data.text;
+
     await apiFetch('/matches/'+currentMatchId+'/strategy', {
       method:'PUT',
-      body:JSON.stringify({strategy: data.text, draft: currentMatchData.currentDraft})
+      body:JSON.stringify({strategy: updatedStrategy, draft: currentMatchData.currentDraft})
     });
-    currentMatchData.currentStrategy = data.text;
+    currentMatchData.currentStrategy = updatedStrategy;
     openDetail(currentMatchId);
   } catch(err) {
     alert('Fel: ' + err.message);
@@ -2236,15 +2243,32 @@ function fmtDuration(sec) {
 }
 function fmtK(v){ return v==null ? '—' : (Math.round(v/100)/10)+'k'; }
 
-// Kort matchberattelse — regelbaserad, ingen AI, byggd pa vad som faktiskt hande
+// Kort matchberattelse — regelbaserad, ingen AI, byggd pa vad som faktiskt hande.
+// Varierad fras per match (seedad pa match-id) sa alla sammanfattningar inte later likadant.
 function buildMatchStory(m, od, ourRows, series) {
   var s = [];
   var won = m.matchResult === 'win';
-  var ourScore = ourSideIsRadiant(m,od) ? od.radiant_score : od.dire_score;
-  var theirScore = ourSideIsRadiant(m,od) ? od.dire_score : od.radiant_score;
-  s.push((won?'<strong style="color:#2ecc71">Vinst</strong>':'<strong style="color:#e74c3c">Förlust</strong>')
-    + ' på ' + fmtDuration(od.duration) + ', ' + ourScore + '–' + theirScore + ' i kills.');
+  var weRad = ourSideIsRadiant(m,od);
+  var ourScore = weRad ? od.radiant_score : od.dire_score;
+  var theirScore = weRad ? od.dire_score : od.radiant_score;
+  var diff = ourScore - theirScore;
+  var durMin = od.duration/60;
+  var seed = 0;
+  String(m.openDotaMatchId||m.id||'').split('').forEach(function(c){ seed += c.charCodeAt(0); });
+  function pick(arr){ return arr[seed % arr.length]; }
 
+  // --- Oppning: resultat + karaktar pa matchen ---
+  var opener = (won?'<strong style="color:#2ecc71">Vinst</strong>':'<strong style="color:#e74c3c">Förlust</strong>')
+    + ' på ' + fmtDuration(od.duration) + ', ' + ourScore + '–' + theirScore + '.';
+  if(won && diff >= 30) opener += ' ' + pick(['En ren utklassning.','Total demolering.','Det där var aldrig jämnt.']);
+  else if(won && durMin < 27 && diff >= 15) opener += ' ' + pick(['Snabbt och brutalt.','Blixtkrig — de hann aldrig andas.']);
+  else if(won && diff <= 5) opener += ' ' + pick(['En riktig rysare.','Vunnen med naglarna.','Jämnare än siffran antyder att den borde varit.']);
+  else if(won && durMin >= 50) opener += ' ' + pick(['Ett maraton — men ni orkade längst.','Lång, seg, vunnen.']);
+  else if(!won && diff >= -5) opener += ' ' + pick(['Så nära. Den här sved.','Förlust med minsta möjliga marginal.']);
+  else if(!won && diff <= -25) opener += ' ' + pick(['En kväll att glömma.','Det där gjorde ont att titta på.']);
+  s.push(opener);
+
+  // --- Guldberattelsen (max en rad) ---
   if(series && series.length > 5) {
     var maxLead = Math.max.apply(null, series);
     var maxDef = Math.min.apply(null, series);
@@ -2254,30 +2278,48 @@ function buildMatchStory(m, od, ourRows, series) {
     if(won && maxDef < -6000) s.push('Comeback: från <strong>'+Math.round(-maxDef/1000)+'k underläge</strong> vid minut '+defMinute+' hela vägen hem. 🔥');
     else if(!won && maxLead > 6000) s.push('Ni ledde med <strong>'+Math.round(maxLead/1000)+'k</strong> vid minut '+leadMinute+' — och tappade det. 💸');
     else if(crossings >= 4) s.push('En berg-och-dalbana — ledningen bytte händer '+crossings+' gånger.');
-    else if(won && maxDef > -2500) s.push('Ni tog kommandot tidigt och släppte det aldrig.');
-    else if(!won && maxLead < 2500) s.push('Motståndarna styrde matchen från start.');
+    else if(won && maxDef > -2500) s.push(pick(['Ni tog kommandot tidigt och släppte det aldrig.','Kontroll från minut ett till GG.','Motståndarna fick aldrig fotfäste.']));
+    else if(!won && maxLead < 2500) s.push(pick(['Motståndarna styrde matchen från start.','Ni jagade hela matchen utan att komma ikapp.']));
   }
 
+  // --- Storsta fajten: bara om den ar stor, och beratta vem som vann den ---
+  var ourIdx = [];
+  (od.players||[]).forEach(function(p,i){ if((p.player_slot<128)===weRad) ourIdx.push(i); });
   var fights = od.teamfights || [];
   if(fights.length) {
     var biggest = fights.reduce(function(a,b){ return (b.deaths||0) > (a.deaths||0) ? b : a; }, fights[0]);
-    if(biggest && biggest.deaths >= 4) s.push('Största smällen kom vid '+fmtDuration(biggest.start)+' — <strong>'+biggest.deaths+' döda</strong> i en enda fight.');
+    if(biggest && biggest.deaths >= 5) {
+      var ourD = 0;
+      (biggest.players||[]).forEach(function(p,i){ if(ourIdx.indexOf(i)>=0) ourD += p.deaths||0; });
+      var theirD = (biggest.deaths||0) - ourD;
+      var outcome = theirD > ourD ? ' — och ni gick segrande ur den.' : ourD > theirD ? ' — och den gick emot er.' : '.';
+      s.push('Matchens blodigaste fight kom vid '+fmtDuration(biggest.start)+': <strong>'+biggest.deaths+' döda</strong>'+outcome);
+    }
   }
 
-  var matched = ourRows.filter(function(r){ return r.od; });
-  if(matched.length) {
-    var star = matched.reduce(function(a,b){ return (b.od.hero_damage||0) > (a.od.hero_damage||0) ? b : a; }, matched[0]);
-    s.push('<strong style="color:var(--gold)">'+star.alias+'</strong> stod för showen: '
-      + star.od.kills+'/'+star.od.deaths+'/'+star.od.assists+' och '+fmtK(star.od.hero_damage)+' hjälteskada.');
-    var fb = matched.find(function(r){ return r.od.firstblood_claimed; });
-    if(fb) s.push('First blood: <strong style="color:var(--gold)">'+fb.alias+'</strong> 🩸');
-  }
-  var enemyFb = (od.players||[]).find(function(p){ return p.firstblood_claimed && ((p.player_slot<128) !== ourSideIsRadiant(m,od)); });
-  if(enemyFb) s.push('First blood gick till motståndarnas '+odHeroName(enemyFb.hero_id)+'. 🩸');
+  // --- Stjarnan: valj den mest anmarknnigsvarda prestationen, med kontext ---
+  var matchedRows = ourRows.filter(function(r){ return r.od; });
+  if(matchedRows.length) {
+    var star = matchedRows.reduce(function(a,b){ return (b.od.hero_damage||0) > (a.od.hero_damage||0) ? b : a; }, matchedRows[0]);
+    var so = star.od;
+    var kdaRatio = (so.kills + so.assists) / Math.max(1, so.deaths);
+    var dmgPerMin = Math.round((so.hero_damage||0)/durMin/100)/10;
+    var starName = '<strong style="color:var(--gold)">'+star.alias+'</strong>';
+    if(kdaRatio >= 10) s.push(starName+' var i princip odödlig: '+so.kills+'/'+so.deaths+'/'+so.assists+' och '+dmgPerMin+'k hjälteskada per minut.');
+    else if(dmgPerMin >= 1.2) s.push(starName+' malde ner dem — '+dmgPerMin+'k hjälteskada i minuten, '+so.kills+'/'+so.deaths+'/'+so.assists+'.');
+    else s.push(starName+' toppade skadetabellen: '+so.kills+'/'+so.deaths+'/'+so.assists+' och '+fmtK(so.hero_damage)+' hjälteskada.');
 
+    // --- Baksidan: tung kvall for nagon? (bara nar det faktiskt sticker ut) ---
+    var rough = matchedRows.reduce(function(a,b){ return (b.od.deaths||0) > (a.od.deaths||0) ? b : a; }, matchedRows[0]);
+    if(rough.od.deaths >= 10 && rough.alias !== star.alias) {
+      s.push(pick(['Tuff kväll för ','Tung dag på kontoret för ','Respawn-skärmen fick sällskap av '])
+        + '<strong>'+rough.alias+'</strong> — '+rough.od.deaths+' dödsfall.');
+    }
+  }
+
+  // --- Planen vs verkligheten ---
   var exp = m.archetype ? ARCHETYPE_TIME_EXPECTATION[m.archetype] : null;
   if(exp) {
-    var durMin = od.duration/60;
     if(exp.maxMin && durMin > exp.maxMin) s.push('Planen var "'+exp.claim+'" — det tog '+fmtDuration(od.duration)+'. '+(won?'Planen sprack, men ni vann ändå. 😄':'Och det kostade.'));
     else if(exp.maxMin) s.push('Planen var "'+exp.claim+'" — avklarat på '+fmtDuration(od.duration)+'. ✅');
     else if(exp.minMin && durMin >= exp.minMin) s.push('Planen "'+exp.claim+'" höll — ni fick er sena fas. ✅');
@@ -2368,16 +2410,20 @@ async function loadOpenDotaStats(m) {
     svg += '<polygon points="'+areaPts+'" fill="url(#goldadv)"/>';
     svg += '<line x1="'+PAD+'" y1="'+yZero+'" x2="'+(W-PAD)+'" y2="'+yZero+'" stroke="var(--border)" stroke-width="1" stroke-dasharray="4 4"/>';
     svg += '<polyline points="'+pts+'" fill="none" stroke="var(--gold)" stroke-width="2"/>';
-    // teamfights: storlek efter antal doda, tooltip med tid + doda + guldsvang for er
+    // teamfights: storlek efter antal doda, tooltip med tid + doda + guldsvang NETTO mot motstandarna
     (od.teamfights||[]).forEach(function(tf){
       var minute = tf.start/60;
       if(minute >= series.length) return;
-      var ourGold = 0;
-      (tf.players||[]).forEach(function(p,i){ if(ourIdx.indexOf(i)>=0) ourGold += p.gold_delta||0; });
+      var ourGold = 0, theirGold = 0;
+      (tf.players||[]).forEach(function(p,i){
+        if(ourIdx.indexOf(i)>=0) ourGold += p.gold_delta||0;
+        else theirGold += p.gold_delta||0;
+      });
+      var netGold = ourGold - theirGold;
       var r = Math.min(9, 3 + (tf.deaths||0));
-      var sign = ourGold>=0?'+':'−';
+      var sign = netGold>=0?'+':'−';
       svg += '<circle cx="'+xAt(minute)+'" cy="'+yAt(series[Math.min(Math.round(minute),series.length-1)]||0)+'" r="'+r+'" fill="#e74c3c" opacity="0.65" stroke="#fff" stroke-width="0.5">'
-        + '<title>Teamfight '+fmtDuration(tf.start)+' — '+(tf.deaths||0)+' döda, '+sign+Math.abs(Math.round(ourGold/100)/10)+'k guld för er</title></circle>';
+        + '<title>Teamfight '+fmtDuration(tf.start)+' — '+(tf.deaths||0)+' döda, '+sign+Math.abs(Math.round(netGold/100)/10)+'k guld netto mot motståndarna</title></circle>';
     });
     svg += '<text x="'+PAD+'" y="'+(PAD/2+4)+'" fill="#2ecc71" font-size="10">+ ni leder</text>';
     svg += '<text x="'+PAD+'" y="'+(H-PAD/2+4)+'" fill="#e74c3c" font-size="10">− dom leder</text>';
@@ -2390,16 +2436,18 @@ async function loadOpenDotaStats(m) {
     if(fights.length) {
       html += '<div style="margin-bottom:20px"><div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-dim);margin:10px 0 6px">Största fajterna</div><div style="display:flex;flex-wrap:wrap;gap:8px">';
       fights.forEach(function(tf){
-        var ourDeaths = 0, ourGold = 0;
+        var ourDeaths = 0, ourGold = 0, theirGold = 0;
         (tf.players||[]).forEach(function(p,i){
           if(ourIdx.indexOf(i)>=0){ ourDeaths += p.deaths||0; ourGold += p.gold_delta||0; }
+          else { theirGold += p.gold_delta||0; }
         });
+        var netGold = ourGold - theirGold;
         var theirDeaths = (tf.deaths||0) - ourDeaths;
         var goodTrade = theirDeaths > ourDeaths;
         html += '<div style="padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;font-size:12px">'
           + '<strong>'+fmtDuration(tf.start)+'</strong> — '
           + '<span style="color:'+(goodTrade?'#2ecc71':'#e74c3c')+'">'+theirDeaths+' av deras'+' mot '+ourDeaths+' av era</span>'
-          + ', '+(ourGold>=0?'+':'−')+Math.abs(Math.round(ourGold/100)/10)+'k guld'
+          + ', <span style="color:'+(netGold>=0?'#2ecc71':'#e74c3c')+'">'+(netGold>=0?'+':'−')+Math.abs(Math.round(netGold/100)/10)+'k netto</span>'
           + '</div>';
       });
       html += '</div></div>';
@@ -2408,25 +2456,66 @@ async function loadOpenDotaStats(m) {
     html += '<div style="color:var(--text-dim);font-size:12px;margin-bottom:20px">Guldkurva saknas — matchen är inte replay-parsad hos OpenDota.</div>';
   }
 
-  // --- 4. Sticker ut: era spelare forst, riktiga namn overallt ---
+  // --- 4. Sticker ut: era spelare forst, riktiga namn overallt, siffror i KONTEXT ---
   var all = od.players || [];
+  var durMin = Math.max(1, od.duration/60);
   function nameFor(op) {
     var ours = matched.find(function(r){ return r.od === op; });
     if(ours) return '<span style="color:var(--gold);font-weight:700">'+ours.alias+'</span>';
     return '<span style="color:var(--text-dim)">'+odHeroName(op.hero_id)+' (motståndare)</span>';
   }
   function isOurs(op){ return !!matched.find(function(r){ return r.od === op; }); }
-  var outliers = [];
-  function topBy(metric, label, fmt) {
-    var best = all.reduce(function(a,b){ return (b[metric]||0) > (a[metric]||0) ? b : a; }, all[0]);
-    if(best && best[metric]) outliers.push({ ours: isOurs(best), html: nameFor(best)+' — '+label+': <strong>'+(fmt?fmt(best[metric]):best[metric])+'</strong>' });
+  function sideSum(op, metric){
+    var sum = 0;
+    all.forEach(function(p){ if((p.player_slot<128)===(op.player_slot<128)) sum += p[metric]||0; });
+    return sum;
   }
-  topBy('hero_damage','mest hjälteskada', fmtK);
-  topBy('kills','flest kills');
-  topBy('gold_per_min','högst GPM');
-  topBy('tower_damage','mest tornskada', fmtK);
-  topBy('deaths','flest dödsfall 💀');
-  topBy('stuns','mest stun-tid', function(v){ return Math.round(v)+'s'; });
+  var outliers = [];
+  function topBy(metric, label, ctxFn) {
+    var sorted = all.slice().sort(function(a,b){ return (b[metric]||0)-(a[metric]||0); });
+    var best = sorted[0], second = sorted[1];
+    if(!best || !best[metric]) return;
+    var ctx = ctxFn(best[metric], best, second ? (second[metric]||0) : 0);
+    outliers.push({ ours: isOurs(best), html: nameFor(best)+' — '+label+': '+ctx });
+  }
+  // Hjalteskada: absolut + per minut + hur dominant mot tvaan
+  topBy('hero_damage','mest hjälteskada', function(v, p, second){
+    var perMin = Math.round(v/durMin/100)/10;
+    var ctx = '<strong>'+fmtK(v)+'</strong> ('+perMin+'k/min';
+    if(second > 0 && v >= second*1.4) ctx += ', '+(Math.round(v/second*10)/10)+'× näst högsta';
+    return ctx + ')';
+  });
+  // Kills: andel av lagets totala kills
+  topBy('kills','flest kills', function(v, p){
+    var teamKills = sideSum(p,'kills');
+    var share = teamKills ? Math.round(v/teamKills*100) : 0;
+    return '<strong>'+v+'</strong> ('+share+'% av lagets kills)';
+  });
+  // GPM: nivaetikett + jamfort med matchsnittet
+  topBy('gold_per_min','högst GPM', function(v, p){
+    var avg = all.reduce(function(s,x){ return s+(x.gold_per_min||0); },0)/Math.max(1,all.length);
+    var tier = v>=850 ? 'absurd siffra' : v>=700 ? 'proffsnivå' : v>=580 ? 'elitfarm' : v>=480 ? 'stark' : null;
+    var ctx = '<strong>'+v+'</strong>';
+    if(tier) ctx += ' — '+tier;
+    if(avg > 0) ctx += ', '+(Math.round(v/avg*10)/10)+'× matchsnittet';
+    return ctx;
+  });
+  // Tornskada: andel av lagets totala tornskada
+  topBy('tower_damage','mest tornskada', function(v, p){
+    var teamTower = sideSum(p,'tower_damage');
+    var share = teamTower ? Math.round(v/teamTower*100) : 0;
+    return '<strong>'+fmtK(v)+'</strong> ('+share+'% av lagets tornskada)';
+  });
+  // Dodsfall: hur ofta i tid
+  topBy('deaths','flest dödsfall 💀', function(v){
+    var every = Math.round(durMin/v);
+    return '<strong>'+v+'</strong>'+(every>=1 ? ' (en död var '+every+':e minut)' : '');
+  });
+  // Stun-tid: andel av matchens langd
+  topBy('stuns','mest stun-tid', function(v){
+    var pct = Math.round(v/od.duration*100);
+    return '<strong>'+Math.round(v)+'s</strong>'+(pct>=1 ? ' — motståndarna stod stilla '+pct+'% av matchen' : '');
+  });
   outliers.sort(function(a,b){ return (b.ours?1:0)-(a.ours?1:0); });
   if(outliers.length) {
     html += '<div style="margin-bottom:20px"><div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">Sticker ut</div><div style="display:flex;flex-wrap:wrap;gap:8px">';
