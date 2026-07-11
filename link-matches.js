@@ -4,7 +4,7 @@
 //
 // Matchningslogik:
 //   1. Hamta match fran OpenDota -> start_time, spelarnas account_id + hero_id
-//   2. Identifiera vilka av vara 9 alias som spelade (via player-accounts.json)
+//   2. Identifiera vilka av vara 9 alias som spelade (via steamId i spelar-binet)
 //   3. Filtrera strategier vars createdAt ligger i ett tidsfonster runt start_time
 //   4. Poangsatt varje kandidat: hur manga matchade alias + hur manga hjaltar
 //      (currentDraft foredras over draft) stammer mot faktiska hero_id
@@ -12,6 +12,9 @@
 //
 // Anvandning: node link-matches.js [match_id1 match_id2 ...]
 // Utan argument: kor mot de 10 kanda matcherna.
+//
+// Kraver i .env: JSONBIN_API_KEY, JSONBIN_PLAYERS_ID (spelar-binet ar delat
+// mellan dev och prod, sa Steam-ID:n satta pa Hero Pool-sidan racker)
 
 const fs = require("fs");
 const path = require("path");
@@ -25,6 +28,11 @@ try {
   });
 } catch {}
 
+if (!process.env.JSONBIN_API_KEY || !process.env.JSONBIN_PLAYERS_ID) {
+  console.error("JSONBIN_API_KEY och JSONBIN_PLAYERS_ID kravs i .env (samma spelar-bin som servern anvander).");
+  process.exit(1);
+}
+
 const HISTORY_BIN_ID = "6a3c3d6bda38895dfef96973"; // prod-historiken (inte dhs27/dev)
 const TIME_WINDOW_BEFORE_MS = 45 * 60 * 1000; // matchen startade inom 45 min efter genererad strategi
 
@@ -33,9 +41,27 @@ const DEFAULT_MATCHES = [
   "8881157887", "8881063783", "8880962213", "8880765419", "8880678889",
 ];
 
-const accountMap = JSON.parse(fs.readFileSync(path.join(__dirname, "player-accounts.json"), "utf8"));
-const accountToAlias = {};
-for (const [alias, id] of Object.entries(accountMap)) accountToAlias[id] = alias;
+async function fetchPlayers() {
+  const res = await fetch(`https://api.jsonbin.io/v3/b/${process.env.JSONBIN_PLAYERS_ID}/latest`, {
+    headers: { "X-Access-Key": process.env.JSONBIN_API_KEY }
+  });
+  if (!res.ok) throw new Error("JSONBin (spelare) HTTP " + res.status);
+  const json = await res.json();
+  const rec = json.record;
+  return Array.isArray(rec) ? rec : (rec && rec.data) || [];
+}
+
+// Bygger account_id -> alias fran spelarnas steamId (satt pa Hero Pool-sidan).
+// Returnerar ocksa vilka alias som saknar Steam-ID, sa man kan flagga dem.
+function buildAccountToAlias(players) {
+  const accountToAlias = {};
+  const missing = [];
+  for (const p of players) {
+    if (p.steamId) accountToAlias[String(p.steamId)] = p.name;
+    else missing.push(p.name);
+  }
+  return { accountToAlias, missing };
+}
 
 // ---- hjaltenamn -> hero_id via dotaconstants ----
 let heroNameToId = {};
@@ -90,6 +116,13 @@ function draftHeroIds(entry) {
 
 async function main() {
   const matchIds = process.argv.slice(2).length ? process.argv.slice(2) : DEFAULT_MATCHES;
+
+  console.log("Hamtar spelare (Steam-ID:n) ...");
+  const players = await fetchPlayers();
+  const { accountToAlias, missing } = buildAccountToAlias(players);
+  console.log(Object.keys(accountToAlias).length + "/" + players.length + " spelare har Steam-ID satt.");
+  if (missing.length) console.log("  Saknar Steam-ID (kan inte kannas igen i matchdata): " + missing.join(", "));
+  console.log();
 
   console.log("Hamtar historik-bin ...");
   const history = await fetchHistory();
