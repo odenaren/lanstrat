@@ -665,12 +665,12 @@ function renderHome() {
     overlayLink.className = 'overlay-link-btn';
     overlayLink.href = '/api/overlay-config/' + encodeURIComponent(p.name);
     overlayLink.setAttribute('download', '');
-    overlayLink.title = 'Ersätter overlay/config.js i din egen kopia av lanstrat-projektet på din dator — INTE i Steam/Dota.';
+    overlayLink.title = 'Lagg denna fil i overlay-mappen du fick av Oskar, ersatt config.js dar — INTE i Steam/Dota.';
     overlayLink.textContent = '📡 Min overlay-config';
     card.appendChild(overlayLink);
     var overlayHint = document.createElement('div');
     overlayHint.style.cssText = 'font-size:10px;color:var(--text-dim);text-align:center;margin-top:4px';
-    overlayHint.textContent = '→ ersätt overlay/config.js (inte Steam/Dota)';
+    overlayHint.textContent = '→ ersätt config.js i overlay-mappen (inte Steam/Dota)';
     card.appendChild(overlayHint);
     grid.appendChild(card);
   });
