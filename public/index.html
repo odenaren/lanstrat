@@ -160,8 +160,6 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .challenge-gen-btn{width:100%;padding:7px;background:none;border:1px dashed #8e44ad88;color:#9b59b6;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;border-radius:4px;transition:all .15s;}
 .challenge-gen-btn:hover{background:rgba(155,89,182,.12);border-color:#9b59b6;}
 .challenge-gen-btn:disabled{opacity:.4;cursor:not-allowed;}
-.overlay-link-btn{display:block;width:100%;box-sizing:border-box;margin-top:8px;padding:7px;background:none;border:1px dashed #2a9d8f88;color:#4ecdc4;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;text-align:center;text-decoration:none;cursor:pointer;border-radius:4px;transition:all .15s;}
-.overlay-link-btn:hover{background:rgba(78,205,196,.12);border-color:#4ecdc4;}
 .gsi-config-link{font-size:12px;color:var(--text-dim);text-decoration:underline;margin-top:6px;display:inline-block;}
 .gsi-config-link:hover{color:var(--gold);}
 /* CHALLENGE POOL - MATCH PAGE */
@@ -188,7 +186,11 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 
 <!-- HOME -->
 <div id="page-home" class="page active">
-  <div class="home-header"><h1>Hero Pool Manager</h1><p>Varje spelare sparar sina hjältar — AI draftar strategin</p><a class="gsi-config-link" href="/api/gsi-config" download title="Flytta filen till Steam/steamapps/common/dota 2 beta/game/dota/cfg/gamestate_integration/ (skapa mappen om den saknas)">📡 Ladda ner GSI-inställning — läggs i Steam/dota 2 beta/game/dota/cfg/gamestate_integration/ (samma fil till alla)</a></div>
+  <div class="home-header"><h1>Hero Pool Manager</h1><p>Varje spelare sparar sina hjältar — AI draftar strategin</p>
+    <a class="gsi-config-link" href="/api/gsi-config" download title="Flytta filen till Steam/steamapps/common/dota 2 beta/game/dota/cfg/gamestate_integration/ (skapa mappen om den saknas)">📡 Ladda ner GSI-inställning — läggs i Steam/dota 2 beta/game/dota/cfg/gamestate_integration/ (samma fil till alla)</a>
+    <br>
+    <a class="gsi-config-link" href="/api/overlay-config" download title="Ersatt config.js i overlay-mappen du fick av Oskar — samma fil till alla, widgeten kanner sjalv av vem du ar via Steam.">📡 Ladda ner overlay-config — läggs i overlay/config.js (samma fil till alla)</a>
+  </div>
   <div id="player-grid" class="player-grid"></div>
 </div>
 
@@ -661,17 +663,6 @@ function renderHome() {
     cpBtn.onclick = (function(idx){ return function(){ generateChallengePool(idx); }; })(i);
     cpSection.appendChild(cpBtn);
     card.appendChild(cpSection);
-    var overlayLink = document.createElement('a');
-    overlayLink.className = 'overlay-link-btn';
-    overlayLink.href = '/api/overlay-config/' + encodeURIComponent(p.name);
-    overlayLink.setAttribute('download', '');
-    overlayLink.title = 'Lagg denna fil i overlay-mappen du fick av Oskar, ersatt config.js dar — INTE i Steam/Dota.';
-    overlayLink.textContent = '📡 Min overlay-config';
-    card.appendChild(overlayLink);
-    var overlayHint = document.createElement('div');
-    overlayHint.style.cssText = 'font-size:10px;color:var(--text-dim);text-align:center;margin-top:4px';
-    overlayHint.textContent = '→ ersätt config.js i overlay-mappen (inte Steam/Dota)';
-    card.appendChild(overlayHint);
     grid.appendChild(card);
   });
   const add = document.createElement('div');

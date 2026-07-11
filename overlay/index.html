@@ -38,9 +38,17 @@
     }, CONFIG.showMs);
   }
 
+  function overlayUrl() {
+    if (!CONFIG.baseUrl) return null;
+    var accountId = new URLSearchParams(location.search).get('accountId');
+    if (accountId) return CONFIG.baseUrl + '/by-steamid/' + encodeURIComponent(accountId);
+    if (CONFIG.alias) return CONFIG.baseUrl + '/' + encodeURIComponent(CONFIG.alias); // manuell fallback (test/Steam ej igangkort)
+    return null;
+  }
+
   function poll() {
-    if (!CONFIG.baseUrl || !CONFIG.alias) return;
-    var url = CONFIG.baseUrl + '/' + encodeURIComponent(CONFIG.alias);
+    var url = overlayUrl();
+    if (!url) return;
     fetch(url, { headers: authHeader() })
       .then(function(r){ return r.json(); })
       .then(function(data){

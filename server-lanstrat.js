@@ -648,6 +648,17 @@ const overlayStates = {}; // alias -> {id, kind, title, body, ts}
 function pushOverlay(alias, kind, title, body) {
   overlayStates[alias] = { id: Date.now().toString() + '-' + Math.random().toString(36).slice(2, 6), kind: kind, title: title, body: body, ts: Date.now() };
 }
+// Widgeten kanner sjalv av spelarens Steam-konto (se overlay/main.js) och slar upp
+// ratt alias har, sa INGEN per-spelare-config behovs langre — en och samma
+// config.js/overlay-mapp funkar for alla 9 spelare.
+app.get('/api/overlay/by-steamid/:accountId', async (req, res) => {
+  const accountId = Number(req.params.accountId);
+  const players = await readPlayers();
+  const p = players.find(pl => Number(pl.steamId) === accountId);
+  if (!p) return res.json({ id: null, kind: null, title: '', body: '', ts: 0 });
+  res.json(overlayStates[p.name] || { id: null, kind: null, title: '', body: '', ts: 0 });
+});
+
 app.get('/api/overlay/:alias', (req, res) => {
   res.json(overlayStates[req.params.alias] || { id: null, kind: null, title: '', body: '', ts: 0 });
 });
@@ -656,14 +667,13 @@ app.post('/api/overlay/:alias', (req, res) => {
   res.json(overlayStates[req.params.alias]);
 });
 
-// Nedladdningsbar overlay/config.js med spelarens alias + sitelosenord ifyllt,
-// sa spelaren slipper skriva nagot sjalv. Skyddad av samma Basic Auth som resten
-// av sajten — man maste redan ha losenordet for att nå den har routen.
-app.get('/api/overlay-config/:alias', (req, res) => {
-  const alias = req.params.alias;
+// Nedladdningsbar overlay/config.js — EN och samma fil till alla 9 spelare.
+// Ingen alias behovs, widgeten kanner sjalv av vem som ar inloggad i Steam.
+// Skyddad av samma Basic Auth som resten av sajten.
+app.get('/api/overlay-config', (req, res) => {
   const content = "window.OVERLAY_CONFIG = {\n"
     + "  baseUrl: '" + (process.env.PUBLIC_URL || 'https://dhs27.up.railway.app') + "/api/overlay',\n"
-    + "  alias: '" + alias.replace(/'/g, "\\'") + "',\n"
+    + "  alias: '', // fallback om Steam inte kunde identifieras — normalt behovs detta inte\n"
     + "  password: '" + (process.env.SITE_PASSWORD || '').replace(/'/g, "\\'") + "',\n"
     + "  pollMs: 2000,\n"
     + "  showMs: 12000\n"
