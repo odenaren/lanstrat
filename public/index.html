@@ -1128,11 +1128,15 @@ async function generateStrategy() {
     { id:'poke', instruction:'Spela POKE & SIEGE. Chip damage pa fiender och torn pa avstand. Tvinga fram daliga fights nar motstandarna ar pa halv hp. Valj hjaltar med lang rackvidd.' },
     { id:'lategame', instruction:'Spela LATE GAME SCALING. Farm lugnt, undvik fights, exploderar vid 35+ minuter nar carries ar fullbuildade. Valj hjaltar som skalas extremt bra.' },
     { id:'splitpush', instruction:'Spela SPLITPUSH. En spelare pushar ensam i en lane, resten distraherar motstandarna. Tvinga omojliga beslut. Valj en stark solohjälte och fyra som kan halla pressure.' },
-    { id:'chaos', instruction:'Spela CHAOS & DISRUPTION. Ingen tydlig plan - oforutsagbarhet ar vapnet. Individuell skill och kaos i alla lanes. Valj hjaltar som ar jobbiga att mota.' },
+    { id:'chaos', instruction:'Spela CHAOS & DISRUPTION. Kaoset AR planen, inte franvaron av en: splitta upp over hela kartan, byt taktik var 5:e minut, tvinga fram oorganiserade 1v1/2v2 istallet for raka 5v5. Konkret vinstvillkor: bryt ner motstandarnas struktur och kommunikation genom att aldrig ge dem ett monster att forbereda sig mot, tills de borjar fatta daliga beslut under press. Valj hjaltar som ar starka solo/i smagrupper och jobbiga att mota.' },
     { id:'objective', instruction:'Spela OBJECTIVE CONTROL. Aldrig doda i ondan - bara ta torn, Roshan och byggnader. Tvinga motstandarna att reagera pa era rorer. Valj hjaltar med bra push.' },
     { id:'towerdive', instruction:'Spela TOWER DIVE HEAVY. Dyk in under torn fran level 3. Extremt aggressivt. Motstandarna ska aldrig kanna sig sakra. Valj hjaltar som overlever dives.' },
     { id:'global', instruction:'Spela GLOBAL PRESENCE. Dyk upp overallt pa kartan. Teleport-items och global ultimates. Motstandarna kan aldrig kanna sig sakra, varje fight kan bli 5v3 i sista sekunden.' },
     { id:'magicimmune', instruction:'Spela MAGIC IMMUNE. Bygga pa BKB och magic resistance. Ga rakt igenom motstandardnas spells och slass med auto-attacks. Valj hjaltar som skalas bra med BKB.' },
+    { id:'roshan', instruction:'Spela ROSHAN & AEGIS TIMING. Hela planen kretsar kring att kontrollera och tajma Roshan-dodande for att tvinga fram Aegis-fordelaktiga fights. Smoka Roshan tidigt, forsvara pit-omradet, anvand Aegis-fonstret (5 min) till en aggressiv push eller pafolande fight. Valj hjaltar som ar starka i och runt Roshan-pit och som drar nytta av en extra liv i en avgorande fight.' },
+    { id:'vision', instruction:'Spela VISION & INFO WARFARE. Dominera wardkriget - saker observer/sentry-fordel over hela kartan, deward konstant, undvik varje fight dar ni saknar informationsfordel. Vinstvillkor: fienden fightar blint medan ni ser allt, och ni valjer alltid var och nar fights sker. Valj hjaltar med bra detection, mobilitet for dewarding, eller invisibility.' },
+    { id:'powerspike', instruction:'Spela POWERSPIKE RUSH. Hela laget itemiserar mot EN specifik minut-markering (t.ex. minut 18-22) dar en nyckelspelare far ett avgorande item (t.ex. Black King Bar, Blink Dagger, Aghanims). Fore den tidpunkten: spela passivt, farma, undvik onodiga fights. Nar spiken slar in: all-in omedelbart, innan fonstret stangs. Valj hjaltar med ett tydligt, farmbart powerspike-item.' },
+    { id:'counterdraft', instruction:'Spela COUNTER-DRAFT TRAP. Planen baseras pa att locka fram specifika fiendehjaltar (via bans, pick-ordning eller synliga svagheter i deras pool) och sedan hardkontra dem rakt av. Draften ska kannas som en fangst som slar igen i mid-game. Valj hjaltar med starka, tydliga counter-relationer mot troliga fiendeval.' },
   ];
 
   // Avoid same archetype twice in a row (stored in session)
@@ -1636,11 +1640,15 @@ var ARCHETYPE_LABELS = {
   poke:{name:'Poke & Siege',desc:'Chip damage på avstånd, tvinga dåliga fights'},
   lategame:{name:'Late Game Scaling',desc:'Farma lugnt, explodera vid 35+ min'},
   splitpush:{name:'Splitpush',desc:'En pushar ensam, resten distraherar'},
-  chaos:{name:'Chaos & Disruption',desc:'Ingen plan — oförutsägbarhet är vapnet'},
+  chaos:{name:'Chaos & Disruption',desc:'Kaoset är planen — splitta, byt taktik, bryt ner strukturen'},
   objective:{name:'Objective Control',desc:'Bara torn, Roshan och byggnader'},
   towerdive:{name:'Tower Dive Heavy',desc:'Dyk under torn från level 3'},
   global:{name:'Global Presence',desc:'Teleports och globala ultimates överallt'},
-  magicimmune:{name:'Magic Immune',desc:'BKB-fokus, rakt igenom spells'}
+  magicimmune:{name:'Magic Immune',desc:'BKB-fokus, rakt igenom spells'},
+  roshan:{name:'Roshan & Aegis Timing',desc:'Kontrollera Roshan, tvinga fights med Aegis-fördel'},
+  vision:{name:'Vision & Info Warfare',desc:'Dominera wardkriget, fighta bara med informationsövertag'},
+  powerspike:{name:'Powerspike Rush',desc:'Hela laget mot en timing, all-in när spiken slår in'},
+  counterdraft:{name:'Counter-Draft Trap',desc:'Locka fram fiendehjältar och hårdkontra dem'}
 };
 function statBar(label, sub, count, total, w, l) {
   var pct = total ? Math.round(count/total*100) : 0;

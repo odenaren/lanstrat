@@ -320,8 +320,10 @@ const STUDIO_ARCHETYPE_LABELS = {
   deathball:'Deathball — win before 25 min', snowball:'Early Snowball — dominate laning',
   gank:'Gank & Dominate', teamfight:'Teamfight — wait for the right fight',
   pickoff:'Pick-off — hunt isolated enemies', poke:'Poke & Siege', lategame:'Late Game Scaling — explode at 35+',
-  splitpush:'Splitpush', chaos:'Chaos & Disruption', objective:'Objective Control',
-  towerdive:'Tower Dive Heavy', global:'Global Presence', magicimmune:'Magic Immune — BKB focus'
+  splitpush:'Splitpush', chaos:'Chaos & Disruption — chaos IS the plan', objective:'Objective Control',
+  towerdive:'Tower Dive Heavy', global:'Global Presence', magicimmune:'Magic Immune — BKB focus',
+  roshan:'Roshan & Aegis Timing', vision:'Vision & Info Warfare',
+  powerspike:'Powerspike Rush — all-in on one timing', counterdraft:'Counter-Draft Trap'
 };
 const STUDIO_NOTABLE_ITEMS = ['rapier','hand_of_midas','black_king_bar','ultimate_scepter','aghanims_shard',
   'refresher','gem','blink','divine_rapier','radiance','heart','satanic','swift_blink','overwhelming_blink',
