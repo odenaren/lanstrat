@@ -6,6 +6,9 @@ Ostrukturerad men kategoriserad att-göra-lista. Uppdatera i klartext när nya i
 
 Sånt som inte finns än — helt nya delar av produkten.
 
+- **Personliga utmaningar med automatisk verifiering** *(pågående)* — AI genererar en personlig utmaning per spelare per match, anpassad efter rollen spelaren fått i strategin (t.ex. "dö max 4 gånger", "placera 8 wards"). Verifieras automatiskt mot OpenDota-datan efter länkning. Studiopanelen avslöjar vem som klarade sin. In-game castern (GSI-servern i separata `laneight`-repot) ska kunna läsa utmaningarna via API:t och kommentera progress live under matchen.
+- **Prisgala / säsongsavslutning på TV:n** — AI-genererad awards-show som finalnummer sista kvällen: MVP, "Feeder of the Year", största comeback, flest first bloods osv. Byggs på samma mönster som studioanalysen (segment + TTS-röster + TV-grafik) men aggregerar hela säsongens OpenDota-data istället för en match.
+- **Storylines över säsongen** — hype-announcern och studiopanelen får aggregerad matchhistorik som promptkontext så de kan bygga berättelser mellan matcher ("tredje raka förlusten som carry", "första gången X och Y är lagkamrater sedan spel 12"). Idag undviker `recap-history.json` bara upprepade vinklar — den bygger inga narrativ.
 - **Single player-läge** *(framtid, inte aktuellt nu)* — ett läge för den som spelar pubmatcher själv (inte på LAN) och vill ha samma typ av kul: roliga utmaningar, "produktion" (typ hype/recap) och statistik på sina egna matcher. Kräver eftertanke kring datamodell (separat från lag-matcherna) och vad som är rimligt att generera per match för en enda spelare. Bara en idé att inte tappa bort.
 
 ## Förbättringar

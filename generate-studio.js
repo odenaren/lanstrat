@@ -167,6 +167,25 @@ async function generateForMatch(strategyMatch, heroes, allMatches) {
     .sort((a,b) => b.deaths - a.deaths).slice(0, 4);
   const roshans = (m.objectives || []).filter(o => o.type === 'CHAT_MESSAGE_ROSHAN_KILL').map(o => 'min' + min(o.time));
 
+  // Utmaningsutfall — verifieras mot matchdatan och ges till panelen (samma logik som server.js)
+  let challengeResults = null;
+  if (Array.isArray(strategyMatch.challenges) && strategyMatch.challenges.length) {
+    const odRowByAlias = {};
+    (m.players || []).forEach(p => {
+      if ((p.player_slot < 128) !== weAreRadiant) return;
+      const nick = aliasByHero[normHero(heroName(p.hero_id))];
+      if (nick) odRowByAlias[nick] = p;
+    });
+    challengeResults = strategyMatch.challenges.map(ch => {
+      const row = odRowByAlias[ch.alias];
+      if (!row) return { alias: ch.alias, challenge: ch.text, result: 'unknown — player not found in match data' };
+      const raw = ch.metric === 'stuns' ? (row.stuns || 0) : (row[ch.metric] || 0);
+      const actual = Math.round(raw);
+      const passed = ch.op === '<=' ? actual <= ch.value : actual >= ch.value;
+      return { alias: ch.alias, challenge: ch.text, target: ch.op + ' ' + ch.value + ' ' + ch.metric, actual, passed };
+    });
+  }
+
   const summary = {
     dhs_team: weAreRadiant ? 'Radiant' : 'Dire',
     dhs_result: strategyMatch.matchResult,
@@ -176,6 +195,7 @@ async function generateForMatch(strategyMatch, heroes, allMatches) {
     radiant_gold_advantage_per_minute: m.radiant_gold_adv || null,
     biggest_teamfights: teamfights,
     roshan_kills: roshans,
+    personal_challenges: challengeResults,
     players: players
   };
 
@@ -212,6 +232,9 @@ async function generateForMatch(strategyMatch, heroes, allMatches) {
     + 'The DHS squad is the emotional center of the recap regardless of who won.'
     + '\n\nPERSONAL COLOR: Where the data genuinely earns it, drop a natural personal remark about one of the DHS players — '
     + 'one or two per recap. NEVER walk through the roster player by player; most of our players should go unmentioned.'
+    + '\n\nPERSONAL CHALLENGES: if personal_challenges is present in MATCH DATA, each DHS player had a public personal '
+    + 'challenge for this match, with verified results. Weave the 1-3 most interesting outcomes into the discussion — '
+    + 'celebrate a clutch clear or roast a spectacular fail. Do NOT recite the full challenge list.'
     + (recentAngles.length ? '\n\nANGLES ALREADY USED in recent recaps tonight (find DIFFERENT threads): ' + recentAngles.join('; ') : '')
     + '\n\nFormat: 10-14 dialogue lines. HOST opens with a short scene-setting line and closes the segment. '
     + 'Both analysts must speak multiple times, and at least once react directly to what the OTHER analyst just said. '
@@ -277,7 +300,8 @@ async function generateForMatch(strategyMatch, heroes, allMatches) {
     headline: recap.headline || null,
     generatedAt: new Date().toISOString(),
     segments: segments,
-    angles: recap.angles || []
+    angles: recap.angles || [],
+    challengeResults: challengeResults
   };
 
   const manifestPayload = { manifest };

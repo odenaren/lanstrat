@@ -396,6 +396,23 @@ async function generateStudioForMatch(strategyMatch, force) {
     .sort((a,b) => b.deaths - a.deaths).slice(0, 4);
   const roshans = (m.objectives || []).filter(o => o.type === 'CHAT_MESSAGE_ROSHAN_KILL').map(o => 'min' + min(o.time));
 
+  // Utmaningsutfall — verifieras mot matchdatan och ges till panelen som underlag
+  let challengeResults = null;
+  if (Array.isArray(strategyMatch.challenges) && strategyMatch.challenges.length) {
+    const odRowByAlias = {};
+    (m.players || []).forEach(p => {
+      if ((p.player_slot < 128) !== weAreRadiant) return;
+      const nick = aliasByHero[studioNormHero(heroName(p.hero_id))];
+      if (nick) odRowByAlias[nick] = p;
+    });
+    challengeResults = strategyMatch.challenges.map(ch => {
+      const row = odRowByAlias[ch.alias];
+      if (!row) return { alias: ch.alias, challenge: ch.text, result: 'unknown — player not found in match data' };
+      const r = evalChallenge(ch, row);
+      return { alias: ch.alias, challenge: ch.text, target: ch.op + ' ' + ch.value + ' ' + ch.metric, actual: r.actual, passed: r.passed };
+    });
+  }
+
   const summary = {
     dhs_team: weAreRadiant ? 'Radiant' : 'Dire',
     dhs_result: matchResult,
@@ -405,6 +422,7 @@ async function generateStudioForMatch(strategyMatch, force) {
     radiant_gold_advantage_per_minute: m.radiant_gold_adv || null,
     biggest_teamfights: teamfights,
     roshan_kills: roshans,
+    personal_challenges: challengeResults,
     players: players
   };
 
@@ -440,6 +458,9 @@ async function generateStudioForMatch(strategyMatch, force) {
     + 'The DHS squad is the emotional center of the recap regardless of who won.'
     + '\n\nPERSONAL COLOR: Where the data genuinely earns it, drop a natural personal remark about one of the DHS players — '
     + 'one or two per recap. NEVER walk through the roster player by player; most of our players should go unmentioned.'
+    + '\n\nPERSONAL CHALLENGES: if personal_challenges is present in MATCH DATA, each DHS player had a public personal '
+    + 'challenge for this match, with verified results. Weave the 1-3 most interesting outcomes into the discussion — '
+    + 'celebrate a clutch clear or roast a spectacular fail. Do NOT recite the full challenge list.'
     + (recentAngles.length ? '\n\nANGLES ALREADY USED in recent recaps tonight (find DIFFERENT threads): ' + recentAngles.join('; ') : '')
     + '\n\nFormat: 10-14 dialogue lines. HOST opens with a short scene-setting line and closes the segment. '
     + 'Both analysts must speak multiple times, and at least once react directly to what the OTHER analyst just said. '
@@ -498,7 +519,8 @@ async function generateStudioForMatch(strategyMatch, force) {
     headline: recap.headline || null,
     generatedAt: new Date().toISOString(),
     segments: segments,
-    angles: recap.angles || []
+    angles: recap.angles || [],
+    challengeResults: challengeResults
   };
 
   // Manifestet (text + repliks bin-id:n, inget ljud) far ocksa en egen liten bin.
@@ -601,6 +623,66 @@ app.post('/api/replay/:id', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── PERSONLIGA UTMANINGAR ────────────────────────────
+// AI genererar en utmaning per spelare, anpassad efter rollen i strategin.
+// Maskinverifierbar: metric ur fast meny (OpenDota-falt), op och value —
+// verifieras automatiskt mot matchdatan nar matchen ar lankad.
+const CHALLENGE_METRICS = {
+  kills: 'kills', deaths: 'deaths (getts som max, op <=)', assists: 'assists',
+  last_hits: 'last hits', denies: 'denies',
+  gold_per_min: 'GPM', xp_per_min: 'XPM',
+  hero_damage: 'hero damage totalt', tower_damage: 'tower damage totalt', hero_healing: 'healing totalt',
+  obs_placed: 'observer wards placerade', sen_placed: 'sentry wards placerade',
+  stuns: 'stun-sekunder totalt'
+};
+
+function evalChallenge(ch, odRow) {
+  const raw = ch.metric === 'stuns' ? (odRow.stuns || 0) : (odRow[ch.metric] || 0);
+  const actual = Math.round(raw);
+  const passed = ch.op === '<=' ? actual <= ch.value : actual >= ch.value;
+  return { actual, passed };
+}
+
+async function generateChallengesForMatch(matchId) {
+  const matches = await readMatches();
+  const match = matches.find(m => m.id === matchId);
+  if (!match || (match.challenges && match.challenges.length)) return;
+  const draft = match.currentDraft || match.draft || {};
+  const aliases = Object.keys(draft);
+  if (!aliases.length) return;
+
+  const prompt = 'Du ar utmaningsgeneratorn for en Dota 2-LAN-kvall. Laget har fatt en hemlig strategi och varje spelare en roll. '
+    + 'Skapa EN personlig utmaning per spelare, anpassad efter spelarens hjalte och roll i strategin. '
+    + 'Utmaningen ska vara matbar via OpenDota-statistik och REALISTISK for rollen: en support ska fa ward/assist/stun-utmaningar, '
+    + 'en carry farm/damage-utmaningar, en offlane tanka/disrupta. Svarighetsgrad: klarbar men inte gratis — man ska behova tanka pa den under matchen.'
+    + '\n\nTillgangliga metrics (anvand exakt dessa nycklar): ' + JSON.stringify(CHALLENGE_METRICS)
+    + '\nop ar ">=" (minst) eller "<=" (hogst, typiskt for deaths).'
+    + '\n\nDRAFT (spelare -> hjalte): ' + JSON.stringify(draft)
+    + '\nSTRATEGI (roller och plan): ' + (match.currentStrategy || match.strategy || '').slice(0, 1500)
+    + '\n\nSvara ENDAST med JSON, ingen markdown:'
+    + '\n{"challenges":[{"alias":"exakt spelarnamn ur draften","text":"kort slagkraftig utmaningstext pa svenska, max 12 ord","metric":"nyckel ur menyn","op":">=","value":42}]}';
+
+  const text = (await callClaude(prompt, 1500)).replace(/```json|```/g, '').trim();
+  const jsonStart = text.indexOf('{');
+  const jsonEnd = text.lastIndexOf('}');
+  if (jsonStart === -1 || jsonEnd === -1) throw new Error('Ogiltigt utmaningssvar fran AI');
+  const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1));
+
+  const valid = (parsed.challenges || []).filter(c =>
+    c && aliases.includes(c.alias) && CHALLENGE_METRICS[c.metric]
+    && (c.op === '>=' || c.op === '<=') && typeof c.value === 'number' && c.text
+  );
+  if (!valid.length) throw new Error('Inga giltiga utmaningar i AI-svaret');
+
+  // Las om binen — annan skrivning kan ha hunnit fore under AI-anropet
+  const fresh = await readMatches();
+  const freshMatch = fresh.find(m => m.id === matchId);
+  if (!freshMatch) return;
+  freshMatch.challenges = valid.map(c => ({ alias: c.alias, text: c.text, metric: c.metric, op: c.op, value: c.value }));
+  await writeMatches(fresh);
+  console.log('Utmaningar genererade for match ' + matchId + ' (' + valid.length + ' st)');
+}
+
 // MATCHES
 app.get('/api/matches', async (req, res) => {
   try { res.json(await readMatches()); }
@@ -639,6 +721,8 @@ app.post('/api/matches', async (req, res) => {
     // Generera announcer-ljud i bakgrunden — klart innan TV:n når hype-skärmen
     const spokenText = match.hypeSpoken || match.hype;
     if (spokenText) generateHypeAudio(match.id, spokenText).catch(e => console.error('Hype TTS:', e.message));
+    // Generera personliga utmaningar i bakgrunden — klart innan TV:n nar utmaningsskarmen
+    generateChallengesForMatch(match.id).catch(e => console.error('Utmaningar:', e.message));
     res.json(match);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });

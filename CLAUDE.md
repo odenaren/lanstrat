@@ -107,6 +107,7 @@ Lokala scripts läser `.env` i repo-roten (skyddad av `.gitignore`). Prod-histor
   "result": "win|loss|null", "matchResult": "sätts vid OpenDota-länkning",
   "openDotaMatchId": "sätts av write-match-links",
   "studioBinId": "JSONBin-bin med studioanalysens manifest (text + per-replik binId:n), satt vid generering",
+  "challenges": [{ "alias": "ALIAS", "text": "sv", "metric": "OpenDota-fält", "op": ">=|<=", "value": 8 }],
   "excludeFromMemory": false
 }
 ```
@@ -127,6 +128,13 @@ Viktigt: `strategy` = originalet, bevaras alltid. Draftändringar efter bans **a
 - **Varför en bin per replik, inte en delad bin per match:** verifierat mot API:t (inte antaget) — JSONBins nginx-proxy svarar 413 på requests över exakt 1MiB (1 048 576 bytes), oavsett vad "10MB Pro-bin" faktiskt syftar på (troligen lagring, inte uppladdningsstorlek). En hel matchs ljud (flera MB) får aldrig plats i ett enda POST/PUT. `STUDIO_MAX_BIN_BYTES` i server.js sätter taket till 900KB per bin (marginal under 1MiB) — överskrids det kastas ett tydligt fel istället för 413 eller tyst korruption.
 - Panelen är **neutrala broadcasters**: får aldrig säga "our team/we/us" — refererar till "the DHS squad", smeknamn etc. (regeln ligger i prompten i server.js OCH generate-studio.js — håll dem synkade)
 - Ingen bakgrundsmusik under studiosändning på TV:n
+
+## Personliga utmaningar
+
+- Genereras i bakgrunden (server.js `generateChallengesForMatch`) när matchen sparas via `POST /api/matches` — sparas som `challenges` på matchen. AI väljer ur fast metric-meny (`CHALLENGE_METRICS`), anpassat efter roll/hjälte i strategin.
+- Visas: TV:n (egen skärm efter briefingen — hämtar om matchen eftersom genereringen är asynkron), Playbook-detaljvyn (lila box; utfall i statistikkortet när matchen är länkad), och studiopanelens prompt får verifierade utfall (`personal_challenges` i MATCH DATA + `challengeResults` i manifestet).
+- Verifiering: `evalChallenge` i server.js (och motsvarande klientlogik i index.html) — jämför OpenDota-fältet mot `op`/`value`. Ingen poängliga (beslut 2026-07-11): bara ära per match.
+- GSI/caster-repot läser utmaningarna via `GET /api/matches/:id` (`challenges`-fältet) för live-kommentarer om progress — inget mer API behövs härifrån.
 
 ## Övriga fällor
 
