@@ -82,9 +82,22 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
 .studio-badge{font-size:14px;font-weight:700;letter-spacing:.25em;color:#e74c3c;text-transform:uppercase;}
 .studio-title{font-size:clamp(24px,3vw,40px);font-weight:700;color:var(--gold);letter-spacing:.06em;text-transform:uppercase;}
 .studio-headline{font-size:16px;color:var(--text-dim);font-style:italic;margin-left:auto;}
-.studio-main{flex:1;display:grid;grid-template-columns:1fr 380px;gap:40px;align-items:start;min-height:0;}
-.studio-speaker-label{font-size:15px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;margin-bottom:16px;transition:color .3s;}
-.studio-line{font-size:clamp(24px,2.6vw,38px);line-height:1.6;color:var(--text);max-width:900px;min-height:200px;}
+.studio-main{flex:1;display:grid;grid-template-columns:1fr 380px;gap:40px;align-items:center;min-height:0;}
+.studio-desk{display:flex;gap:24px;align-items:stretch;}
+.studio-seat{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:36px 20px;border-radius:12px;border:1px solid var(--gold-dim);background:rgba(255,255,255,.02);opacity:.35;transform:scale(.95);transition:opacity .4s ease,transform .4s ease,border-color .4s ease,box-shadow .4s ease,background .4s ease;}
+.studio-seat.active{opacity:1;transform:scale(1);background:rgba(200,155,60,.06);}
+.studio-seat-icon{font-size:44px;filter:grayscale(1);transition:filter .4s ease;}
+.studio-seat.active .studio-seat-icon{filter:grayscale(0);}
+.studio-seat-name{font-size:14px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--text-dim);transition:color .4s ease;text-align:center;}
+.studio-seat.active .studio-seat-name{color:var(--gold);}
+.studio-seat-bars{display:flex;gap:5px;align-items:flex-end;height:30px;}
+.studio-seat-bars span{width:6px;background:var(--text-dim);border-radius:3px;height:6px;transition:background .4s ease;}
+.studio-seat.active .studio-seat-bars span{animation:barPulse .9s ease-in-out infinite;}
+.studio-seat.active .studio-seat-bars span:nth-child(1){animation-delay:0s;}
+.studio-seat.active .studio-seat-bars span:nth-child(2){animation-delay:.15s;}
+.studio-seat.active .studio-seat-bars span:nth-child(3){animation-delay:.3s;}
+.studio-seat.active .studio-seat-bars span:nth-child(4){animation-delay:.1s;}
+@keyframes barPulse{0%,100%{height:6px;}50%{height:28px;}}
 .studio-spotlight{display:flex;flex-direction:column;gap:14px;}
 .spotlight-card{background:rgba(200,155,60,.06);border:1px solid var(--gold-dim);border-radius:8px;padding:16px;display:flex;gap:14px;align-items:center;animation:fadeIn .4s ease both;}
 .spotlight-card img{width:110px;height:62px;object-fit:cover;border-radius:5px;}
@@ -110,9 +123,22 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
       <span class="studio-headline" id="studio-headline"></span>
     </div>
     <div class="studio-main">
-      <div>
-        <div class="studio-speaker-label" id="studio-speaker"></div>
-        <div class="studio-line" id="studio-line"></div>
+      <div class="studio-desk" id="studio-desk">
+        <div class="studio-seat" data-speaker="host">
+          <div class="studio-seat-icon">🎙</div>
+          <div class="studio-seat-name">Host</div>
+          <div class="studio-seat-bars"><span></span><span></span><span></span><span></span></div>
+        </div>
+        <div class="studio-seat" data-speaker="analyst1">
+          <div class="studio-seat-icon">📈</div>
+          <div class="studio-seat-name">Analyst — Strategi</div>
+          <div class="studio-seat-bars"><span></span><span></span><span></span><span></span></div>
+        </div>
+        <div class="studio-seat" data-speaker="analyst2">
+          <div class="studio-seat-icon">📊</div>
+          <div class="studio-seat-name">Analyst — Siffror</div>
+          <div class="studio-seat-bars"><span></span><span></span><span></span><span></span></div>
+        </div>
       </div>
       <div class="studio-spotlight" id="studio-spotlight"></div>
     </div>
@@ -840,14 +866,15 @@ async function runStudio(strategyMatchId) {
     for(var i = 0; i < manifest.segments.length; i++) {
       var seg = manifest.segments[i];
       var meta = SPEAKER_META[seg.speaker] || { label: seg.speaker.toUpperCase(), color: 'var(--text)' };
-      var spEl = document.getElementById('studio-speaker');
-      spEl.textContent = meta.label;
-      spEl.style.color = meta.color;
-      var lineEl = document.getElementById('studio-line');
-      lineEl.style.animation = 'none';
-      void lineEl.offsetWidth;
-      lineEl.style.animation = 'fadeIn .35s ease both';
-      lineEl.textContent = seg.text;
+
+      // Ingen text pa skarmen - bara den pratande "stolen" lyser upp och pulsar
+      document.querySelectorAll('.studio-seat').forEach(function(seat){
+        var isActive = seat.getAttribute('data-speaker') === seg.speaker;
+        seat.classList.toggle('active', isActive);
+        seat.style.borderColor = isActive ? meta.color : '';
+        seat.style.boxShadow = isActive ? '0 0 40px ' + meta.color + '55' : '';
+        seat.querySelectorAll('.studio-seat-bars span').forEach(function(bar){ bar.style.background = isActive ? meta.color : ''; });
+      });
       document.getElementById('studio-progress').textContent = (i+1) + ' / ' + manifest.segments.length;
 
       // Spotlights: byt panel när nya spelare nämns, behåll annars
@@ -880,6 +907,11 @@ async function runStudio(strategyMatchId) {
       });
       await wait(250);
     }
+
+    document.querySelectorAll('.studio-seat').forEach(function(seat){
+      seat.classList.remove('active'); seat.style.borderColor = ''; seat.style.boxShadow = '';
+      seat.querySelectorAll('.studio-seat-bars span').forEach(function(bar){ bar.style.background = ''; });
+    });
 
     await wait(4000);
     if(bg) fadeAudio(bg, bg.volume, 0, 2000, function(){ try{ bg.pause(); }catch(e){} });
