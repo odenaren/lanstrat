@@ -6,8 +6,10 @@
 //     (arketyp, briefing, draft) och kan jamfora mot verkligheten
 //   * Varje replik taggas med vilka DHS-spelare som namns ("mentions")
 //     sa TV:n kan lyfta fram deras statistik nar de omtalas
-//   * Output: public/studio/<odMatchId>/manifest.json + seg_NN.mp3
-//     (spelas av Playbook-detaljvyn och /tv)
+//   * Output: en egen JSONBin-bin per match (manifest + base64-ljud),
+//     bin-id:t sparas som studioBinId pa matchen i matches-binen. Detta
+//     istallet for disk, eftersom Railways filsystem ar efemart vid deploy.
+//     (spelas av Playbook-detaljvyn och /tv via /studio/:odId/... pa servern)
 //
 // Anvandning:
 //   node generate-studio.js                 <- alla lankade matcher utan studio
@@ -32,7 +34,7 @@ const KEY = process.env.ANTHROPIC_API_KEY;
 const EL_KEY = process.env.ELEVENLABS_API_KEY;
 const BIN_KEY = process.env.JSONBIN_API_KEY;
 const HISTORY_FILE = path.join(__dirname, 'recap-history.json');
-const STUDIO_DIR = path.join(__dirname, 'public', 'studio');
+const MAX_BIN_BYTES = 9 * 1024 * 1024; // 9MB — marginal under JSONBins 10MB-tak per bin
 
 const args = process.argv.slice(2);
 const FORCE = args.includes('--force');
@@ -77,13 +79,41 @@ async function fetchBinMatches() {
   return Array.isArray(rec) ? rec : (rec && rec.data) || [];
 }
 
+// Skriver hela matchlistan tillbaka (anvands efter att studioBinId satts pa en match)
+async function writeBinMatches(matches) {
+  const res = await fetch('https://api.jsonbin.io/v3/b/' + BIN_ID, {
+    method: 'PUT',
+    headers: { 'X-Access-Key': BIN_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify(matches)
+  });
+  if (!res.ok) throw new Error('JSONBin skriv ' + res.status);
+}
+
+async function createStudioBin(payload) {
+  const res = await fetch('https://api.jsonbin.io/v3/b', {
+    method: 'POST',
+    headers: { 'X-Access-Key': BIN_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('JSONBin skapa studio-bin ' + res.status);
+  const json = await res.json();
+  return json.metadata.id;
+}
+
+async function setStudioBinData(binId, payload) {
+  const res = await fetch('https://api.jsonbin.io/v3/b/' + binId, {
+    method: 'PUT',
+    headers: { 'X-Access-Key': BIN_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('JSONBin uppdatera studio-bin ' + res.status);
+}
+
 function normHero(n){ return String(n||'').toLowerCase().replace(/[^a-z]/g,''); }
 
-async function generateForMatch(strategyMatch, heroes) {
+async function generateForMatch(strategyMatch, heroes, allMatches) {
   const odId = strategyMatch.openDotaMatchId;
-  const outDir = path.join(STUDIO_DIR, String(odId));
-  const manifestFile = path.join(outDir, 'manifest.json');
-  if (fs.existsSync(manifestFile) && !FORCE) {
+  if (strategyMatch.studioBinId && !FORCE) {
     console.log('  ↷ ' + odId + ' — studio finns redan, hoppar over (kor med --force for att gora om)');
     return;
   }
@@ -205,28 +235,24 @@ async function generateForMatch(strategyMatch, heroes) {
   });
 
   console.log('  "' + (recap.headline || '') + '" — ' + recap.dialogue.length + ' repliker. Genererar roster…');
-  fs.mkdirSync(outDir, { recursive: true });
 
   const segments = [];
   for (let i = 0; i < recap.dialogue.length; i++) {
     const d = recap.dialogue[i];
     const fname = 'seg_' + String(i).padStart(2, '0') + '.mp3';
-    const fpath = path.join(outDir, fname);
-    if (!fs.existsSync(fpath) || FORCE) {
-      const body = { text: d.text, model_id: 'eleven_multilingual_v2', voice_settings: SETTINGS_MAP[d.speaker] || SETTINGS_MAP.analyst1 };
-      if (i > 0) body.previous_text = recap.dialogue[i-1].text;
-      if (i < recap.dialogue.length - 1) body.next_text = recap.dialogue[i+1].text;
-      const tRes = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + (VOICE_MAP[d.speaker] || voices.analytic), {
-        method: 'POST',
-        headers: { 'xi-api-key': EL_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      if (!tRes.ok) { console.error('  ElevenLabs ' + tRes.status + ' pa replik ' + i + ' — avbryter denna match.'); return; }
-      fs.writeFileSync(fpath, Buffer.from(await tRes.arrayBuffer()));
-      await new Promise(r => setTimeout(r, 800));
-    }
+    const body = { text: d.text, model_id: 'eleven_multilingual_v2', voice_settings: SETTINGS_MAP[d.speaker] || SETTINGS_MAP.analyst1 };
+    if (i > 0) body.previous_text = recap.dialogue[i-1].text;
+    if (i < recap.dialogue.length - 1) body.next_text = recap.dialogue[i+1].text;
+    const tRes = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + (VOICE_MAP[d.speaker] || voices.analytic), {
+      method: 'POST',
+      headers: { 'xi-api-key': EL_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!tRes.ok) { console.error('  ElevenLabs ' + tRes.status + ' pa replik ' + i + ' — avbryter denna match.'); return; }
+    const audioBase64 = Buffer.from(await tRes.arrayBuffer()).toString('base64');
+    await new Promise(r => setTimeout(r, 800));
     process.stdout.write('    ✓ ' + (i+1) + '/' + recap.dialogue.length + ' ' + d.speaker + (d.mentions.length ? '  [' + d.mentions.join(', ') + ']' : '') + '\n');
-    segments.push({ speaker: d.speaker, text: d.text, mentions: d.mentions, file: fname });
+    segments.push({ speaker: d.speaker, text: d.text, mentions: d.mentions, file: fname, audioBase64 });
   }
 
   const manifest = {
@@ -235,14 +261,26 @@ async function generateForMatch(strategyMatch, heroes) {
     strategyName: strategyMatch.name || null,
     headline: recap.headline || null,
     generatedAt: new Date().toISOString(),
-    segments: segments,
+    segments: segments.map(s => ({ speaker: s.speaker, text: s.text, mentions: s.mentions, file: s.file })),
     angles: recap.angles || []
   };
-  fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2));
+
+  const binPayload = { manifest, segments };
+  const payloadBytes = Buffer.byteLength(JSON.stringify(binPayload), 'utf8');
+  if (payloadBytes > MAX_BIN_BYTES) {
+    console.error('  Studioanalysen blev ' + (Math.round(payloadBytes / 1024 / 1024 * 10) / 10) + 'MB — for stor for en JSONBin-bin (max ~9MB). Hoppar over.');
+    return;
+  }
+
+  let binId = strategyMatch.studioBinId;
+  if (binId) await setStudioBinData(binId, binPayload);
+  else binId = await createStudioBin(binPayload);
+  strategyMatch.studioBinId = binId;
+  await writeBinMatches(allMatches);
 
   history.push({ match_id: String(odId), angles: recap.angles || [], at: new Date().toISOString() });
   fs.writeFileSync(HISTORY_FILE, JSON.stringify(history.slice(-10), null, 2));
-  console.log('  ✔ Sparad: public/studio/' + odId + '/ (' + segments.length + ' segment)');
+  console.log('  ✔ Sparad i JSONBin-bin ' + binId + ' (' + segments.length + ' segment)');
 }
 
 (async () => {
@@ -257,8 +295,8 @@ async function generateForMatch(strategyMatch, heroes) {
   console.log(targets.length + ' lankade matcher att behandla.');
 
   for (const t of targets) {
-    try { await generateForMatch(t, heroes); }
+    try { await generateForMatch(t, heroes, all); }
     catch(e) { console.error('  Fel pa ' + t.openDotaMatchId + ': ' + e.message); }
   }
-  console.log('\nKlart. Committa public/studio/ till dev-branchen sa servar Railway filerna.');
+  console.log('\nKlart. Ljudet ligger i JSONBin och overlever Railway-deploys — inget att committa.');
 })();

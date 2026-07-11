@@ -108,6 +108,26 @@ async function writeDraftPools(data) { await setBin('draftpools', { data }); }
 async function readMatches() { const r = await getBin('matches'); return (r && r.data) ? r.data : []; }
 async function writeMatches(data) { await setBin('matches', { data }); }
 
+// ── Per-match studio-bins (manifest + base64-ljud) — undviker att svalla matches-binen ──
+// och overlever Railway-deploys eftersom JSONBin ligger utanfor appens filsystem.
+const studioBinCache = new Map(); // matchId -> { data, ts }
+const STUDIO_CACHE_TTL_MS = 5 * 60 * 1000;
+async function createStudioBin(payload) {
+  const res = await jsonbinRequest('POST', '/b', payload);
+  return res.metadata.id;
+}
+async function setStudioBinData(binId, payload) {
+  await jsonbinRequest('PUT', `/b/${binId}`, payload);
+}
+async function getStudioBinCached(match) {
+  const cached = studioBinCache.get(match.id);
+  if (cached && (Date.now() - cached.ts) < STUDIO_CACHE_TTL_MS) return cached.data;
+  const data = await jsonbinRequest('GET', `/b/${match.studioBinId}/latest`).then(r => r.record);
+  studioBinCache.set(match.id, { data, ts: Date.now() });
+  if (studioBinCache.size > 20) studioBinCache.delete(studioBinCache.keys().next().value);
+  return data;
+}
+
 // PLAYERS
 app.get('/api/players', async (req, res) => {
   try { res.json(await readPlayers()); }
@@ -265,7 +285,6 @@ app.get('/api/hype-audio/:id', async (req, res) => {
 });
 
 // ── STUDIOANALYS (efterhandsgenerering, samma logik som generate-studio.js) ──
-const STUDIO_DIR = path.join(__dirname, 'public', 'studio');
 const RECAP_HISTORY_FILE = path.join(__dirname, 'recap-history.json');
 let _studioVoices = null;
 function studioVoices() {
@@ -301,9 +320,7 @@ async function studioHeroes() {
 
 async function generateStudioForMatch(strategyMatch, force) {
   const odId = strategyMatch.openDotaMatchId;
-  const outDir = path.join(STUDIO_DIR, String(odId));
-  const manifestFile = path.join(outDir, 'manifest.json');
-  if (fs.existsSync(manifestFile) && !force) return { alreadyExists: true };
+  if (strategyMatch.studioBinId && !force) return { alreadyExists: true };
 
   const voices = studioVoices();
   if (!voices.analytic) throw new Error('analytic-röst saknas i bank-config.json');
@@ -429,27 +446,22 @@ async function generateStudioForMatch(strategyMatch, force) {
   const validAliases = new Set(Object.keys(draft));
   recap.dialogue.forEach(d => { d.mentions = (d.mentions || []).filter(x => validAliases.has(x)); });
 
-  fs.mkdirSync(outDir, { recursive: true });
-
   const segments = [];
   for (let i = 0; i < recap.dialogue.length; i++) {
     const d = recap.dialogue[i];
     const fname = 'seg_' + String(i).padStart(2, '0') + '.mp3';
-    const fpath = path.join(outDir, fname);
-    if (!fs.existsSync(fpath) || force) {
-      const body = { text: d.text, model_id: 'eleven_multilingual_v2', voice_settings: SETTINGS_MAP[d.speaker] || SETTINGS_MAP.analyst1 };
-      if (i > 0) body.previous_text = recap.dialogue[i-1].text;
-      if (i < recap.dialogue.length - 1) body.next_text = recap.dialogue[i+1].text;
-      const tRes = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + (VOICE_MAP[d.speaker] || voices.analytic), {
-        method: 'POST',
-        headers: { 'xi-api-key': EL_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      if (!tRes.ok) throw new Error('ElevenLabs ' + tRes.status + ' på replik ' + i);
-      fs.writeFileSync(fpath, Buffer.from(await tRes.arrayBuffer()));
-      await new Promise(r => setTimeout(r, 800));
-    }
-    segments.push({ speaker: d.speaker, text: d.text, mentions: d.mentions, file: fname });
+    const body = { text: d.text, model_id: 'eleven_multilingual_v2', voice_settings: SETTINGS_MAP[d.speaker] || SETTINGS_MAP.analyst1 };
+    if (i > 0) body.previous_text = recap.dialogue[i-1].text;
+    if (i < recap.dialogue.length - 1) body.next_text = recap.dialogue[i+1].text;
+    const tRes = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + (VOICE_MAP[d.speaker] || voices.analytic), {
+      method: 'POST',
+      headers: { 'xi-api-key': EL_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!tRes.ok) throw new Error('ElevenLabs ' + tRes.status + ' på replik ' + i);
+    const audioBase64 = Buffer.from(await tRes.arrayBuffer()).toString('base64');
+    await new Promise(r => setTimeout(r, 800));
+    segments.push({ speaker: d.speaker, text: d.text, mentions: d.mentions, file: fname, audioBase64 });
   }
 
   const manifest = {
@@ -458,15 +470,28 @@ async function generateStudioForMatch(strategyMatch, force) {
     strategyName: strategyMatch.name || null,
     headline: recap.headline || null,
     generatedAt: new Date().toISOString(),
-    segments: segments,
+    segments: segments.map(s => ({ speaker: s.speaker, text: s.text, mentions: s.mentions, file: s.file })),
     angles: recap.angles || []
   };
-  fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2));
+
+  // Ljudet lever i en egen JSONBin-bin per match (istallet for disk, som ar
+  // efemart pa Railway vid varje deploy). Kollar storleken forst — JSONBin
+  // Pro har ett tak pa 10MB per bin.
+  const binPayload = { manifest, segments };
+  const payloadBytes = Buffer.byteLength(JSON.stringify(binPayload), 'utf8');
+  const MAX_BIN_BYTES = 9 * 1024 * 1024; // 9MB — marginal under JSONBins 10MB-tak
+  if (payloadBytes > MAX_BIN_BYTES) {
+    throw new Error('Studioanalysen blev ' + (Math.round(payloadBytes / 1024 / 1024 * 10) / 10) + 'MB — for stor for en JSONBin-bin (max ~9MB). Kontakta Oskar.');
+  }
+
+  let binId = strategyMatch.studioBinId;
+  if (binId) await setStudioBinData(binId, binPayload);
+  else binId = await createStudioBin(binPayload);
 
   history.push({ match_id: String(odId), angles: recap.angles || [], at: new Date().toISOString() });
   fs.writeFileSync(RECAP_HISTORY_FILE, JSON.stringify(history.slice(-10), null, 2));
 
-  return { ok: true, segments: segments.length };
+  return { ok: true, studioBinId: binId, segments: segments.length };
 }
 
 // Generera studioanalys i efterhand (knapp i Playbook — samma logik som generate-studio.js CLI)
@@ -478,12 +503,41 @@ app.post('/api/studio-generate/:id', async (req, res) => {
     if (!match.openDotaMatchId) return res.status(400).json({ error: 'Matchen saknar OpenDota-länk — länka matchen först' });
     serverStatus.generating = true;
     const result = await generateStudioForMatch(match, !!req.body.force);
+    if (result.studioBinId) {
+      match.studioBinId = result.studioBinId;
+      await writeMatches(matches);
+      studioBinCache.delete(match.id);
+    }
     res.json(result);
   } catch(e) {
     res.status(500).json({ error: e.message });
   } finally {
     serverStatus.generating = false;
   }
+});
+
+// Servera studiomanifest + ljud fran den matchens JSONBin-bin (ersatter statiska filer under public/studio/)
+app.get('/studio/:odId/manifest.json', async (req, res) => {
+  try {
+    const matches = await readMatches();
+    const match = matches.find(m => String(m.openDotaMatchId) === req.params.odId);
+    if (!match || !match.studioBinId) return res.status(404).json({ error: 'Ingen studioanalys genererad för denna match' });
+    const data = await getStudioBinCached(match);
+    res.json(data.manifest);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/studio/:odId/:file', async (req, res) => {
+  try {
+    const matches = await readMatches();
+    const match = matches.find(m => String(m.openDotaMatchId) === req.params.odId);
+    if (!match || !match.studioBinId) return res.status(404).json({ error: 'Ingen studioanalys genererad för denna match' });
+    const data = await getStudioBinCached(match);
+    const seg = (data.segments || []).find(s => s.file === req.params.file);
+    if (!seg || !seg.audioBase64) return res.status(404).json({ error: 'Segment saknas' });
+    res.set('Content-Type', 'audio/mpeg');
+    res.send(Buffer.from(seg.audioBase64, 'base64'));
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── STATUS (polling) ─────────────────────────────────
@@ -501,8 +555,7 @@ app.post('/api/studio-play/:id', async (req, res) => {
     const match = matches.find(m => m.id === req.params.id);
     if (!match) return res.status(404).json({ error: 'Match not found' });
     if (!match.openDotaMatchId) return res.status(400).json({ error: 'Matchen saknar OpenDota-lank' });
-    const manifest = path.join(__dirname, 'public', 'studio', String(match.openDotaMatchId), 'manifest.json');
-    if (!fs.existsSync(manifest)) return res.status(404).json({ error: 'Ingen studioanalys genererad — kor generate-studio.js forst' });
+    if (!match.studioBinId) return res.status(404).json({ error: 'Ingen studioanalys genererad — kor generate-studio.js forst' });
     serverStatus.studioMatchId = match.id;
     serverStatus.studioToken = Date.now().toString();
     res.json({ ok: true });

@@ -106,6 +106,7 @@ Lokala scripts läser `.env` i repo-roten (skyddad av `.gitignore`). Prod-histor
   "banned": [], "enemies": [], "items": "…",
   "result": "win|loss|null", "matchResult": "sätts vid OpenDota-länkning",
   "openDotaMatchId": "sätts av write-match-links",
+  "studioBinId": "JSONBin-bin med studioanalysens manifest + base64-ljud, satt vid generering",
   "excludeFromMemory": false
 }
 ```
@@ -121,10 +122,11 @@ Viktigt: `strategy` = originalet, bevaras alltid. Draftändringar efter bans **a
 ## Studioanalysen ("Eftersnack")
 
 - Genereras via knapp i detaljvyn (`POST /api/studio-generate/:id`) eller CLI (`node generate-studio.js`)
-- Output: `public/studio/<odMatchId>/manifest.json` + `seg_NN.mp3` — spelas i Playbook-detaljvyn och på `/tv`
+- **Lagring:** en egen JSONBin-bin per match (manifest + alla mp3-segment base64-kodade), skapad on-demand. Bin-id:t sparas som `studioBinId` på matchen i matches-binen. Servern (`server.js`) exponerar `/studio/:odId/manifest.json` och `/studio/:odId/:file` som dynamiska routes som slår upp matchen via `openDotaMatchId`, hämtar rätt bin och skickar tillbaka JSON/mp3 — Playbook och `/tv` pratar mot samma URL:er som förut, oförändrat på frontend.
+- **Varför inte disk:** Railways filsystem är efemärt vid varje deploy (`public/studio/` skulle nollställas). JSONBin ligger utanför appens filsystem och överlever alltid.
+- **Storlekstak:** JSONBin Pro har ~10MB per bin. Innan uppladdning kollas payloaden mot 9MB (marginal) — om en analys skulle bli större kastas ett tydligt fel istället för att tyst trunkeras eller korrumperas.
 - Panelen är **neutrala broadcasters**: får aldrig säga "our team/we/us" — refererar till "the DHS squad", smeknamn etc. (regeln ligger i prompten i server.js OCH generate-studio.js — håll dem synkade)
 - Ingen bakgrundsmusik under studiosändning på TV:n
-- OBS: genererade mp3-filer på Railway är efemära vid ny deploy — committa `public/studio/` till dev om analyserna ska överleva
 
 ## Övriga fällor
 
