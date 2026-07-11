@@ -2887,6 +2887,7 @@ function toggleStudioPlayback() {
 function stopStudioPlayback() {
   if(!_studioState) return;
   _studioState.playing = false;
+  if(_studioState.segAudios) { _studioState.segAudios.forEach(function(a){ try{ a.pause(); }catch(e){} }); }
   if(_studioState.audio) { try{ _studioState.audio.pause(); }catch(e){} _studioState.audio = null; }
   document.getElementById('studio-play-btn').textContent = '▶ Spela';
   highlightStudioSeg(-1);
@@ -2912,21 +2913,37 @@ async function startStudioPlayback(fromIdx) {
   document.getElementById('studio-play-btn').textContent = '⏹ Stoppa';
   var s = _studioState;
   var odId = s.m.openDotaMatchId;
+  // Forladdar allt ljud sa det inte blir dod luft medan naesta replik hamtas.
+  var STUDIO_OVERLAP_MS = 180;
+  var segAudios = s.manifest.segments.map(function(seg){
+    var a = new Audio('/studio/' + odId + '/' + seg.file);
+    a.preload = 'auto';
+    return a;
+  });
+  s.segAudios = segAudios; // sa stopStudioPlayback kan pausa aven forladdade/overlappande repliker
+  function segAudioStarted(a) { return a.currentTime > 0 || !a.paused; }
   for(var i = fromIdx; i < s.manifest.segments.length; i++) {
     if(!s.playing || _studioState !== s) return;
     s.idx = i;
     highlightStudioSeg(i);
     var seg = s.manifest.segments[i];
+    var nextAudio = i + 1 < segAudios.length ? segAudios[i+1] : null;
     await new Promise(function(resolve) {
-      var a = new Audio('/studio/' + odId + '/' + seg.file);
+      var a = segAudios[i];
       s.audio = a;
       var settled = false;
       function done(){ if(!settled){ settled = true; resolve(); } }
+      function startNextEarly() {
+        if(nextAudio && !segAudioStarted(nextAudio)) nextAudio.play().catch(function(){});
+      }
+      a.ontimeupdate = function(){
+        if(a.duration && isFinite(a.duration) && (a.duration - a.currentTime) * 1000 <= STUDIO_OVERLAP_MS) startNextEarly();
+      };
       a.onended = done;
-      a.onerror = function(){ setTimeout(done, 1500); };
-      a.play().catch(function(){ setTimeout(done, 1500); });
+      a.onerror = function(){ startNextEarly(); setTimeout(done, 1500); };
+      if(segAudioStarted(a)) { /* redan igang - klippt in fran forra repliken */ }
+      else a.play().catch(function(){ startNextEarly(); setTimeout(done, 1500); });
     });
-    await new Promise(function(r){ setTimeout(r, 200); });
   }
   if(_studioState === s) stopStudioPlayback();
 }

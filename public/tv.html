@@ -863,6 +863,16 @@ async function runStudio(strategyMatchId) {
     var spot = document.getElementById('studio-spotlight');
     spot.innerHTML = '';
 
+    // Forladdar allt ljud direkt - annars borjar natlasningen forst nar .play()
+    // anropas, vilket ger dod luft mellan varje replik.
+    var STUDIO_OVERLAP_MS = 180; // hur mycket nasta replik far klippa in i forra
+    var segAudios = manifest.segments.map(function(s){
+      var a = new Audio('/studio/' + odId + '/' + s.file);
+      a.preload = 'auto';
+      return a;
+    });
+    function segAudioStarted(a) { return a.currentTime > 0 || !a.paused; }
+
     for(var i = 0; i < manifest.segments.length; i++) {
       var seg = manifest.segments[i];
       var meta = SPEAKER_META[seg.speaker] || { label: seg.speaker.toUpperCase(), color: 'var(--text)' };
@@ -896,16 +906,24 @@ async function runStudio(strategyMatchId) {
         });
       }
 
-      // Spela segmentets ljud, vänta tills det talat klart
+      // Spela segmentets (forladdade) ljud. Nasta replik far klippa in nar
+      // den har lite kvar - kanns som en riktig panel istallet for dod luft.
+      var nextAudio = i + 1 < segAudios.length ? segAudios[i+1] : null;
       await new Promise(function(resolve) {
-        var a = new Audio('/studio/' + odId + '/' + seg.file);
+        var a = segAudios[i];
         var settled = false;
         function done(){ if(!settled){ settled = true; resolve(); } }
+        function startNextEarly() {
+          if(nextAudio && !segAudioStarted(nextAudio)) nextAudio.play().catch(function(){});
+        }
+        a.ontimeupdate = function(){
+          if(a.duration && isFinite(a.duration) && (a.duration - a.currentTime) * 1000 <= STUDIO_OVERLAP_MS) startNextEarly();
+        };
         a.onended = done;
-        a.onerror = function(){ setTimeout(done, Math.min(9000, 2500 + seg.text.length * 55)); };
-        a.play().catch(function(){ setTimeout(done, Math.min(9000, 2500 + seg.text.length * 55)); });
+        a.onerror = function(){ startNextEarly(); setTimeout(done, Math.min(9000, 2500 + seg.text.length * 55)); };
+        if(segAudioStarted(a)) { /* redan igang - klippt in fran forra repliken */ }
+        else a.play().catch(function(){ startNextEarly(); setTimeout(done, Math.min(9000, 2500 + seg.text.length * 55)); });
       });
-      await wait(250);
     }
 
     document.querySelectorAll('.studio-seat').forEach(function(seat){
