@@ -1137,6 +1137,10 @@ async function generateStrategy() {
     { id:'vision', instruction:'Spela VISION & INFO WARFARE. Dominera wardkriget - saker observer/sentry-fordel over hela kartan, deward konstant, undvik varje fight dar ni saknar informationsfordel. Vinstvillkor: fienden fightar blint medan ni ser allt, och ni valjer alltid var och nar fights sker. Valj hjaltar med bra detection, mobilitet for dewarding, eller invisibility.' },
     { id:'powerspike', instruction:'Spela POWERSPIKE RUSH. Hela laget itemiserar mot EN specifik minut-markering (t.ex. minut 18-22) dar en nyckelspelare far ett avgorande item (t.ex. Black King Bar, Blink Dagger, Aghanims). Fore den tidpunkten: spela passivt, farma, undvik onodiga fights. Nar spiken slar in: all-in omedelbart, innan fonstret stangs. Valj hjaltar med ett tydligt, farmbart powerspike-item.' },
     { id:'counterdraft', instruction:'Spela COUNTER-DRAFT TRAP. Planen baseras pa att locka fram specifika fiendehjaltar (via bans, pick-ordning eller synliga svagheter i deras pool) och sedan hardkontra dem rakt av. Draften ska kannas som en fangst som slar igen i mid-game. Valj hjaltar med starka, tydliga counter-relationer mot troliga fiendeval.' },
+    { id:'trilane', instruction:'Spela TRILANE DOMINATION. Tre spelare committar till safe lane fran minut 0 for att garantera en tidig kill eller total zonering av fiendens carry - offlanern far klara sig sjalv med minimalt stod. Vinstvillkor: er carry far en katastrofal laning-fordel medan fiendens carry far ingenting alls. Valj hjaltar starka i trilane-scenarion (bra harass/stun-kombinationer for tva supports + en carry, och en offlanehjalte som klarar sig solo).' },
+    { id:'buybackdenial', instruction:'Spela BUYBACK DENIAL. Hela laget haller koll pa fiendens ekonomi (ungefarligt guld per spelare) och tvingar ENDAST fram fights nar motstandarna saknar buyback-pengar. Undvik fights dar de kan buyback in och neutralisera fordelen. Vinstvillkor: varje forlorad fight for fienden blir permanent, inte en tillfallig satback. Valj hjaltar som kan initiera snabbt och opportunistiskt nar fonstret oppnar sig.' },
+    { id:'smokechain', instruction:'Spela SMOKE TIMING CHAIN. Schemalagg smoke-gankar kopplade till specifika power spikes - level 6 (forsta ultimates), level 10, level 16 - och slall alltid samma lane om och om igen sa den aldrig hinner andas. Vinstvillkor: en lane snobollar sa hart att fienden tvingas ge upp den helt. Valj hjaltar med starka gank-ultimates som ar redo just vid dessa nivaer.' },
+    { id:'roleswap', instruction:'Spela ROLE-SWAP DRAFT. Draft hjaltar in i okonventionella roller (en klassisk carry-hjalte som support, en supporthjalte i mid, etc) sa att fiendens motpick- och bannstrategi blir vardelos. Vinstvillkor: motstandarna forbereder sig for fel matchup hela matchen. Valj hjaltar som faktiskt FUNGERAR (om an ovanligt) i den tilldelade rollen - detta ska vara smart och spelbart, inte troll-picks som forlorar matchen for skojs skull.' },
   ];
 
   // Avoid same archetype twice in a row (stored in session)
@@ -1648,7 +1652,11 @@ var ARCHETYPE_LABELS = {
   roshan:{name:'Roshan & Aegis Timing',desc:'Kontrollera Roshan, tvinga fights med Aegis-fördel'},
   vision:{name:'Vision & Info Warfare',desc:'Dominera wardkriget, fighta bara med informationsövertag'},
   powerspike:{name:'Powerspike Rush',desc:'Hela laget mot en timing, all-in när spiken slår in'},
-  counterdraft:{name:'Counter-Draft Trap',desc:'Locka fram fiendehjältar och hårdkontra dem'}
+  counterdraft:{name:'Counter-Draft Trap',desc:'Locka fram fiendehjältar och hårdkontra dem'},
+  trilane:{name:'Trilane Domination',desc:'Tre i safelane från start, total laning-dominans'},
+  buybackdenial:{name:'Buyback Denial',desc:'Fighta bara när fienden saknar buyback'},
+  smokechain:{name:'Smoke Timing Chain',desc:'Schemalagda smoke-gankar på fasta power spikes'},
+  roleswap:{name:'Role-Swap Draft',desc:'Hjältar i okonventionella roller gör motpicks värdelösa'}
 };
 function statBar(label, sub, count, total, w, l) {
   var pct = total ? Math.round(count/total*100) : 0;

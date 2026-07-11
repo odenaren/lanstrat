@@ -116,7 +116,7 @@ Viktigt: `strategy` = originalet, bevaras alltid. Draftändringar efter bans **a
 
 ## Strategigenerering (index.html)
 
-- **17 hemliga arketyper** (visas ALDRIG för spelarna före match): Deathball, Early Snowball, Gank & Dominate, Teamfight, Pick-off, Poke & Siege, Late Game Scaling, Splitpush, Chaos & Disruption, Objective Control, Tower Dive Heavy, Global Presence, Magic Immune, Roshan & Aegis Timing, Vision & Info Warfare, Powerspike Rush, Counter-Draft Trap. OBS: "Chaos & Disruption" ska ALLTID ha ett konkret vinstvillkor (kaoset är metoden, inte avsaknad av plan) — reviderad 2026-07-11 efter att arketypen visade sig vara den vanligaste (delvis pga att den fungerar som slasktratt i den retroaktiva AI-gissningen på statssidan för matcher utan sparad arketyp).
+- **21 hemliga arketyper** (visas ALDRIG för spelarna före match): Deathball, Early Snowball, Gank & Dominate, Teamfight, Pick-off, Poke & Siege, Late Game Scaling, Splitpush, Chaos & Disruption, Objective Control, Tower Dive Heavy, Global Presence, Magic Immune, Roshan & Aegis Timing, Vision & Info Warfare, Powerspike Rush, Counter-Draft Trap, Trilane Domination, Buyback Denial, Smoke Timing Chain, Role-Swap Draft. OBS: "Chaos & Disruption" ska ALLTID ha ett konkret vinstvillkor (kaoset är metoden, inte avsaknad av plan) — reviderad 2026-07-11 efter att arketypen visade sig vara den vanligaste (delvis pga att den fungerar som slasktratt i den retroaktiva AI-gissningen på statssidan för matcher utan sparad arketyp).
 - **8 presentationsstilar** (Standard 50%, resten slumpas), **wildcard ~15%** oberoende av stil
 - AI-svaret parsas via markörer: `DRAFT_JSON_START/END`, `KAPTENSBRIEFING_START/END` — ändra aldrig formatet utan att uppdatera parsern samtidigt
 

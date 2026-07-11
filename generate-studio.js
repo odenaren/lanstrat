@@ -71,7 +71,9 @@ const ARCHETYPE_LABELS = {
   splitpush:'Splitpush', chaos:'Chaos & Disruption — chaos IS the plan', objective:'Objective Control',
   towerdive:'Tower Dive Heavy', global:'Global Presence', magicimmune:'Magic Immune — BKB focus',
   roshan:'Roshan & Aegis Timing', vision:'Vision & Info Warfare',
-  powerspike:'Powerspike Rush — all-in on one timing', counterdraft:'Counter-Draft Trap'
+  powerspike:'Powerspike Rush — all-in on one timing', counterdraft:'Counter-Draft Trap',
+  trilane:'Trilane Domination — 3-man safelane from minute 0', buybackdenial:'Buyback Denial — fight only when they can\'t buy back',
+  smokechain:'Smoke Timing Chain — scheduled ganks on power spikes', roleswap:'Role-Swap Draft — heroes in unconventional roles'
 };
 
 async function fetchBinMatches() {
