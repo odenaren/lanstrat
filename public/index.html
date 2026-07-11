@@ -188,7 +188,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 
 <!-- HOME -->
 <div id="page-home" class="page active">
-  <div class="home-header"><h1>Hero Pool Manager</h1><p>Varje spelare sparar sina hjältar — AI draftar strategin</p><a class="gsi-config-link" href="/api/gsi-config" download>📡 Ladda ner GSI-inställning (för in-game overlay, samma fil till alla)</a></div>
+  <div class="home-header"><h1>Hero Pool Manager</h1><p>Varje spelare sparar sina hjältar — AI draftar strategin</p><a class="gsi-config-link" href="/api/gsi-config" download title="Flytta filen till Steam/steamapps/common/dota 2 beta/game/dota/cfg/gamestate_integration/ (skapa mappen om den saknas)">📡 Ladda ner GSI-inställning — läggs i Steam/dota 2 beta/game/dota/cfg/gamestate_integration/ (samma fil till alla)</a></div>
   <div id="player-grid" class="player-grid"></div>
 </div>
 
@@ -665,8 +665,13 @@ function renderHome() {
     overlayLink.className = 'overlay-link-btn';
     overlayLink.href = '/api/overlay-config/' + encodeURIComponent(p.name);
     overlayLink.setAttribute('download', '');
+    overlayLink.title = 'Ersätter overlay/config.js i din egen kopia av lanstrat-projektet på din dator — INTE i Steam/Dota.';
     overlayLink.textContent = '📡 Min overlay-config';
     card.appendChild(overlayLink);
+    var overlayHint = document.createElement('div');
+    overlayHint.style.cssText = 'font-size:10px;color:var(--text-dim);text-align:center;margin-top:4px';
+    overlayHint.textContent = '→ ersätt overlay/config.js (inte Steam/Dota)';
+    card.appendChild(overlayHint);
     grid.appendChild(card);
   });
   const add = document.createElement('div');
