@@ -6,9 +6,12 @@
 //     (arketyp, briefing, draft) och kan jamfora mot verkligheten
 //   * Varje replik taggas med vilka DHS-spelare som namns ("mentions")
 //     sa TV:n kan lyfta fram deras statistik nar de omtalas
-//   * Output: en egen JSONBin-bin per match (manifest + base64-ljud),
-//     bin-id:t sparas som studioBinId pa matchen i matches-binen. Detta
+//   * Output: en JSONBin-bin PER REPLIK (bara ljudet) plus en liten
+//     manifest-bin per match (text + varje repliks binId). Manifestets
+//     bin-id sparas som studioBinId pa matchen i matches-binen. Detta
 //     istallet for disk, eftersom Railways filsystem ar efemart vid deploy.
+//     En delad bin for hela matchens ljud funkar INTE - JSONBins nginx-proxy
+//     stoppar requests over 1MiB (413), langt under vad en hel matchs ljud vager.
 //     (spelas av Playbook-detaljvyn och /tv via /studio/:odId/... pa servern)
 //
 // Anvandning:
@@ -34,7 +37,7 @@ const KEY = process.env.ANTHROPIC_API_KEY;
 const EL_KEY = process.env.ELEVENLABS_API_KEY;
 const BIN_KEY = process.env.JSONBIN_API_KEY;
 const HISTORY_FILE = path.join(__dirname, 'recap-history.json');
-const MAX_BIN_BYTES = 9 * 1024 * 1024; // 9MB — marginal under JSONBins 10MB-tak per bin
+const MAX_BIN_BYTES = 900 * 1024; // 900KB — marginal under JSONBins verifierade 1MiB-tak per request
 
 const args = process.argv.slice(2);
 const FORCE = args.includes('--force');
@@ -107,6 +110,11 @@ async function setStudioBinData(binId, payload) {
     body: JSON.stringify(payload)
   });
   if (!res.ok) throw new Error('JSONBin uppdatera studio-bin ' + res.status);
+}
+
+function checkStudioBinSize(payload, label) {
+  const bytes = Buffer.byteLength(JSON.stringify(payload), 'utf8');
+  if (bytes > MAX_BIN_BYTES) throw new Error(label + ' blev ' + Math.round(bytes / 1024) + 'KB — for stort for en JSONBin-bin (max ~900KB)');
 }
 
 function normHero(n){ return String(n||'').toLowerCase().replace(/[^a-z]/g,''); }
@@ -251,8 +259,15 @@ async function generateForMatch(strategyMatch, heroes, allMatches) {
     if (!tRes.ok) { console.error('  ElevenLabs ' + tRes.status + ' pa replik ' + i + ' — avbryter denna match.'); return; }
     const audioBase64 = Buffer.from(await tRes.arrayBuffer()).toString('base64');
     await new Promise(r => setTimeout(r, 800));
+
+    // Varje replik far sin egen bin - en delad bin for hela matchen blir for
+    // stor for JSONBins 1MiB-request-tak.
+    const segmentPayload = { audioBase64 };
+    checkStudioBinSize(segmentPayload, 'Replik ' + i + ' (' + d.speaker + ')');
+    const segmentBinId = await createStudioBin(segmentPayload);
+
     process.stdout.write('    ✓ ' + (i+1) + '/' + recap.dialogue.length + ' ' + d.speaker + (d.mentions.length ? '  [' + d.mentions.join(', ') + ']' : '') + '\n');
-    segments.push({ speaker: d.speaker, text: d.text, mentions: d.mentions, file: fname, audioBase64 });
+    segments.push({ speaker: d.speaker, text: d.text, mentions: d.mentions, file: fname, binId: segmentBinId });
   }
 
   const manifest = {
@@ -261,20 +276,16 @@ async function generateForMatch(strategyMatch, heroes, allMatches) {
     strategyName: strategyMatch.name || null,
     headline: recap.headline || null,
     generatedAt: new Date().toISOString(),
-    segments: segments.map(s => ({ speaker: s.speaker, text: s.text, mentions: s.mentions, file: s.file })),
+    segments: segments,
     angles: recap.angles || []
   };
 
-  const binPayload = { manifest, segments };
-  const payloadBytes = Buffer.byteLength(JSON.stringify(binPayload), 'utf8');
-  if (payloadBytes > MAX_BIN_BYTES) {
-    console.error('  Studioanalysen blev ' + (Math.round(payloadBytes / 1024 / 1024 * 10) / 10) + 'MB — for stor for en JSONBin-bin (max ~9MB). Hoppar over.');
-    return;
-  }
+  const manifestPayload = { manifest };
+  checkStudioBinSize(manifestPayload, 'Manifestet');
 
   let binId = strategyMatch.studioBinId;
-  if (binId) await setStudioBinData(binId, binPayload);
-  else binId = await createStudioBin(binPayload);
+  if (binId) await setStudioBinData(binId, manifestPayload);
+  else binId = await createStudioBin(manifestPayload);
   strategyMatch.studioBinId = binId;
   await writeBinMatches(allMatches);
 

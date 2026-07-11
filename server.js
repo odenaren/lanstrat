@@ -108,9 +108,15 @@ async function writeDraftPools(data) { await setBin('draftpools', { data }); }
 async function readMatches() { const r = await getBin('matches'); return (r && r.data) ? r.data : []; }
 async function writeMatches(data) { await setBin('matches', { data }); }
 
-// ── Per-match studio-bins (manifest + base64-ljud) — undviker att svalla matches-binen ──
-// och overlever Railway-deploys eftersom JSONBin ligger utanfor appens filsystem.
-const studioBinCache = new Map(); // matchId -> { data, ts }
+// ── Studio-bins i JSONBin — overlever Railway-deploys eftersom JSONBin ligger
+// utanfor appens filsystem. OBS (verifierat mot API:t): JSONBins nginx-proxy
+// stoppar requests over 1MiB (413), oavsett bin-storlekens 10MB-tak — darfor
+// far VARJE replik sin egen bin (liten, valdigt under grasen) istallet for
+// en delad bin per match. Matchens manifest (text, inget ljud) far ocksa en
+// egen liten bin, och pekar pa varje repliks ljud-bin via segments[i].binId.
+const STUDIO_MAX_BIN_BYTES = 900 * 1024; // 900KB — marginal under nginx 1MiB-taket
+const studioManifestCache = new Map(); // matchId -> { data, ts }
+const studioSegmentCache = new Map();  // segmentBinId -> { data, ts }
 const STUDIO_CACHE_TTL_MS = 5 * 60 * 1000;
 async function createStudioBin(payload) {
   const res = await jsonbinRequest('POST', '/b', payload);
@@ -119,12 +125,26 @@ async function createStudioBin(payload) {
 async function setStudioBinData(binId, payload) {
   await jsonbinRequest('PUT', `/b/${binId}`, payload);
 }
-async function getStudioBinCached(match) {
-  const cached = studioBinCache.get(match.id);
+function checkStudioBinSize(payload, label) {
+  const bytes = Buffer.byteLength(JSON.stringify(payload), 'utf8');
+  if (bytes > STUDIO_MAX_BIN_BYTES) {
+    throw new Error(label + ' blev ' + Math.round(bytes / 1024) + 'KB — for stort for en JSONBin-bin (max ~900KB, JSONBins proxy stoppar over 1MiB).');
+  }
+}
+async function getStudioManifestCached(match) {
+  const cached = studioManifestCache.get(match.id);
   if (cached && (Date.now() - cached.ts) < STUDIO_CACHE_TTL_MS) return cached.data;
   const data = await jsonbinRequest('GET', `/b/${match.studioBinId}/latest`).then(r => r.record);
-  studioBinCache.set(match.id, { data, ts: Date.now() });
-  if (studioBinCache.size > 20) studioBinCache.delete(studioBinCache.keys().next().value);
+  studioManifestCache.set(match.id, { data, ts: Date.now() });
+  if (studioManifestCache.size > 20) studioManifestCache.delete(studioManifestCache.keys().next().value);
+  return data;
+}
+async function getStudioSegmentCached(binId) {
+  const cached = studioSegmentCache.get(binId);
+  if (cached && (Date.now() - cached.ts) < STUDIO_CACHE_TTL_MS) return cached.data;
+  const data = await jsonbinRequest('GET', `/b/${binId}/latest`).then(r => r.record);
+  studioSegmentCache.set(binId, { data, ts: Date.now() });
+  if (studioSegmentCache.size > 100) studioSegmentCache.delete(studioSegmentCache.keys().next().value);
   return data;
 }
 
@@ -461,7 +481,14 @@ async function generateStudioForMatch(strategyMatch, force) {
     if (!tRes.ok) throw new Error('ElevenLabs ' + tRes.status + ' på replik ' + i);
     const audioBase64 = Buffer.from(await tRes.arrayBuffer()).toString('base64');
     await new Promise(r => setTimeout(r, 800));
-    segments.push({ speaker: d.speaker, text: d.text, mentions: d.mentions, file: fname, audioBase64 });
+
+    // Varje replik far sin egen bin — en delad bin for hela matchen blir for
+    // stor for JSONBins 1MiB-request-tak (se STUDIO_MAX_BIN_BYTES ovan).
+    const segmentPayload = { audioBase64 };
+    checkStudioBinSize(segmentPayload, 'Replik ' + i + ' (' + d.speaker + ')');
+    const segmentBinId = await createStudioBin(segmentPayload);
+
+    segments.push({ speaker: d.speaker, text: d.text, mentions: d.mentions, file: fname, binId: segmentBinId });
   }
 
   const manifest = {
@@ -470,23 +497,17 @@ async function generateStudioForMatch(strategyMatch, force) {
     strategyName: strategyMatch.name || null,
     headline: recap.headline || null,
     generatedAt: new Date().toISOString(),
-    segments: segments.map(s => ({ speaker: s.speaker, text: s.text, mentions: s.mentions, file: s.file })),
+    segments: segments,
     angles: recap.angles || []
   };
 
-  // Ljudet lever i en egen JSONBin-bin per match (istallet for disk, som ar
-  // efemart pa Railway vid varje deploy). Kollar storleken forst — JSONBin
-  // Pro har ett tak pa 10MB per bin.
-  const binPayload = { manifest, segments };
-  const payloadBytes = Buffer.byteLength(JSON.stringify(binPayload), 'utf8');
-  const MAX_BIN_BYTES = 9 * 1024 * 1024; // 9MB — marginal under JSONBins 10MB-tak
-  if (payloadBytes > MAX_BIN_BYTES) {
-    throw new Error('Studioanalysen blev ' + (Math.round(payloadBytes / 1024 / 1024 * 10) / 10) + 'MB — for stor for en JSONBin-bin (max ~9MB). Kontakta Oskar.');
-  }
+  // Manifestet (text + repliks bin-id:n, inget ljud) far ocksa en egen liten bin.
+  const manifestPayload = { manifest };
+  checkStudioBinSize(manifestPayload, 'Manifestet');
 
   let binId = strategyMatch.studioBinId;
-  if (binId) await setStudioBinData(binId, binPayload);
-  else binId = await createStudioBin(binPayload);
+  if (binId) await setStudioBinData(binId, manifestPayload);
+  else binId = await createStudioBin(manifestPayload);
 
   history.push({ match_id: String(odId), angles: recap.angles || [], at: new Date().toISOString() });
   fs.writeFileSync(RECAP_HISTORY_FILE, JSON.stringify(history.slice(-10), null, 2));
@@ -506,7 +527,7 @@ app.post('/api/studio-generate/:id', async (req, res) => {
     if (result.studioBinId) {
       match.studioBinId = result.studioBinId;
       await writeMatches(matches);
-      studioBinCache.delete(match.id);
+      studioManifestCache.delete(match.id);
     }
     res.json(result);
   } catch(e) {
@@ -522,7 +543,7 @@ app.get('/studio/:odId/manifest.json', async (req, res) => {
     const matches = await readMatches();
     const match = matches.find(m => String(m.openDotaMatchId) === req.params.odId);
     if (!match || !match.studioBinId) return res.status(404).json({ error: 'Ingen studioanalys genererad för denna match' });
-    const data = await getStudioBinCached(match);
+    const data = await getStudioManifestCached(match);
     res.json(data.manifest);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -532,11 +553,13 @@ app.get('/studio/:odId/:file', async (req, res) => {
     const matches = await readMatches();
     const match = matches.find(m => String(m.openDotaMatchId) === req.params.odId);
     if (!match || !match.studioBinId) return res.status(404).json({ error: 'Ingen studioanalys genererad för denna match' });
-    const data = await getStudioBinCached(match);
-    const seg = (data.segments || []).find(s => s.file === req.params.file);
-    if (!seg || !seg.audioBase64) return res.status(404).json({ error: 'Segment saknas' });
+    const manifestData = await getStudioManifestCached(match);
+    const seg = (manifestData.manifest.segments || []).find(s => s.file === req.params.file);
+    if (!seg || !seg.binId) return res.status(404).json({ error: 'Segment saknas' });
+    const segData = await getStudioSegmentCached(seg.binId);
+    if (!segData.audioBase64) return res.status(404).json({ error: 'Segmentets ljud saknas' });
     res.set('Content-Type', 'audio/mpeg');
-    res.send(Buffer.from(seg.audioBase64, 'base64'));
+    res.send(Buffer.from(segData.audioBase64, 'base64'));
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

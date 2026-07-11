@@ -106,7 +106,7 @@ Lokala scripts läser `.env` i repo-roten (skyddad av `.gitignore`). Prod-histor
   "banned": [], "enemies": [], "items": "…",
   "result": "win|loss|null", "matchResult": "sätts vid OpenDota-länkning",
   "openDotaMatchId": "sätts av write-match-links",
-  "studioBinId": "JSONBin-bin med studioanalysens manifest + base64-ljud, satt vid generering",
+  "studioBinId": "JSONBin-bin med studioanalysens manifest (text + per-replik binId:n), satt vid generering",
   "excludeFromMemory": false
 }
 ```
@@ -122,9 +122,9 @@ Viktigt: `strategy` = originalet, bevaras alltid. Draftändringar efter bans **a
 ## Studioanalysen ("Eftersnack")
 
 - Genereras via knapp i detaljvyn (`POST /api/studio-generate/:id`) eller CLI (`node generate-studio.js`)
-- **Lagring:** en egen JSONBin-bin per match (manifest + alla mp3-segment base64-kodade), skapad on-demand. Bin-id:t sparas som `studioBinId` på matchen i matches-binen. Servern (`server.js`) exponerar `/studio/:odId/manifest.json` och `/studio/:odId/:file` som dynamiska routes som slår upp matchen via `openDotaMatchId`, hämtar rätt bin och skickar tillbaka JSON/mp3 — Playbook och `/tv` pratar mot samma URL:er som förut, oförändrat på frontend.
+- **Lagring:** VARJE replik får sin egen JSONBin-bin (bara `{audioBase64}`), plus en liten manifest-bin per match (text + varje repliks `binId`, inget ljud). Manifest-bin-id:t sparas som `studioBinId` på matchen i matches-binen. Servern (`server.js`) exponerar `/studio/:odId/manifest.json` och `/studio/:odId/:file` som dynamiska routes som slår upp matchen via `openDotaMatchId`, hämtar manifestet, letar upp rätt repliks bin och skickar tillbaka JSON/mp3 — Playbook och `/tv` pratar mot samma URL:er som förut, oförändrat på frontend.
 - **Varför inte disk:** Railways filsystem är efemärt vid varje deploy (`public/studio/` skulle nollställas). JSONBin ligger utanför appens filsystem och överlever alltid.
-- **Storlekstak:** JSONBin Pro har ~10MB per bin. Innan uppladdning kollas payloaden mot 9MB (marginal) — om en analys skulle bli större kastas ett tydligt fel istället för att tyst trunkeras eller korrumperas.
+- **Varför en bin per replik, inte en delad bin per match:** verifierat mot API:t (inte antaget) — JSONBins nginx-proxy svarar 413 på requests över exakt 1MiB (1 048 576 bytes), oavsett vad "10MB Pro-bin" faktiskt syftar på (troligen lagring, inte uppladdningsstorlek). En hel matchs ljud (flera MB) får aldrig plats i ett enda POST/PUT. `STUDIO_MAX_BIN_BYTES` i server.js sätter taket till 900KB per bin (marginal under 1MiB) — överskrids det kastas ett tydligt fel istället för 413 eller tyst korruption.
 - Panelen är **neutrala broadcasters**: får aldrig säga "our team/we/us" — refererar till "the DHS squad", smeknamn etc. (regeln ligger i prompten i server.js OCH generate-studio.js — håll dem synkade)
 - Ingen bakgrundsmusik under studiosändning på TV:n
 
