@@ -28,7 +28,7 @@ Webbapp för Dota 2-draft, strategigenerering och TV-produktion för ett årligt
 
 - **`dev`** — all utveckling. Deployar automatiskt till `dhs27.up.railway.app`.
 - **`main`** — stabil backup, prod (`lanstrat-production.up.railway.app`). Merga från dev först när det är verifierat i dev-miljön.
-- All kod ligger i undermappen **`laneight/`**.
+- All kod ligger i **repo-roten** (ingen undermapp).
 - Committa med korta beskrivande meddelanden på svenska eller engelska. Pusha till `dev` — aldrig direkt till `main` utan att fråga.
 - Railway är testmiljön; servern körs sällan lokalt. Statiska filer deployas dåligt på Railway — använd GitHub Pages/Netlify Drop för fristående statiskt.
 
@@ -36,11 +36,11 @@ Webbapp för Dota 2-draft, strategigenerering och TV-produktion för ett årligt
 
 ```bash
 # Serverfiler och scripts
-node --check laneight/server.js
+node --check server.js
 
 # Inline-JS i HTML-filer (index.html, tv.html, ...)
 python3 -c "
-content = open('laneight/public/index.html', encoding='utf-8').read()
+content = open('public/index.html', encoding='utf-8').read()
 s = content.index('<script>') + 8
 e = content.rindex('</script>')
 open('/tmp/check.js', 'w', encoding='utf-8').write(content[s:e])
@@ -54,8 +54,8 @@ Har filen flera `<script>`-block: extrahera varje block med `re.findall(r'<scrip
 
 ## Teknisk stack
 
-- **Server:** Node.js + Express — `laneight/server.js`
-- **Frontend:** Single-page HTML med inline CSS/JS — `laneight/public/index.html` (Playbook), `tv.html` (TV-läget), `pool.html` (hero pool-import)
+- **Server:** Node.js + Express — `server.js`
+- **Frontend:** Single-page HTML med inline CSS/JS — `public/index.html` (Playbook), `tv.html` (TV-läget), `pool.html` (hero pool-import)
 - **Hosting:** Railway (dev: `dhs27.up.railway.app`, prod: `lanstrat-production.up.railway.app`)
 - **Data:** JSONBin.io (Pro, 10MB-bins) — persistent över deploys. OBS: bins kan inte skapas med tomma arrayer, initiera med giltig struktur `{data: []}`.
 - **AI:** Anthropic API, modell `claude-fable-5`
@@ -65,7 +65,7 @@ Har filen flera `<script>`-block: extrahera varje block med `re.findall(r'<scrip
 ### Miljövariabler (Railway + lokal `.env`)
 `ANTHROPIC_API_KEY`, `JSONBIN_API_KEY`, `JSONBIN_PLAYERS_ID`, `JSONBIN_MATCHES_ID`, `JSONBIN_DRAFTPOOLS_ID`, `SITE_PASSWORD`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`
 
-Lokala scripts läser `.env` i `laneight/` (skyddad av `.gitignore`). Prod-historikens bin-id: `6a3c3d6bda38895dfef96973` (hårdkodad i `link-matches.js`).
+Lokala scripts läser `.env` i repo-roten (skyddad av `.gitignore`). Prod-historikens bin-id: `6a3c3d6bda38895dfef96973` (hårdkodad i `link-matches.js`).
 
 ---
 
