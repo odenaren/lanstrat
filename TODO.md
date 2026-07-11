@@ -5,6 +5,7 @@ Ostrukturerad att-göra-lista. Uppdatera i klartext när nya idéer dyker upp el
 ## Aktuellt
 
 - **Streaming av strategitext** — visa AI-svaret i realtid medan det genereras istället för att vänta på hela svaret innan något visas.
+- **`recap-history.json` är fortfarande diskbaserad och efemär.** Samma bugg som studioljudet hade (Railways filsystem nollställs vid varje deploy), men mindre allvarlig — filen håller bara koll på senaste vinklarna i studioanalyser för att undvika upprepning. Vid förlust: ingen dataförlust som märks, bara risk för lite mer repetitiva vinklar i nya analyser tills historiken byggts upp igen. Kan flyttas till JSONBin på samma sätt som studioljudet (`50f5638`) om det blir ett faktiskt problem.
 
 ## Framtid — inte aktuellt nu
 
