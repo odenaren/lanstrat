@@ -9,12 +9,12 @@ Rutigaskjortan, Elsa, Pax, Jockwe, Flabben, Tobbe, Gojja, Robin Hood, Skiipa
 ---
 
 ## Teknisk stack
-- **Server:** Node.js + Express (`laneight/server.js`)
-- **Frontend:** Single-page HTML (`laneight/public/index.html`) — all CSS och JS inline i en fil
+- **Server:** Node.js + Express (`server.js`)
+- **Frontend:** Single-page HTML (`public/index.html`) — all CSS och JS inline i en fil
 - **Hosting:** Railway (`lanstrat-production.up.railway.app`)
-- **Repo:** `github.com/odenaren/lanstrat` (all kod i undermappen `laneight/`)
+- **Repo:** `github.com/odenaren/lanstrat` (all kod i repo-roten, ingen undermapp)
 - **Data:** JSONBin.io (persistent lagring, överlever Railway-deploys)
-- **AI:** Anthropic API (`claude-sonnet-4-6`)
+- **AI:** Anthropic API (`claude-fable-5`)
 
 ## Railway-miljövariabler
 ```
@@ -46,7 +46,7 @@ parent.appendChild(el);
 ## Syntaxkontroll efter varje ändring
 ```bash
 python3 -c "
-content = open('laneight/public/index.html', encoding='utf-8').read()
+content = open('public/index.html', encoding='utf-8').read()
 s = content.index('<script>') + 8
 e = content.rindex('</script>')
 open('/tmp/check.js', 'w', encoding='utf-8').write(content[s:e])
@@ -194,7 +194,5 @@ Fyra hjältar har fel slug och har hardkodade overrides i `HERO_IMG_OVERRIDES`:
 - `dev` — all utveckling sker här
 - Testa i dev, merga till main när det fungerar
 
-## Kända förbättringsförslag (ej implementerat)
-- Streaming av strategitext för realtids-progression
-- PIN-skydd för Matchen/Historik-flikarna innan lanet
-- Hjältporträtt i historiklistan fungerar delvis (mixad syntax)
+## Att göra
+Se [TODO.md](TODO.md) i repo-roten.
