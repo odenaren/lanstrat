@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin:0; background:transparent; overflow:hidden; font-family:'Segoe UI',sans-serif; }
+  #box {
+    box-sizing:border-box; width:340px; padding:14px 16px; border-radius:8px;
+    background:rgba(20,20,24,0.88); border:1px solid rgba(200,155,60,0.5);
+    color:#eee; opacity:0; transform:translateY(-8px);
+    transition:opacity .25s ease, transform .25s ease;
+  }
+  #box.show { opacity:1; transform:translateY(0); }
+  #kind { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:#c89b3c; margin-bottom:6px; font-weight:700; }
+  #body { font-size:14px; line-height:1.4; white-space:pre-line; }
+</style>
+</head>
+<body>
+<div id="box"><div id="kind"></div><div id="body"></div></div>
+<script src="config.js"></script>
+<script>
+  var CONFIG = Object.assign({ baseUrl:'', alias:'', password:'', pollMs:2000, showMs:12000 }, window.OVERLAY_CONFIG || {});
+  var lastId = null;
+  var hideTimer = null;
+
+  function authHeader() {
+    if (!CONFIG.password) return {};
+    return { 'Authorization': 'Basic ' + btoa('dhs:' + CONFIG.password) };
+  }
+
+  function show(kind, body) {
+    document.getElementById('kind').textContent = kind || '';
+    document.getElementById('body').textContent = body || '';
+    document.getElementById('box').classList.add('show');
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(function() {
+      document.getElementById('box').classList.remove('show');
+    }, CONFIG.showMs);
+  }
+
+  function poll() {
+    if (!CONFIG.baseUrl || !CONFIG.alias) return;
+    var url = CONFIG.baseUrl + '/' + encodeURIComponent(CONFIG.alias);
+    fetch(url, { headers: authHeader() })
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if (data && data.id && data.id !== lastId) {
+          lastId = data.id;
+          show(data.kind, (data.title ? data.title + '\n' : '') + (data.body || ''));
+        }
+      })
+      .catch(function(e){ console.error('overlay poll fel', e); });
+  }
+
+  setInterval(poll, CONFIG.pollMs);
+  poll();
+</script>
+</body>
+</html>

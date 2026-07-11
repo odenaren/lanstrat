@@ -24,6 +24,7 @@ app.use((req, res, next) => {
 });
 const SITE_PASSWORD = process.env.SITE_PASSWORD;
 app.use((req, res, next) => {
+  if (req.path === '/api/gsi') return next(); // Dota GSI klienten kan inte skicka Basic Auth, autentiseras via egen token istallet
   if (!SITE_PASSWORD) return next();
   const auth = req.headers.authorization || '';
   if (auth.startsWith('Basic ')) {
@@ -342,6 +343,48 @@ async function studioHeroes() {
   return heroes;
 }
 
+let _gsiHeroNameCache = null;
+async function heroInternalNameMap() {
+  if (_gsiHeroNameCache) return _gsiHeroNameCache;
+  const map = {};
+  const hRes = await fetch('https://api.opendota.com/api/heroes');
+  if (hRes.ok) (await hRes.json()).forEach(h => { map[h.name] = h.localized_name; });
+  _gsiHeroNameCache = map;
+  return map;
+}
+
+// Displaynamn ("Black King Bar") -> GSI-internnamn UTAN "item_"-prefix ("black_king_bar")
+let _itemNameCache = null;
+async function itemDisplayNameMap() {
+  if (_itemNameCache) return _itemNameCache;
+  const map = {};
+  const iRes = await fetch('https://api.opendota.com/api/constants/items');
+  if (iRes.ok) {
+    const items = await iRes.json();
+    Object.keys(items).forEach(key => {
+      const dname = items[key] && items[key].dname;
+      if (dname) map[dname.toLowerCase()] = key;
+    });
+  }
+  _itemNameCache = map;
+  return map;
+}
+
+// GSI:s player.steamid ar ett 64-bitars SteamID, men spelarnas steamId i players-binen
+// ar ett 32-bitars OpenDota account_id — konvertera med Valves standardoffset.
+const STEAM64_OFFSET = 76561197960265728n;
+function steam64ToAccountId(steamid64) {
+  try { return Number(BigInt(String(steamid64)) - STEAM64_OFFSET); }
+  catch (e) { return null; }
+}
+async function findAliasBySteamId64(steamid64) {
+  const accountId = steam64ToAccountId(steamid64);
+  if (accountId === null) return null;
+  const players = await readPlayers();
+  const p = players.find(pl => Number(pl.steamId) === accountId);
+  return p ? p.name : null;
+}
+
 async function generateStudioForMatch(strategyMatch, force) {
   const odId = strategyMatch.openDotaMatchId;
   if (strategyMatch.studioBinId && !force) return { alreadyExists: true };
@@ -595,6 +638,66 @@ app.get('/api/status', (req, res) => res.json(serverStatus));
 app.post('/api/status/generating', (req, res) => {
   serverStatus.generating = !!req.body.generating;
   res.json(serverStatus);
+});
+
+// ── OVERLAY (in-game widget, se overlay/) ─────────────
+// Generiskt innehall, en kanal per spelaralias — vad som helst kan pusha en notis hit
+// (draftandringar, itemtiming osv), widgeten bryr sig bara om {id, kind, title, body}
+// och vet inte vad "kind" betyder.
+const overlayStates = {}; // alias -> {id, kind, title, body, ts}
+function pushOverlay(alias, kind, title, body) {
+  overlayStates[alias] = { id: Date.now().toString() + '-' + Math.random().toString(36).slice(2, 6), kind: kind, title: title, body: body, ts: Date.now() };
+}
+app.get('/api/overlay/:alias', (req, res) => {
+  res.json(overlayStates[req.params.alias] || { id: null, kind: null, title: '', body: '', ts: 0 });
+});
+app.post('/api/overlay/:alias', (req, res) => {
+  pushOverlay(req.params.alias, req.body.kind || 'test', req.body.title || '', req.body.body || '');
+  res.json(overlayStates[req.params.alias]);
+});
+
+// Nedladdningsbar overlay/config.js med spelarens alias + sitelosenord ifyllt,
+// sa spelaren slipper skriva nagot sjalv. Skyddad av samma Basic Auth som resten
+// av sajten — man maste redan ha losenordet for att nå den har routen.
+app.get('/api/overlay-config/:alias', (req, res) => {
+  const alias = req.params.alias;
+  const content = "window.OVERLAY_CONFIG = {\n"
+    + "  baseUrl: '" + (process.env.PUBLIC_URL || 'https://dhs27.up.railway.app') + "/api/overlay',\n"
+    + "  alias: '" + alias.replace(/'/g, "\\'") + "',\n"
+    + "  password: '" + (process.env.SITE_PASSWORD || '').replace(/'/g, "\\'") + "',\n"
+    + "  pollMs: 2000,\n"
+    + "  showMs: 12000\n"
+    + "};\n";
+  res.set('Content-Type', 'application/javascript');
+  res.set('Content-Disposition', 'attachment; filename="config.js"');
+  res.send(content);
+});
+
+// Nedladdningsbar Dota 2 GSI-cfg med ratt URL + token ifyllt.
+app.get('/api/gsi-config', (req, res) => {
+  const url = (process.env.PUBLIC_URL || 'https://dhs27.up.railway.app') + '/api/gsi';
+  const content = '"DHS Playbook GSI"\n{\n'
+    + '    "uri"           "' + url + '"\n'
+    + '    "timeout"       "5.0"\n'
+    + '    "buffer"        "0.1"\n'
+    + '    "throttle"      "0.1"\n'
+    + '    "heartbeat"     "30.0"\n'
+    + '    "data"\n    {\n'
+    + '        "provider"      "1"\n'
+    + '        "map"           "1"\n'
+    + '        "player"        "1"\n'
+    + '        "hero"          "1"\n'
+    + '        "abilities"     "1"\n'
+    + '        "items"         "1"\n'
+    + '        "draft"         "1"\n'
+    + '    }\n'
+    + '    "auth"\n    {\n'
+    + '        "token"         "' + (process.env.GSI_TOKEN || '') + '"\n'
+    + '    }\n'
+    + '}\n';
+  res.set('Content-Type', 'text/plain');
+  res.set('Content-Disposition', 'attachment; filename="gamestate_integration_dhs.cfg"');
+  res.send(content);
 });
 
 // Trigga studiosandning pa TV:n for en match med genererad studioanalys
@@ -854,6 +957,224 @@ app.post('/api/strategy', async (req, res) => {
 app.post('/api/items', async (req, res) => {
   try { res.json({ text: await callClaude(req.body.prompt, 2000) }); }
   catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Hittar spelarens egen sektion i itemtips-texten (rubrik "## Alias") och plockar ut
+// varje "**Item** - ... (senast minut X)"-rad darunder.
+function parsePlayerItemTimings(itemsText, alias) {
+  if (!itemsText) return [];
+  const sections = itemsText.split(/^##\s+/m).slice(1);
+  for (const section of sections) {
+    const firstLine = section.split('\n')[0].trim();
+    if (firstLine.toLowerCase() === alias.toLowerCase()) {
+      const timings = [];
+      const re = /\*\*([^*]+)\*\*[^\n(]*\(senast minut (\d+)\)/gi;
+      let m;
+      while ((m = re.exec(section))) {
+        timings.push({ item: m[1].trim(), minute: parseInt(m[2], 10) });
+      }
+      return timings;
+    }
+  }
+  return [];
+}
+function ownedItemKeys(gsiItems) {
+  const owned = new Set();
+  Object.keys(gsiItems || {}).forEach(slot => {
+    const it = gsiItems[slot];
+    if (it && it.name && it.name !== 'empty') owned.add(String(it.name).replace(/^item_/, ''));
+  });
+  return owned;
+}
+function dueReminders(timings, ownedKeys, clockSeconds, nameMap, remindedSet, matchId, alias) {
+  const clockMinutes = clockSeconds / 60;
+  const due = [];
+  timings.forEach(t => {
+    const key = nameMap[t.item.toLowerCase()];
+    if (!key) return; // okant itemnamn i OpenDota-mappningen, hoppa over tyst
+    const dedupKey = matchId + '|' + alias + '|' + t.item;
+    if (remindedSet.has(dedupKey)) return;
+    if (ownedKeys.has(key)) return; // redan kopt
+    if (clockMinutes < t.minute) return; // inte dags an
+    due.push(t);
+    remindedSet.add(dedupKey);
+  });
+  return due;
+}
+
+// Dota GSI-endpoint: auto-genererar itemtips, foreslar ersattare live under draften,
+// och paminner varje spelare individuellt om sina egna itemtips i realtid under matchen.
+// .cfg-filen i Dota 2:s gamestate_integration-mapp pekar hit med matchande auth-token.
+// OVERIFIERAT MOT LIVE-PAYLOAD (kan inte testas pa denna dator, se TODO.md) — loggar radata
+// sa faltnamnen kan bekraftas nasta gang nagon spelar en pubmatch.
+let gsiLastState = null;
+let gsiSeenUnavailable = new Set(); // kumulativt sedan draften borjade, aterstalls varje ny HERO_SELECTION
+let gsiLastItemCheck = {}; // alias -> timestamp, throttlar JSONBin-lasningar under matchen
+let gsiItemCache = { matchId: null, timingsByAlias: {} };
+let gsiRemindedItems = new Set(); // matchId|alias|itemnamn
+
+app.post('/api/gsi', async (req, res) => {
+  res.sendStatus(200); // svara direkt, GSI vantar inte pa oss
+  try {
+    const body = req.body || {};
+    if (!process.env.GSI_TOKEN || !body.auth || body.auth.token !== process.env.GSI_TOKEN) return;
+
+    const state = body.map && body.map.game_state;
+    console.log('[GSI]', state, JSON.stringify(body.draft || {}), body.player && body.player.team_name);
+
+    const enteringHeroSelection = state === 'DOTA_GAMERULES_STATE_HERO_SELECTION' && gsiLastState !== state;
+    const justEnteredStrategyTime = state === 'DOTA_GAMERULES_STATE_STRATEGY_TIME' && gsiLastState !== state;
+    gsiLastState = state;
+    if (enteringHeroSelection) gsiSeenUnavailable = new Set();
+
+    const myTeam = body.player && body.player.team_name; // 'radiant' | 'dire'
+    const draft = body.draft;
+    if (!myTeam || !draft) return;
+
+    const enemyTeamKey = myTeam === 'radiant' ? 'team3' : 'team2';
+    const enemyTeam = draft[enemyTeamKey];
+    if (!enemyTeam) return;
+
+    const heroMap = await heroInternalNameMap();
+    const enemyHeroes = [];
+    for (let i = 0; i < 5; i++) {
+      const cls = enemyTeam['pick' + i + '_class'];
+      if (cls && heroMap[cls]) enemyHeroes.push(heroMap[cls]);
+    }
+
+    // ── Live under draften: foresla ersattare sa fort en planerad hjalte forsvinner ──
+    if (state === 'DOTA_GAMERULES_STATE_HERO_SELECTION') {
+      const allBannedNames = [];
+      ['team2', 'team3'].forEach(tk => {
+        const t = draft[tk];
+        if (!t) return;
+        for (let i = 0; i < 8; i++) {
+          const cls = t['ban' + i + '_class'];
+          if (cls && heroMap[cls]) allBannedNames.push(heroMap[cls]);
+        }
+      });
+      const currentUnavailable = new Set([...enemyHeroes, ...allBannedNames]);
+      const newlyUnavailable = [...currentUnavailable].filter(h => !gsiSeenUnavailable.has(h));
+      currentUnavailable.forEach(h => gsiSeenUnavailable.add(h));
+
+      if (newlyUnavailable.length > 0) {
+        const matches = await readMatches();
+        const match = matches.find(m => m.id === serverStatus.latestMatchId);
+        const plannedDraft = match ? (match.currentDraft || match.draft || {}) : {};
+        const affected = Object.keys(plannedDraft).filter(alias => newlyUnavailable.includes(plannedDraft[alias]));
+
+        if (match && affected.length > 0) {
+          const idToName = await studioHeroes();
+          const takenThisBatch = new Set(); // undvik att foresla samma ersattare till tva spelare i samma omgang
+          const pools = {};
+          affected.forEach(alias => {
+            const p = (match.players || []).find(pl => pl.name === alias);
+            pools[alias] = ((p && p.heroes) || []).map(id => idToName[id]).filter(Boolean)
+              .filter(h => !currentUnavailable.has(h));
+          });
+
+          const bannedList = affected.map(alias => plannedDraft[alias] + ' (' + alias + ')').join(', ');
+          const poolList = affected.map(alias => alias + ': ' + (pools[alias].join(', ') || 'Tom pool - valj basta alternativ')).join('\n');
+
+          const replacePrompt = 'Du ar en Dota 2 draft-expert. Ersatt bannlysta/tagna hjaltar sa snabbt som mojligt.\n\n'
+            + 'STRATEGI (valj hjaltar som passar denna win condition och spelstil): ' + (match.currentStrategy || match.strategy || '').substring(0, 800) + '\n\n'
+            + 'ERSATT: ' + bannedList + '\n'
+            + 'POOLER: ' + poolList + '\n'
+            + 'EJ VALBARA: ' + [...currentUnavailable].join(', ') + '\n\n'
+            + 'Svara ENDAST med ersattningarna, en rad per spelare:\n'
+            + '**[SPELARNAMN]: [NY HJALTE]** — en mening om varfor och hur hjalten fyller samma roll i planen.\n'
+            + 'Skriv INGET annat — ingen omskriven strategi, ingen inledning.\n\n'
+            + 'Anvand svenska.';
+
+          const replaceText = await callClaude(replacePrompt, 500);
+          const newDraft = Object.assign({}, plannedDraft);
+          const overlayLines = [];
+
+          affected.forEach(alias => {
+            const oldHero = plannedDraft[alias];
+            const escaped = alias.replace(/[.*+?^${}()|\[\]\\]/g, '\\$&');
+            const regex = new RegExp(escaped + '[^\\n]*?:\\s*([A-Za-z\\- ]+)', 'i');
+            const m2 = replaceText.match(regex);
+            let newHero = m2 ? m2[1].trim().replace(/\*+/g, '').split(' - ')[0].split('(')[0].trim() : null;
+
+            // Sakerhetsnat: lita aldrig blint pa AI-svaret — om det foreslar nagot
+            // som ar bannat/taget/redan valt at nagon annan i denna omgang, fall
+            // tillbaka pa forsta lediga hjalte i spelarens egen pool istallet.
+            const available = pools[alias].filter(h => !takenThisBatch.has(h));
+            if (!newHero || currentUnavailable.has(newHero) || takenThisBatch.has(newHero)) {
+              newHero = available[0] || null;
+            }
+            if (newHero) {
+              takenThisBatch.add(newHero);
+              newDraft[alias] = newHero;
+              const line = oldHero + ' bannad → ' + newHero;
+              overlayLines.push(line + ' (' + alias + ')');
+              pushOverlay(alias, 'draft-ban', 'Draftändring', line); // varje spelare ser bara sin egen ersattning
+            }
+          });
+
+          match.currentStrategy = (match.currentStrategy || match.strategy || '')
+            + '\n\n---\n### Draftändring efter bans (' + bannedList + ')\n' + replaceText;
+          match.currentDraft = newDraft;
+          match.banned = Array.from(new Set((match.banned || []).concat(affected.map(a => plannedDraft[a]))));
+          await writeMatches(matches);
+
+          console.log('[GSI] Auto-ersatte:', overlayLines.join(' | '));
+        }
+      }
+    }
+
+    // ── Live under matchen: paminn den enskilda spelaren om sina egna itemtips ──
+    if (state === 'DOTA_GAMERULES_STATE_GAME_IN_PROGRESS') {
+      const alias = await findAliasBySteamId64(body.player && body.player.steamid);
+      if (alias) {
+        const now = Date.now();
+        if (now - (gsiLastItemCheck[alias] || 0) >= 5000) { // throttla JSONBin-lasningar till var 5:e sekund per spelare
+          gsiLastItemCheck[alias] = now;
+
+          if (gsiItemCache.matchId !== serverStatus.latestMatchId) {
+            gsiItemCache = { matchId: serverStatus.latestMatchId, timingsByAlias: {} };
+            gsiRemindedItems = new Set();
+          }
+          if (!(alias in gsiItemCache.timingsByAlias)) {
+            const matches = await readMatches();
+            const match = matches.find(m => m.id === serverStatus.latestMatchId);
+            if (match && match.items) gsiItemCache.timingsByAlias[alias] = parsePlayerItemTimings(match.items, alias);
+          }
+
+          const timings = gsiItemCache.timingsByAlias[alias];
+          if (timings && timings.length > 0) {
+            const nameMap = await itemDisplayNameMap();
+            const owned = ownedItemKeys(body.items);
+            const clockSeconds = (body.map && body.map.clock_time) || 0;
+            const due = dueReminders(timings, owned, clockSeconds, nameMap, gsiRemindedItems, gsiItemCache.matchId, alias);
+            due.forEach(t => {
+              pushOverlay(alias, 'item-reminder', 'Itemtips', 'Dags att kopa ' + t.item + ' (senast minut ' + t.minute + ')');
+              console.log('[GSI] Itemparminnelse:', alias, '->', t.item);
+            });
+          }
+        }
+      }
+    }
+
+    if (!justEnteredStrategyTime) return;
+    if (enemyHeroes.length < 5) return; // ofullstandig draft-data, kanske fel faltnamn — se loggen
+
+    const matches = await readMatches();
+    const match = matches.find(m => m.id === serverStatus.latestMatchId);
+    if (!match || match.items) return; // ingen aktiv match, eller redan genererat
+
+    const prompt = 'Du ar en Dota 2 item-expert. Vi har precis genererat en draft-strategi och ska nu mota dessa motstandare.\n\n'
+      + 'VAR DRAFT-STRATEGI:\n' + (match.currentStrategy || match.strategy || '') + '\n\n'
+      + 'MOTSTANDARNA SPELAR:\n' + enemyHeroes.join(', ') + '\n\n'
+      + 'Ge konkreta itemtips per spelare i vart lag. Fokusera pa 3-5 nyckelitems per spelare som ar extra viktiga MOT just dessa motstandare.\n\n'
+      + 'FORMAT: For varje spelare, skriv en rubrik pa egen rad exakt som "## [SPELARNAMN]" (spelarens alias rakt av, inget annat pa den raden), sedan hjaltens namn pa egen rad, sedan varje item pa egen rad som "**Itemnamn** - kort motivering (senast minut X)" dar X ar en ungefarlig match-minut senast nar itemet bor vara kopt. Avsluta varje spelare med en "Prioritet:"-rad. Ingen markdown-tabell, inga | tecken. Anvand svenska. Var specifik.';
+
+    match.enemies = enemyHeroes;
+    match.items = await callClaude(prompt, 2000);
+    await writeMatches(matches);
+    console.log('[GSI] Itemtips auto-genererade for match', match.id);
+  } catch(e) { console.error('[GSI] Fel:', e.message); }
 });
 
 app.get('/tv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'tv.html')));

@@ -63,7 +63,7 @@ Har filen flera `<script>`-block: extrahera varje block med `re.findall(r'<scrip
 - **Matchdata:** OpenDota API. Steam API är övergivet (`GetMatchDetails` ger kroniskt 500).
 
 ### Miljövariabler (Railway + lokal `.env`)
-`ANTHROPIC_API_KEY`, `JSONBIN_API_KEY`, `JSONBIN_PLAYERS_ID`, `JSONBIN_MATCHES_ID`, `JSONBIN_DRAFTPOOLS_ID`, `SITE_PASSWORD`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`
+`ANTHROPIC_API_KEY`, `JSONBIN_API_KEY`, `JSONBIN_PLAYERS_ID`, `JSONBIN_MATCHES_ID`, `JSONBIN_DRAFTPOOLS_ID`, `SITE_PASSWORD`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `GSI_TOKEN` (delad hemlighet mot Dota 2:s gamestate_integration-cfg, se `/api/gsi`), `PUBLIC_URL` (valfri — bas-URL som bakas in i de nedladdningsbara `/api/gsi-config`- och `/api/overlay-config/:alias`-filerna, faller tillbaka på `https://dhs27.up.railway.app` om ej satt)
 
 Lokala scripts läser `.env` i repo-roten (skyddad av `.gitignore`). Prod-historikens bin-id: `6a3c3d6bda38895dfef96973` (hårdkodad i `link-matches.js`).
 
@@ -77,7 +77,7 @@ Lokala scripts läser `.env` i repo-roten (skyddad av `.gitignore`). Prod-histor
 | `server-lanstrat.js` | Identisk kopia av server.js (hålls synkad, se arbetsregel 5) |
 | `public/index.html` | Playbook: spelare, pools, strategigenerering, historik, detaljvy m. OpenDota-statistik + studiospelare |
 | `public/tv.html` | Cinematisk TV: hero reveals m. TTS, hype, fight card, studiosändning ("Eftersnack"). Polling mot `/api/status` med `replayToken`/`studioToken` |
-| `public/pool.html` | Hero pool-import (`/pool`, egen JSONBin-bin) |
+| `public/pool.html` | Hero pool-import (`/pool`, egen JSONBin-bin). **Används sannolikt inte längre** (2026-07-11) — Hero Pool Manager-sidan i `index.html` är den aktiva ytan för spelarnas hjältepooler. Bygg inte nya funktioner här utan att fråga först. |
 | `generate-studio.js` | CLI: generera studioanalys per länkad match (samma logik finns i server.js — håll prompterna synkade) |
 | `analyze-match.js` | Äldre trerosts-recap → fristående HTML m. inbäddad base64-audio |
 | `link-matches.js` | Dry-run: föreslå koppling OpenDota-match ↔ strategi (45 min-fönster, strategi före match) |

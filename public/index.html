@@ -160,6 +160,10 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .challenge-gen-btn{width:100%;padding:7px;background:none;border:1px dashed #8e44ad88;color:#9b59b6;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;border-radius:4px;transition:all .15s;}
 .challenge-gen-btn:hover{background:rgba(155,89,182,.12);border-color:#9b59b6;}
 .challenge-gen-btn:disabled{opacity:.4;cursor:not-allowed;}
+.overlay-link-btn{display:block;width:100%;box-sizing:border-box;margin-top:8px;padding:7px;background:none;border:1px dashed #2a9d8f88;color:#4ecdc4;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;text-align:center;text-decoration:none;cursor:pointer;border-radius:4px;transition:all .15s;}
+.overlay-link-btn:hover{background:rgba(78,205,196,.12);border-color:#4ecdc4;}
+.gsi-config-link{font-size:12px;color:var(--text-dim);text-decoration:underline;margin-top:6px;display:inline-block;}
+.gsi-config-link:hover{color:var(--gold);}
 /* CHALLENGE POOL - MATCH PAGE */
 .cp-toggle{display:flex;gap:2px;flex-shrink:0;}
 .cp-btn{padding:2px 5px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;cursor:pointer;border:1px solid #8e44ad44;background:none;color:#6a3d8a;transition:all .12s;white-space:nowrap;}
@@ -184,7 +188,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 
 <!-- HOME -->
 <div id="page-home" class="page active">
-  <div class="home-header"><h1>Hero Pool Manager</h1><p>Varje spelare sparar sina hjältar — AI draftar strategin</p></div>
+  <div class="home-header"><h1>Hero Pool Manager</h1><p>Varje spelare sparar sina hjältar — AI draftar strategin</p><a class="gsi-config-link" href="/api/gsi-config" download>📡 Ladda ner GSI-inställning (för in-game overlay, samma fil till alla)</a></div>
   <div id="player-grid" class="player-grid"></div>
 </div>
 
@@ -657,6 +661,12 @@ function renderHome() {
     cpBtn.onclick = (function(idx){ return function(){ generateChallengePool(idx); }; })(i);
     cpSection.appendChild(cpBtn);
     card.appendChild(cpSection);
+    var overlayLink = document.createElement('a');
+    overlayLink.className = 'overlay-link-btn';
+    overlayLink.href = '/api/overlay-config/' + encodeURIComponent(p.name);
+    overlayLink.setAttribute('download', '');
+    overlayLink.textContent = '📡 Min overlay-config';
+    card.appendChild(overlayLink);
     grid.appendChild(card);
   });
   const add = document.createElement('div');
@@ -1981,7 +1991,7 @@ async function removeEnemy(name) {
 async function generateItems() {
   var m = await apiFetch('/matches/'+currentMatchId);
   var enemyList = [...currentEnemies].join(', ');
-  var prompt = 'Du ar en Dota 2 item-expert. Vi har precis genererat en draft-strategi och ska nu mota dessa motstandare.\n\nVAR DRAFT-STRATEGI:\n'+(m.currentStrategy||m.strategy||'')+'\n\nMOTSTANDARRNA SPELAR:\n'+enemyList+'\n\nGe konkreta itemtips per spelare i vart lag. Fokusera pa 3-5 nyckelitems per spelare som ar extra viktiga MOT just dessa motstandare.\n\nFORMAT: For varje spelare, skriv spelarnamn och hjalte som rubrik, sedan varje item pa egen rad som "**Itemnamn** - kort motivering". Avsluta varje spelare med en "Prioritet:"-rad. Ingen markdown-tabell, inga | tecken. Anvand svenska. Var specifik.';
+  var prompt = 'Du ar en Dota 2 item-expert. Vi har precis genererat en draft-strategi och ska nu mota dessa motstandare.\n\nVAR DRAFT-STRATEGI:\n'+(m.currentStrategy||m.strategy||'')+'\n\nMOTSTANDARRNA SPELAR:\n'+enemyList+'\n\nGe konkreta itemtips per spelare i vart lag. Fokusera pa 3-5 nyckelitems per spelare som ar extra viktiga MOT just dessa motstandare.\n\nFORMAT: For varje spelare, skriv en rubrik pa egen rad exakt som "## [SPELARNAMN]" (spelarens alias rakt av, inget annat pa den raden), sedan hjaltens namn pa egen rad, sedan varje item pa egen rad som "**Itemnamn** - kort motivering (senast minut X)" dar X ar en ungefarlig match-minut senast nar itemet bor vara kopt. Avsluta varje spelare med en "Prioritet:"-rad. Ingen markdown-tabell, inga | tecken. Anvand svenska. Var specifik.';
   var btn = document.getElementById('get-items-btn');
   if(btn) { btn.disabled = true; btn.textContent = 'Hamtar itemtips...'; }
   try {
