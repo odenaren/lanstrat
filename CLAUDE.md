@@ -91,7 +91,7 @@ Lokala scripts läser `.env` i repo-roten (skyddad av `.gitignore`). Prod-histor
 
 ## Datamodell (JSONBin)
 
-**Player:** `{ name, heroes: [heroId...], challengePool: [...] }`
+**Player:** `{ name, heroes: [heroId...], challengePool: [...], steamId: "32-bit OpenDota account_id eller null" }`
 
 **Match** (viktigaste fälten):
 ```json

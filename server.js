@@ -115,12 +115,12 @@ app.get('/api/players', async (req, res) => {
 });
 
 app.post('/api/players', async (req, res) => {
-  const { name } = req.body;
+  const { name, steamId } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
   try {
     const players = await readPlayers();
     if (players.find(p => p.name === name)) return res.status(409).json({ error: 'Player exists' });
-    players.push({ name, heroes: [] });
+    players.push({ name, heroes: [], steamId: steamId || null });
     await writePlayers(players);
     res.json(players);
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -165,6 +165,17 @@ app.put('/api/players/:name/challenge-pool', async (req, res) => {
     const p = players.find(p => p.name === req.params.name);
     if (!p) return res.status(404).json({ error: 'Not found' });
     p.challengePool = req.body.challengePool || [];
+    await writePlayers(players);
+    res.json(p);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/players/:name/steamid', async (req, res) => {
+  try {
+    const players = await readPlayers();
+    const p = players.find(p => p.name === req.params.name);
+    if (!p) return res.status(404).json({ error: 'Not found' });
+    p.steamId = req.body.steamId || null;
     await writePlayers(players);
     res.json(p);
   } catch(e) { res.status(500).json({ error: e.message }); }

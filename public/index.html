@@ -326,6 +326,8 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
   <div class="modal">
     <h3>Lägg till spelare</h3>
     <input class="modal-input" id="new-player-name" placeholder="SPELARNICK" maxlength="20" onkeydown="if(event.key==='Enter')confirmAddPlayer()">
+    <input class="modal-input" id="new-player-steamid" placeholder="Steam-ID (valfritt)" style="text-transform:none" onkeydown="if(event.key==='Enter')confirmAddPlayer()">
+    <div style="font-size:11px;color:var(--text-dim);margin:-10px 0 16px;line-height:1.4">SteamID64, OpenDota-ID eller steamcommunity.com/profiles/-länk — används för att koppla matcher automatiskt</div>
     <div class="modal-btns">
       <button class="modal-cancel" onclick="closeModal()">Avbryt</button>
       <button class="modal-confirm" onclick="confirmAddPlayer()">Lägg till</button>
@@ -574,6 +576,19 @@ async function apiFetch(path, options={}) {
 }
 async function loadPlayers() { players = await apiFetch('/players'); renderHome(); }
 
+// Normaliserar SteamID64, OpenDota/32-bit account-id, eller en steamcommunity.com/profiles/-lank
+// till 32-bit account-id (samma id som OpenDota anvander for att matcha spelare i matchdata).
+function normalizeSteamId(raw) {
+  var s = String(raw||'').trim();
+  if(!s) return '';
+  var urlMatch = s.match(/profiles\/(\d+)/);
+  if(urlMatch) s = urlMatch[1];
+  if(!/^\d+$/.test(s)) return null;
+  var num = Number(s);
+  var STEAM64_BASE = 76561197960265728;
+  return String(num >= STEAM64_BASE ? num - STEAM64_BASE : num);
+}
+
 // ===================== NAV =====================
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -608,6 +623,7 @@ function renderHome() {
       </div>
       <div class="player-card-count"><span>${count}</span> hjältar valda</div>
       <div class="player-card-roles">${roles.map(r=>`<span class="role-pill ${r.toLowerCase()}">${r}</span>`).join('')}</div>
+      <div id="steamid-${i}" onclick="startSteamIdEdit(${i})" style="font-size:11px;color:${p.steamId?'var(--text-dim)':'var(--gold-dim)'};margin-top:8px;cursor:pointer;font-family:monospace">${p.steamId?'🎮 '+p.steamId:'+ Lägg till Steam-ID'}</div>
       <button class="player-card-btn" onclick="openPicker(${i})">${poolOnlyMode?"Valj mina hjaltar":"Redigera pool"}</button>`;
     var cpSection = document.createElement('div');
     cpSection.className = 'challenge-pool-section';
@@ -674,6 +690,30 @@ function startRename(i) {
   input.onblur = doRename;
   input.onkeydown = e => { if(e.key==='Enter') { input.blur(); } if(e.key==='Escape') loadPlayers(); };
 }
+function startSteamIdEdit(i) {
+  const el = document.getElementById('steamid-'+i);
+  if(!el || el.tagName === 'INPUT') return;
+  const name = players[i].name;
+  const oldVal = players[i].steamId || '';
+  const input = document.createElement('input');
+  input.value = oldVal;
+  input.placeholder = 'SteamID64, OpenDota-ID eller profiles/-länk';
+  input.style.cssText = 'background:var(--surface2);border:1px solid var(--gold-dim);color:var(--text);padding:3px 6px;border-radius:3px;font-size:11px;font-family:monospace;width:100%;outline:none;margin-top:8px;';
+  el.replaceWith(input);
+  input.focus(); input.select();
+  async function doSave() {
+    const raw = input.value.trim();
+    const normalized = raw ? normalizeSteamId(raw) : '';
+    if(normalized === null) { alert('Kunde inte tolka Steam-ID:t.'); renderHome(); return; }
+    if(normalized === oldVal) { renderHome(); return; }
+    try {
+      await apiFetch('/players/'+encodeURIComponent(name)+'/steamid', {method:'PUT', body:JSON.stringify({steamId:normalized})});
+      await loadPlayers();
+    } catch(err) { alert('Kunde inte spara Steam-ID: '+err.message); renderHome(); }
+  }
+  input.onblur = doSave;
+  input.onkeydown = e => { if(e.key==='Enter') { input.blur(); } if(e.key==='Escape') renderHome(); };
+}
 
 async function ensureDefaultPlayers() {
   const existing = await apiFetch('/players');
@@ -706,10 +746,16 @@ async function deletePlayer(event,name) {
 async function confirmAddPlayer() {
   const name = document.getElementById('new-player-name').value.trim().toUpperCase();
   if(!name)return;
-  try { players = await apiFetch('/players',{method:'POST',body:JSON.stringify({name})}); closeModal(); renderHome(); }
+  const steamRaw = document.getElementById('new-player-steamid').value.trim();
+  let steamId = '';
+  if(steamRaw) {
+    steamId = normalizeSteamId(steamRaw);
+    if(steamId === null) { alert('Kunde inte tolka Steam-ID:t. Ange SteamID64, OpenDota-ID, eller en steamcommunity.com/profiles/-länk.'); return; }
+  }
+  try { players = await apiFetch('/players',{method:'POST',body:JSON.stringify({name, steamId})}); closeModal(); renderHome(); }
   catch(err){ alert('Kunde inte lägga till: '+err.message); }
 }
-function closeModal(){ document.getElementById('modal-overlay').classList.remove('open'); }
+function closeModal(){ document.getElementById('modal-overlay').classList.remove('open'); document.getElementById('new-player-steamid').value=''; }
 
 // ===================== CHALLENGE POOL =====================
 async function generateChallengePool(playerIdx) {
