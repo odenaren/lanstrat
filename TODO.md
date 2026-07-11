@@ -5,8 +5,6 @@ Ostrukturerad att-göra-lista. Uppdatera i klartext när nya idéer dyker upp el
 ## Aktuellt
 
 - **Streaming av strategitext** — visa AI-svaret i realtid medan det genereras istället för att vänta på hela svaret innan något visas.
-- **PIN-skydd för Strats/Historik-flikarna** — så spelarna kan använda Hero Pool-sidan (inför lanet) utan att kunna tjuvkika på genererade strategier/historik. Hero Pool ska vara öppen som idag.
-- **Hjältporträtt i historiklistan** — fungerar delvis idag, mixad/inkonsekvent syntax för hur bilderna hämtas/renderas. Städa upp.
 
 ## Framtid — inte aktuellt nu
 
@@ -14,4 +12,5 @@ Ostrukturerad att-göra-lista. Uppdatera i klartext när nya idéer dyker upp el
 
 ## Klart (flyttat hit vid färdigställande, för spårbarhet)
 
-_(tomt ännu)_
+- **PIN-skydd för Strats/Historik** — löstes istället genom att bygga en separat `pool.html`-sida (egen JSONBin-bin) som spelarna kunde nå inför lanet utan att se Strats/Historik. Inte aktuellt längre efter lanet.
+- **Hjältporträtt i historiklistan** — använder `heroImgByName` konsekvent med fallback-ikon när bild saknas.
