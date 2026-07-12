@@ -649,6 +649,14 @@ const overlayStates = {}; // alias -> {id, kind, title, body, ts}
 function pushOverlay(alias, kind, title, body) {
   overlayStates[alias] = { id: Date.now().toString() + '-' + Math.random().toString(36).slice(2, 6), kind: kind, title: title, body: body, ts: Date.now() };
 }
+
+// Sjalv-paminnelser: spelaren skriver (via /prompt-sidan pa telefonen) fritext eller valjer
+// ett AI-forslag, AI:n tolkar det till en kort text + en match-minut den ska visas.
+// GSI-flodet langre ner (DOTA_GAMERULES_STATE_GAME_IN_PROGRESS) triggar pushOverlay nar
+// spelarens egen matchklocka passerar triggerSeconds. Rent i-minnet, matchId-keyat -
+// behover ingen explicit rensning, gamla matchers poster ligger bara ovanvanda.
+let selfPrompts = {}; // matchId -> alias -> [{id, message, triggerSeconds, fired}]
+let selfPromptPresets = {}; // matchId -> alias -> [{message, triggerMinute}] (cachas per match+alias)
 // Widgeten kanner sjalv av spelarens Steam-konto (se overlay/main.js) och slar upp
 // ratt alias har, sa INGEN per-spelare-config behovs langre — en och samma
 // config.js/overlay-mapp funkar for alla 9 spelare.
@@ -682,6 +690,134 @@ app.get('/api/overlay-config', (req, res) => {
   res.set('Content-Type', 'application/javascript');
   res.set('Content-Disposition', 'attachment; filename="config.js"');
   res.send(content);
+});
+
+// 3 AI-forslag pa sjalv-paminnelser for den aktiva matchen, anpassade efter spelarens
+// hjalte, roll/strategi och (om steamId finns) hur ofta/val de spelat hjalten i sasongen.
+// Cachas per match+alias sa telefonen inte tvingar fram ett nytt AI-anrop varje sidladdning.
+app.get('/api/self-prompt-presets/:alias', async (req, res) => {
+  try {
+    const alias = req.params.alias;
+    const matchId = serverStatus.latestMatchId;
+    if (!matchId) return res.status(404).json({ error: 'Ingen aktiv match just nu' });
+
+    const matches = await readMatches();
+    const match = matches.find(m => m.id === matchId);
+    if (!match) return res.status(404).json({ error: 'Ingen aktiv match just nu' });
+    const draft = match.currentDraft || match.draft || {};
+    const hero = draft[alias];
+    if (!hero) return res.status(404).json({ error: 'Hittade ingen hjalte for ' + alias + ' i denna match' });
+
+    if (selfPromptPresets[matchId] && selfPromptPresets[matchId][alias]) {
+      return res.json({ hero: hero, presets: selfPromptPresets[matchId][alias] });
+    }
+
+    let statText = 'Ingen sparad OpenDota-historik pa denna hjalte hittades — generalisera utifran roll/hjaltearketyp.';
+    try {
+      const players = await readPlayers();
+      const player = players.find(p => p.name === alias);
+      if (player && player.steamId) {
+        const idToName = await studioHeroes();
+        const nameToId = {};
+        Object.keys(idToName).forEach(id => { nameToId[idToName[id]] = id; });
+        const heroId = nameToId[hero];
+        if (heroId) {
+          const hRes = await fetch('https://api.opendota.com/api/players/' + player.steamId + '/heroes');
+          if (hRes.ok) {
+            const rows = await hRes.json();
+            const row = rows.find(r => String(r.hero_id) === String(heroId));
+            if (row) statText = 'Har spelat ' + hero + ' ' + row.games + ' ganger denna sasongen, ' + row.win + ' vinster.';
+          }
+        }
+      }
+    } catch (e) { /* best effort - ingen statistik ar bättre än ett trasigt anrop */ }
+
+    const prompt = 'Du ar en Dota 2-coach som ger en spelare korta, konkreta mal att folja under EN specifik match, '
+      + 'visade som paminnelser i deras egen in-game overlay vid ratt tidpunkt.\n\n'
+      + 'HJALTE: ' + hero + '\n'
+      + 'SPELARENS ROLL/STRATEGI I DENNA MATCH: ' + (match.currentStrategy || match.strategy || '').slice(0, 1200) + '\n'
+      + 'HISTORIK: ' + statText + '\n\n'
+      + 'Skapa 3 OLIKA forslag pa konkreta, matbara mal under matchen (t.ex. farm-fonster, ward-mal, item-timing, positionering, aggression). '
+      + 'Varje forslag ska ha en kort text (max 12 ord) och en rimlig match-minut (0-60) da paminnelsen ska visas i overlayn — '
+      + 'tidpunkten ska vara NAR malet blir relevant att paminnas om (t.ex. ett farm-fonster 15-25 min -> visa vid minut 15, en item-deadline vid minut 10 -> visa nagot innan, typ minut 8).\n'
+      + 'Hitta ALDRIG pa exakta siffror om historik saknas - generalisera da bara utifran roll och hjaltearketyp.\n\n'
+      + 'Svara ENDAST med JSON, ingen markdown:\n'
+      + '{"presets":[{"message":"kort text pa svenska","triggerMinute":15}]}';
+
+    const text = (await callClaude(prompt, 700)).replace(/```json|```/g, '').trim();
+    const jsonStart = text.indexOf('{');
+    const jsonEnd = text.lastIndexOf('}');
+    if (jsonStart === -1 || jsonEnd === -1) throw new Error('Ogiltigt AI-svar for forslag');
+    const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1));
+    const presets = (parsed.presets || [])
+      .filter(p => p && p.message && typeof p.triggerMinute === 'number')
+      .slice(0, 3)
+      .map(p => ({ message: String(p.message).slice(0, 140), triggerMinute: Math.max(0, Math.min(90, Math.round(p.triggerMinute))) }));
+    if (!presets.length) throw new Error('Inga giltiga forslag i AI-svaret');
+
+    if (!selfPromptPresets[matchId]) selfPromptPresets[matchId] = {};
+    selfPromptPresets[matchId][alias] = presets;
+    res.json({ hero: hero, presets: presets });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Sparar en sjalv-paminnelse for den aktiva matchen — antingen fritext (tolkas av AI till
+// kort text + tidpunkt) eller ett index in i de cachade forslagen fran routen ovan.
+app.post('/api/self-prompt/:alias', async (req, res) => {
+  try {
+    const alias = req.params.alias;
+    const matchId = serverStatus.latestMatchId;
+    if (!matchId) return res.status(404).json({ error: 'Ingen aktiv match just nu' });
+
+    let message, triggerMinute;
+
+    if (typeof req.body.presetIndex === 'number') {
+      const presets = selfPromptPresets[matchId] && selfPromptPresets[matchId][alias];
+      const preset = presets && presets[req.body.presetIndex];
+      if (!preset) return res.status(400).json({ error: 'Okant forslag' });
+      message = preset.message;
+      triggerMinute = preset.triggerMinute;
+    } else {
+      const freetext = (req.body.text || '').trim();
+      if (!freetext) return res.status(400).json({ error: 'Ingen text skickad' });
+
+      const matches = await readMatches();
+      const match = matches.find(m => m.id === matchId);
+      if (!match) return res.status(404).json({ error: 'Ingen aktiv match just nu' });
+      const draft = match.currentDraft || match.draft || {};
+      const hero = draft[alias] || 'okand hjalte';
+
+      const prompt = 'En spelare i en Dota 2-match skriver en anteckning till sig sjalv, som ska visas som en kort '
+        + 'paminnelse i deras egen in-game overlay vid ratt tidpunkt.\n\n'
+        + 'HJALTE: ' + hero + '\n'
+        + 'STRATEGI/ROLL: ' + (match.currentStrategy || match.strategy || '').slice(0, 1200) + '\n'
+        + 'SPELARENS TEXT: "' + freetext.slice(0, 500) + '"\n\n'
+        + 'Tolka texten och skriv om den till EN kort, tydlig paminnelse (max 12 ord). Bestam ocksa en rimlig match-minut (0-60) '
+        + 'da paminnelsen ska visas i overlayn — om spelaren anger ett tidsfonster (t.ex. "mellan minut 15 och 25") ska paminnelsen '
+        + 'visas vid FORSTA relevanta tidpunkten (minut 15), inte i mitten eller vid slutet. Om ingen tid namns explicit, valj en '
+        + 'rimlig tidpunkt baserat pa sammanhanget (tidig/mitten/sen match).\n\n'
+        + 'Svara ENDAST med JSON, ingen markdown:\n'
+        + '{"message":"kort text pa svenska","triggerMinute":15}';
+
+      const aiText = (await callClaude(prompt, 300)).replace(/```json|```/g, '').trim();
+      const jsonStart = aiText.indexOf('{');
+      const jsonEnd = aiText.lastIndexOf('}');
+      if (jsonStart === -1 || jsonEnd === -1) throw new Error('Ogiltigt AI-svar');
+      const parsed = JSON.parse(aiText.slice(jsonStart, jsonEnd + 1));
+      if (!parsed.message || typeof parsed.triggerMinute !== 'number') throw new Error('Ofullstandigt AI-svar');
+      message = String(parsed.message).slice(0, 140);
+      triggerMinute = Math.max(0, Math.min(90, Math.round(parsed.triggerMinute)));
+    }
+
+    if (!selfPrompts[matchId]) selfPrompts[matchId] = {};
+    if (!selfPrompts[matchId][alias]) selfPrompts[matchId][alias] = [];
+    selfPrompts[matchId][alias].push({
+      id: Date.now().toString() + '-' + Math.random().toString(36).slice(2, 6),
+      message: message, triggerSeconds: triggerMinute * 60, fired: false
+    });
+
+    res.json({ message: message, triggerMinute: triggerMinute });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // Nedladdningsbar Dota 2 GSI-cfg med ratt URL + token ifyllt.
@@ -1159,17 +1295,28 @@ app.post('/api/gsi', async (req, res) => {
             if (match && match.items) gsiItemCache.timingsByAlias[alias] = parsePlayerItemTimings(match.items, alias);
           }
 
+          const clockSeconds = (body.map && body.map.clock_time) || 0;
+
           const timings = gsiItemCache.timingsByAlias[alias];
           if (timings && timings.length > 0) {
             const nameMap = await itemDisplayNameMap();
             const owned = ownedItemKeys(body.items);
-            const clockSeconds = (body.map && body.map.clock_time) || 0;
             const due = dueReminders(timings, owned, clockSeconds, nameMap, gsiRemindedItems, gsiItemCache.matchId, alias);
             due.forEach(t => {
               pushOverlay(alias, 'item-reminder', 'Itemtips', 'Dags att kopa ' + t.item + ' (senast minut ' + t.minute + ')');
               console.log('[GSI] Itemparminnelse:', alias, '->', t.item);
             });
           }
+
+          // Sjalv-paminnelser (fritext/AI-forslag fran /prompt) — trigga de vars tidpunkt passerats.
+          const pending = (selfPrompts[serverStatus.latestMatchId] || {})[alias] || [];
+          pending.forEach(sp => {
+            if (!sp.fired && clockSeconds >= sp.triggerSeconds) {
+              sp.fired = true;
+              pushOverlay(alias, 'self-prompt', 'Din påminnelse', sp.message);
+              console.log('[GSI] Sjalv-paminnelse:', alias, '->', sp.message);
+            }
+          });
         }
       }
     }
@@ -1196,6 +1343,7 @@ app.post('/api/gsi', async (req, res) => {
 
 app.get('/tv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'tv.html')));
 app.get('/pool', (req, res) => res.sendFile(path.join(__dirname, 'public', 'pool.html')));
+app.get('/prompt', (req, res) => res.sendFile(path.join(__dirname, 'public', 'prompt.html')));
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 

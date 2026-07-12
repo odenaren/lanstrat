@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>DHS — Prompta din overlay</title>
+<style>
+  :root{
+    --bg:#0a0b0d; --surface:#12151a; --surface2:#1a1f28; --border:#252c38;
+    --gold:#c89b3c; --gold-light:#e8c06a; --gold-dim:#7a5c1e;
+    --text:#d4cfc7; --text-dim:#7a7a7a; --green:#27ae60; --red:#e74c3c;
+  }
+  *{box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;margin:0;padding:20px 16px 60px;min-height:100vh;}
+  h1{font-size:20px;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin:0 0 4px;}
+  .sub{color:var(--text-dim);font-size:13px;margin-bottom:20px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:14px;}
+  .card h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);margin:0 0 10px;}
+  .preset{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+  .preset:last-child{margin-bottom:0;}
+  .preset-text{font-size:14px;line-height:1.4;}
+  .preset-minute{color:var(--text-dim);font-size:12px;margin-top:2px;}
+  button{font-family:inherit;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;border-radius:5px;border:none;padding:9px 14px;cursor:pointer;white-space:nowrap;}
+  .btn-gold{background:var(--gold);color:#0a0b0d;}
+  .btn-gold:hover{background:var(--gold-light);}
+  .btn-gold:disabled{opacity:.5;cursor:default;}
+  textarea{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:12px;font-family:inherit;font-size:14px;resize:vertical;min-height:80px;}
+  textarea:focus{outline:none;border-color:var(--gold-dim);}
+  .status{margin-top:12px;font-size:13px;line-height:1.5;}
+  .status.ok{color:var(--green);}
+  .status.err{color:var(--red);}
+  .hint{color:var(--text-dim);font-size:12px;margin-top:6px;}
+</style>
+</head>
+<body>
+<h1>Skriv till din overlay</h1>
+<div class="sub" id="whoami">Laddar…</div>
+
+<div class="card" id="presets-card" style="display:none">
+  <h2>AI-förslag för din match</h2>
+  <div id="presets-list"></div>
+</div>
+
+<div class="card">
+  <h2>Egen anteckning</h2>
+  <textarea id="freetext" placeholder="T.ex. 'jag ska ha 100 last hits mellan minut 15 och 25' eller 'köp blink innan 10 min'"></textarea>
+  <div style="margin-top:10px"><button class="btn-gold" id="send-btn" onclick="sendFreetext()">Skicka</button></div>
+  <div class="hint">AI:n tolkar texten och räknar ut en rimlig tidpunkt att påminna dig i din overlay under matchen.</div>
+</div>
+
+<div class="status" id="status"></div>
+
+<script>
+  var params = new URLSearchParams(location.search);
+  var alias = params.get('alias') || '';
+  var whoamiEl = document.getElementById('whoami');
+  var statusEl = document.getElementById('status');
+  var presetsCard = document.getElementById('presets-card');
+  var presetsList = document.getElementById('presets-list');
+
+  function showStatus(text, ok) {
+    statusEl.textContent = text;
+    statusEl.className = 'status ' + (ok ? 'ok' : 'err');
+  }
+
+  if (!alias) {
+    whoamiEl.textContent = 'Ingen spelare angiven.';
+    showStatus('Öppna länken från ditt eget spelarkort i Hero Pool Manager.', false);
+  } else {
+    whoamiEl.textContent = 'Du skriver som ' + alias;
+    loadPresets();
+  }
+
+  function loadPresets() {
+    fetch('/api/self-prompt-presets/' + encodeURIComponent(alias))
+      .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+      .then(function(res) {
+        if (!res.ok) { presetsCard.style.display = 'none'; return; }
+        whoamiEl.textContent = 'Du spelar ' + res.data.hero + ' i denna match';
+        renderPresets(res.data.presets || []);
+      })
+      .catch(function() { presetsCard.style.display = 'none'; });
+  }
+
+  function renderPresets(presets) {
+    if (!presets.length) { presetsCard.style.display = 'none'; return; }
+    presetsList.innerHTML = '';
+    presets.forEach(function(p, i) {
+      var row = document.createElement('div');
+      row.className = 'preset';
+      var left = document.createElement('div');
+      var textEl = document.createElement('div');
+      textEl.className = 'preset-text';
+      textEl.textContent = p.message;
+      var minuteEl = document.createElement('div');
+      minuteEl.className = 'preset-minute';
+      minuteEl.textContent = 'Visas vid minut ' + p.triggerMinute;
+      left.appendChild(textEl);
+      left.appendChild(minuteEl);
+      var btn = document.createElement('button');
+      btn.className = 'btn-gold';
+      btn.textContent = 'Välj';
+      btn.onclick = function() { selectPreset(i, btn); };
+      row.appendChild(left);
+      row.appendChild(btn);
+      presetsList.appendChild(row);
+    });
+    presetsCard.style.display = 'block';
+  }
+
+  function selectPreset(index, btn) {
+    btn.disabled = true;
+    fetch('/api/self-prompt/' + encodeURIComponent(alias), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ presetIndex: index })
+    })
+      .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+      .then(function(res) {
+        btn.disabled = false;
+        if (!res.ok) { showStatus(res.data.error || 'Något gick fel.', false); return; }
+        showStatus('Sparat! Dyker upp i din overlay vid minut ' + res.data.triggerMinute + '.', true);
+      })
+      .catch(function() { btn.disabled = false; showStatus('Kunde inte nå servern.', false); });
+  }
+
+  function sendFreetext() {
+    var text = document.getElementById('freetext').value.trim();
+    if (!text) return;
+    var btn = document.getElementById('send-btn');
+    btn.disabled = true;
+    btn.textContent = 'Tolkar…';
+    fetch('/api/self-prompt/' + encodeURIComponent(alias), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text })
+    })
+      .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+      .then(function(res) {
+        btn.disabled = false;
+        btn.textContent = 'Skicka';
+        if (!res.ok) { showStatus(res.data.error || 'Något gick fel.', false); return; }
+        document.getElementById('freetext').value = '';
+        showStatus('Uppfattat: "' + res.data.message + '" — dyker upp vid minut ' + res.data.triggerMinute + '.', true);
+      })
+      .catch(function() { btn.disabled = false; btn.textContent = 'Skicka'; showStatus('Kunde inte nå servern.', false); });
+  }
+</script>
+</body>
+</html>

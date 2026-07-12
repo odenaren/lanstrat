@@ -164,6 +164,8 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .gsi-config-link:hover{color:var(--gold);}
 .overlay-start-link{display:block;width:100%;box-sizing:border-box;margin-top:8px;padding:7px;background:none;border:1px dashed #2a9d8f88;color:#4ecdc4;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;text-align:center;text-decoration:none;cursor:pointer;border-radius:4px;transition:all .15s;}
 .overlay-start-link:hover{background:rgba(78,205,196,.12);border-color:#4ecdc4;}
+.overlay-prompt-link{display:block;width:100%;box-sizing:border-box;margin-top:6px;padding:7px;background:none;border:1px dashed var(--gold-dim);color:var(--gold);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;text-align:center;text-decoration:none;cursor:pointer;border-radius:4px;transition:all .15s;}
+.overlay-prompt-link:hover{background:rgba(200,155,60,.12);border-color:var(--gold);}
 /* CHALLENGE POOL - MATCH PAGE */
 .cp-toggle{display:flex;gap:2px;flex-shrink:0;}
 .cp-btn{padding:2px 5px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;cursor:pointer;border:1px solid #8e44ad44;background:none;color:#6a3d8a;transition:all .12s;white-space:nowrap;}
@@ -672,6 +674,13 @@ function renderHome() {
     overlayStartLink.textContent = '▶ Starta overlay';
     overlayStartLink.onclick = function(ev) { ev.preventDefault(); tryStartOverlay(overlayStartLink); };
     card.appendChild(overlayStartLink);
+    var overlayPromptLink = document.createElement('a');
+    overlayPromptLink.className = 'overlay-prompt-link';
+    overlayPromptLink.href = '/prompt?alias=' + encodeURIComponent(p.name);
+    overlayPromptLink.target = '_blank';
+    overlayPromptLink.title = 'Oppna pa telefonen for att skriva anteckningar/valja mal som paminner dig i din overlay under matchen.';
+    overlayPromptLink.textContent = '📱 Prompta min overlay';
+    card.appendChild(overlayPromptLink);
     grid.appendChild(card);
   });
   const add = document.createElement('div');
