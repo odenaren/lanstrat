@@ -1075,6 +1075,12 @@ app.post('/api/gsi', async (req, res) => {
         const affected = Object.keys(plannedDraft).filter(alias => newlyUnavailable.includes(plannedDraft[alias]));
 
         if (match && affected.length > 0) {
+          // Visa banstatus direkt — ingen AI-tankekraft kravs for att veta vad som hande.
+          // Overlayn uppdateras sen igen med den faktiska ersattaren nar AI-svaret ar klart.
+          affected.forEach(alias => {
+            pushOverlay(alias, 'draft-ban-detected', 'Hjälte bannad', plannedDraft[alias] + ' bannad — hittar ersättare…');
+          });
+
           const idToName = await studioHeroes();
           const takenThisBatch = new Set(); // undvik att foresla samma ersattare till tva spelare i samma omgang
           const pools = {};
