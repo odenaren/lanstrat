@@ -34,6 +34,7 @@ Sånt som inte finns än — helt nya delar av produkten.
   4. Testa Steam-registerdetektionen (`HKCU\Software\Valve\Steam\ActiveProcess\ActiveUser`) mot en riktig, inloggad Steam-klient — verifierad bara med en handgjord test-registernyckel (parsning av `REG_DWORD 0x...`-formatet stämde), inte mot Steams faktiska nyckel eftersom Steam inte är installerat i den här miljön.
   5. Testa `dhsoverlay://`-lanken i en riktig webblasare (Chrome/Edge) fran Hero Pool Manager — webblasare visar normalt en "Öppna med DHS Overlay?"-bekräftelse forsta gangen for okanda URL-scheman (samma UX som steam://-lankar), inte testat i denna miljö eftersom det är webbläsarspecifikt beteende.
   6. Packetera `overlay/` som en riktig installer (electron-builder) om zip+`start.bat`-forsta-gangen visar sig vara for mycket friktion i praktiken — inte byggt nu.
+  7. **Testa hela overlay-appen end-to-end** *(tillagt 2026-07-12)* — `npm install` kort i `overlay/` gav en Electron-uppgradering (39.x → 43.1.0, breaking change enligt npm, gjord for att losa en "1 high severity"-sarbarhetsvarning) som aldrig verifierats mot appens faktiska kod. `config.js` laddades ner och lades pa plats, men appen sjalv (start.bat, `dhsoverlay://`-lanken, Steam-registerdetektionen i `main.js`) har ANNU inte startats/testats en enda gang. Testa: starta via `start.bat`, bekrafta att fonstret oppnas och pollar ratt overlay-endpoint, kolla att inget i `main.js` anvander en Electron-API som togs bort/andrades i v43.
 
 ## Förbättringar
 
