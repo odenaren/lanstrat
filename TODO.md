@@ -55,7 +55,7 @@ Befintliga funktioner som funkar men kan bli bättre.
 Kända problem som inte stoppar produkten men bör åtgärdas.
 
 - **`recap-history.json` är fortfarande diskbaserad och efemär.** Samma bugg som studioljudet hade (Railways filsystem nollställs vid varje deploy), men mindre allvarlig — filen håller bara koll på senaste vinklarna i studioanalyser för att undvika upprepning. Vid förlust: ingen dataförlust som märks, bara risk för lite mer repetitiva vinklar i nya analyser tills historiken byggts upp igen. Kan flyttas till JSONBin på samma sätt som studioljudet (`50f5638`, `7bdb935`) om det blir ett faktiskt problem.
-- **Bara 6 av 9 spelare hittades i spelar-binet** när `link-matches.js` kördes (2026-07-11) — Gojja, Robin Hood och Skiipa saknades. Oklart om de aldrig lagts till, eller om något annat är fel. Bör kollas på Hero Pool-sidan.
+- **Bara 6 av 9 spelare hittades i spelar-binet** när `link-matches.js` kördes (2026-07-11) — Gojja, Robin Hood och Skiipa saknades. *(fix-script klart 2026-07-12, väntar på att köras)* — `set-player-steamids.js` skriver alla 9 spelares Steam-ID till spelar-binet via `PUT /api/players/:name/steamid` (dry-run som standard, `--apply` för att skriva). Kör `node set-player-steamids.js --apply` lokalt (kräver `SITE_PASSWORD` i `.env`) för att faktiskt fixa bugen.
 - **`dotaconstants`-modulen saknas lokalt**, vilket gör att `link-matches.js` hoppar över hjältematchning (bara alias-matchning kvar, sämre träffsäkerhet i poängsättningen). Kör `npm install dotaconstants` för att fixa.
 
 ## Klart (flyttat hit vid färdigställande, för spårbarhet)
