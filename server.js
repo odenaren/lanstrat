@@ -1341,6 +1341,146 @@ app.post('/api/gsi', async (req, res) => {
   } catch(e) { console.error('[GSI] Fel:', e.message); }
 });
 
+// ── Automatisk match-lankning ─────────────────────────────────────────
+// Periodisk bakgrundskoll: hamtar varje kand spelares senaste OpenDota-matcher
+// och lankar automatiskt (openDotaMatchId/matchResult/matchConfidence) NAR
+// konfidensen ar HOG och otvetydig. Samma poangsattning som link-matches.js/
+// write-match-links.js (tidsfonster + spelar-/hjaltematchning + kronologisk
+// konsistens), men strangare tröskel eftersom det har skriver UTAN mansklig
+// koll: kraver >=3 kanda spelare OCH att bastpoangsatta kandidaten redan
+// respekterar spelnummer-ordningen (ingen "justering" tillaten). Osakra fall
+// lamnas olankade — kor write-match-links.js/link-matches.js manuellt for dem.
+// Inget dotaconstants-beroende: hjalte-id:n kommer fran samma OpenDota-cache
+// (studioHeroes) som overlayn redan anvander.
+const AUTO_LINK_TIME_WINDOW_MS = 45 * 60 * 1000;
+
+async function heroNameToIdMap() {
+  const idToName = await studioHeroes();
+  const map = {};
+  Object.keys(idToName).forEach(id => { map[idToName[id].toLowerCase()] = Number(id); });
+  return map;
+}
+function draftHeroIds(entry, heroNameToId) {
+  const draft = entry.currentDraft || entry.draft || {};
+  const ids = {};
+  Object.keys(draft).forEach(alias => {
+    const id = heroNameToId[String(draft[alias]).toLowerCase()];
+    if (id != null) ids[alias] = id;
+  });
+  return ids;
+}
+
+async function checkForAutoLinks() {
+  try {
+    const players = await readPlayers();
+    const accountToAlias = {};
+    players.forEach(p => { if (p.steamId) accountToAlias[String(p.steamId)] = p.name; });
+    if (!Object.keys(accountToAlias).length) return;
+
+    const seenMatchIds = new Set();
+    for (const accountId of Object.keys(accountToAlias)) {
+      try {
+        const r = await fetch('https://api.opendota.com/api/players/' + accountId + '/matches?limit=3');
+        if (!r.ok) continue;
+        (await r.json()).forEach(m => seenMatchIds.add(String(m.match_id)));
+      } catch (e) { /* en spelares OpenDota-anrop far inte stoppa hela kollen */ }
+    }
+    if (!seenMatchIds.size) return;
+
+    const matches = await readMatches();
+    const alreadyLinkedIds = new Set(matches.filter(m => m.openDotaMatchId).map(m => String(m.openDotaMatchId)));
+    const newMatchIds = [...seenMatchIds].filter(id => !alreadyLinkedIds.has(id));
+    if (!newMatchIds.length) return;
+
+    const unlinked = matches.filter(m => !m.openDotaMatchId);
+    if (!unlinked.length) return;
+
+    const heroNameToId = await heroNameToIdMap();
+    const results = [];
+    for (const matchId of newMatchIds) {
+      let odMatch;
+      try {
+        const r = await fetch('https://api.opendota.com/api/matches/' + matchId);
+        if (!r.ok) continue;
+        odMatch = await r.json();
+      } catch (e) { continue; }
+      if (!odMatch || !odMatch.match_id) continue;
+
+      const startMs = odMatch.start_time * 1000;
+      const matchedPlayers = [];
+      (odMatch.players || []).forEach(p => {
+        const alias = accountToAlias[String(p.account_id)];
+        if (alias) matchedPlayers.push({ alias, hero_id: p.hero_id, isRadiant: p.player_slot < 128 });
+      });
+      if (!matchedPlayers.length) continue;
+
+      const radiantCount = matchedPlayers.filter(p => p.isRadiant).length;
+      const ourSideIsRadiant = radiantCount >= matchedPlayers.length / 2;
+      const ourResult = ourSideIsRadiant === odMatch.radiant_win ? 'win' : 'loss';
+
+      const candidates = unlinked.filter(entry => {
+        const t = new Date(entry.createdAt).getTime();
+        if (isNaN(t)) return false;
+        const gap = startMs - t;
+        return gap >= 0 && gap <= AUTO_LINK_TIME_WINDOW_MS;
+      });
+      if (!candidates.length) continue;
+
+      const scored = candidates.map(entry => {
+        const heroIds = draftHeroIds(entry, heroNameToId);
+        let playerScore = 0, heroScore = 0;
+        matchedPlayers.forEach(mp => {
+          if (heroIds[mp.alias] != null) {
+            playerScore++;
+            if (heroIds[mp.alias] === mp.hero_id) heroScore++;
+          }
+        });
+        return { entry, playerScore, heroScore, total: playerScore + heroScore };
+      }).sort((a, b) => b.total - a.total);
+
+      const confidence = matchedPlayers.length >= 3 ? 'HÖG' : matchedPlayers.length === 2 ? 'MEDEL' : 'LÅG';
+      results.push({ matchId, startMs, matchedPlayers, ourResult, scored, confidence });
+    }
+    if (!results.length) return;
+
+    // Kronologisk konsistenskontroll, samma monster som link-matches.js/write-match-links.js
+    results.sort((a, b) => a.startMs - b.startMs);
+    let lastGameNumber = -Infinity;
+    results.forEach(r => {
+      const chosen = r.scored.find(c => c.entry.gameNumber >= lastGameNumber);
+      r.orderOverridden = !chosen || chosen !== r.scored[0];
+      r.chosen = chosen || r.scored[0];
+      lastGameNumber = r.chosen.entry.gameNumber;
+    });
+
+    const toLink = results.filter(r => r.confidence === 'HÖG' && !r.orderOverridden);
+    const skipped = results.filter(r => r.confidence !== 'HÖG' || r.orderOverridden);
+    if (skipped.length) {
+      console.log('[AutoLink] ' + skipped.length + ' match(er) for osakra for auto-lankning (kor write-match-links.js manuellt):', skipped.map(r => r.matchId).join(', '));
+    }
+    if (!toLink.length) return;
+
+    // Las om binen - annan skrivning kan ha hunnit fore under OpenDota-anropen ovan.
+    // Undvik ocksa att samma strategi lankas till tva olika matcher inom samma korning.
+    const usedEntryIds = new Set();
+    const freshMatches = await readMatches();
+    let wroteAny = false;
+    toLink.forEach(r => {
+      if (usedEntryIds.has(r.chosen.entry.id)) return;
+      const freshEntry = freshMatches.find(m => m.id === r.chosen.entry.id);
+      if (!freshEntry || freshEntry.openDotaMatchId) return;
+      usedEntryIds.add(r.chosen.entry.id);
+      freshEntry.openDotaMatchId = r.matchId;
+      freshEntry.matchResult = r.ourResult;
+      freshEntry.matchConfidence = r.confidence;
+      freshEntry.matchedPlayers = r.matchedPlayers.map(p => p.alias);
+      wroteAny = true;
+      console.log('[AutoLink] Lankade spel #' + freshEntry.gameNumber + ' "' + freshEntry.name + '" -> OpenDota-match ' + r.matchId + ' (' + r.ourResult + ')');
+    });
+    if (wroteAny) await writeMatches(freshMatches);
+  } catch (e) { console.error('[AutoLink] Fel:', e.message); }
+}
+
 app.get('/tv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'tv.html')));
 app.get('/pool', (req, res) => res.sendFile(path.join(__dirname, 'public', 'pool.html')));
 app.get('/prompt', (req, res) => res.sendFile(path.join(__dirname, 'public', 'prompt.html')));
@@ -1350,4 +1490,6 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 app.listen(PORT, async () => {
   console.log(`Laneight running on port ${PORT}`);
   await initBins();
+  setInterval(() => checkForAutoLinks(), 5 * 60 * 1000);
+  checkForAutoLinks();
 });
