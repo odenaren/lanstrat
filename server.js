@@ -1022,6 +1022,7 @@ let gsiSeenUnavailable = new Set(); // kumulativt sedan draften borjade, atersta
 let gsiLastItemCheck = {}; // alias -> timestamp, throttlar JSONBin-lasningar under matchen
 let gsiItemCache = { matchId: null, timingsByAlias: {} };
 let gsiRemindedItems = new Set(); // matchId|alias|itemnamn
+let gsiLastRawHSLog = 0; // throttlar full-payload-dumpen under HERO_SELECTION (debug All Pick-bans)
 
 app.post('/api/gsi', async (req, res) => {
   res.sendStatus(200); // svara direkt, GSI vantar inte pa oss
@@ -1031,6 +1032,12 @@ app.post('/api/gsi', async (req, res) => {
 
     const state = body.map && body.map.game_state;
     console.log('[GSI]', state, JSON.stringify(body.draft || {}), body.player && body.player.team_name);
+    if (body.player && body.player.steamid) console.log('[GSI-steamid]', typeof body.player.steamid, body.player.steamid);
+    if (body.items) console.log('[GSI-items]', JSON.stringify(body.items).slice(0, 500));
+    if (state === 'DOTA_GAMERULES_STATE_HERO_SELECTION' && Date.now() - gsiLastRawHSLog > 2000) {
+      console.log('[GSI-RAW-HS]', JSON.stringify(body));
+      gsiLastRawHSLog = Date.now();
+    }
 
     const enteringHeroSelection = state === 'DOTA_GAMERULES_STATE_HERO_SELECTION' && gsiLastState !== state;
     const justEnteredStrategyTime = state === 'DOTA_GAMERULES_STATE_STRATEGY_TIME' && gsiLastState !== state;

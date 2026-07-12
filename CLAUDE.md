@@ -143,3 +143,4 @@ Viktigt: `strategy` = originalet, bevaras alltid. Draftändringar efter bans **a
 - **PUGGE** har alias Tobbe/TOBBE — statssidan mergar dem; ta höjd för det i all aggregering
 - **CSP** är satt i server.js — nya externa resurser (CDN, API) måste läggas till där, annars blockeras de tyst
 - **JSONBin-headers:** servern använder `X-Access-Key`; vissa äldre scripts `X-Master-Key` — kontrollera vilket när ett script får 401
+- **Lokal körning:** `server.js` läser aldrig `.env` själv (inget `dotenv`-anrop) — den förlitar sig på att Railway sätter miljövariablerna på plattformsnivå. Lokalt måste `.env` laddas in i skalmiljön manuellt innan `node server.js` körs, annars kraschar servern vid start (`initBins` försöker skapa nya JSONBin-bins istället för att läsa befintliga). Git Bash: `set -a; source .env; set +a; node server.js`.
