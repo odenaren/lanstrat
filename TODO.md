@@ -36,6 +36,10 @@ Sånt som inte finns än — helt nya delar av produkten.
   5. Testa `dhsoverlay://`-lanken i en riktig webblasare (Chrome/Edge) fran Hero Pool Manager — webblasare visar normalt en "Öppna med DHS Overlay?"-bekräftelse forsta gangen for okanda URL-scheman (samma UX som steam://-lankar), inte testat i denna miljö eftersom det är webbläsarspecifikt beteende.
   6. Packetera `overlay/` som en riktig installer (electron-builder) om zip+`start.bat`-forsta-gangen visar sig vara for mycket friktion i praktiken — inte byggt nu.
 
+- **Overlay: visa banstatus direkt utan AI-fördröjning** — när en planerad hjälte bannas/tas ska overlayn OMEDELBART visa vilken hjälte som blev bannad (ren datavisning, kräver ingen AI-tankekraft), sen ett "genererar ersättare…"-tillstånd medan AI-anropet pågår, och till sist det nya hjälteförslaget. Idag (`server.js` GSI-flödet, se ersättningslogiken ovan) pushas bara sluttillståndet till spelarens overlay-kanal — spelaren ser ingenting förrän AI-svaret är klart, ingen indikation på att något är på gång.
+- **Overlay: fritextprompt tolkad av AI till korta interaktioner** — låt spelaren skriva fri text (t.ex. i Playbook eller ett litet UI i overlay-appen) som AI:n tolkar och omvandlar till korta, tydliga interaktioner/påminnelser mot sin egen overlay under matchen. Utforma prompt + parsning så AI:n inte hittar på annat än korta actionable meddelanden.
+- **Overlay: item-timing-feedback mot säsongsstatistik** — när en spelare köper ett nyckel-item, jämför köptiden mot resten av säsongens data (via OpenDota) och ge feedback i overlayn, t.ex. "Blink på 12 min — snabbast i säsongen" eller "Du fick det på 20 min, snabbast är Elsa på 18 min med Medusa". Kräver dels en modell för vilka item+hjälte-kombinationer som är intressanta att bevaka (t.ex. Battle Fury på PA, Heart på PL), dels aggregering av historiska item-timings över säsongens länkade matcher (`openDotaMatchId`) att jämföra mot live under `DOTA_GAMERULES_STATE_GAME_IN_PROGRESS`.
+
 ## Förbättringar
 
 Befintliga funktioner som funkar men kan bli bättre.

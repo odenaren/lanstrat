@@ -670,6 +670,7 @@ function renderHome() {
     overlayStartLink.href = 'dhsoverlay://start';
     overlayStartLink.title = 'Startar (eller vacker) overlay-appen pa den har datorn. Kravs bara att du kort start.bat en gang tidigare.';
     overlayStartLink.textContent = '▶ Starta overlay';
+    overlayStartLink.onclick = function(ev) { ev.preventDefault(); tryStartOverlay(overlayStartLink); };
     card.appendChild(overlayStartLink);
     grid.appendChild(card);
   });
@@ -678,6 +679,30 @@ function renderHome() {
   add.innerHTML = `<div class="plus">+</div><span>Lägg till spelare</span>`;
   add.onclick = ()=>document.getElementById('modal-overlay').classList.add('open');
   grid.appendChild(add);
+}
+// Klick pa "Starta overlay" navigerar en dold iframe till dhsoverlay:// istallet for
+// hela sidan — om ingen app ar registrerad for protokollet later Edge/Chrome annars
+// sidan falla tillbaka till en Google-sokning pa lank-texten. Iframen misslyckas tyst.
+function tryStartOverlay(linkEl) {
+  var originalText = linkEl.textContent;
+  var opened = false;
+  function onBlur() { opened = true; }
+  window.addEventListener('blur', onBlur);
+  linkEl.textContent = 'Startar…';
+  var iframe = document.createElement('iframe');
+  iframe.style.display = 'none';
+  iframe.src = 'dhsoverlay://start';
+  document.body.appendChild(iframe);
+  setTimeout(function() {
+    if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    window.removeEventListener('blur', onBlur);
+    if (opened) {
+      linkEl.textContent = originalText;
+    } else {
+      linkEl.textContent = '⚠ Kör start.bat i overlay-mappen, forsok igen';
+      setTimeout(function() { linkEl.textContent = originalText; }, 5000);
+    }
+  }, 1200);
 }
 function getTopRoles(ids) {
   const rc={};
