@@ -38,12 +38,28 @@
     }, CONFIG.showMs);
   }
 
+  var ACCOUNT_ID = new URLSearchParams(location.search).get('accountId');
+
   function overlayUrl() {
     if (!CONFIG.baseUrl) return null;
-    var accountId = new URLSearchParams(location.search).get('accountId');
-    if (accountId) return CONFIG.baseUrl + '/by-steamid/' + encodeURIComponent(accountId);
+    if (ACCOUNT_ID) return CONFIG.baseUrl + '/by-steamid/' + encodeURIComponent(ACCOUNT_ID);
     if (CONFIG.alias) return CONFIG.baseUrl + '/' + encodeURIComponent(CONFIG.alias); // manuell fallback (test/Steam ej igangkort)
     return null;
+  }
+
+  // Servern ber om en screenshot av topbaren (fiendehjaltarna syns aldrig i GSI
+  // i All Pick) — ta remsan via preload/main-processen och skicka upp den.
+  // Visas ALDRIG som notis; svaret fran servern kommer som en egen push senare.
+  function handleCaptureRequest() {
+    if (!window.dhsOverlay || !ACCOUNT_ID) return;
+    window.dhsOverlay.captureTopStrip().then(function(b64) {
+      if (!b64) return;
+      var headers = Object.assign({ 'Content-Type': 'application/json' }, authHeader());
+      fetch(CONFIG.baseUrl + '-capture', {
+        method: 'POST', headers: headers,
+        body: JSON.stringify({ accountId: ACCOUNT_ID, image: b64 })
+      }).catch(function(e){ console.error('capture-upload fel', e); });
+    }).catch(function(e){ console.error('capture fel', e); });
   }
 
   function poll() {
@@ -54,6 +70,7 @@
       .then(function(data){
         if (data && data.id && data.id !== lastId) {
           lastId = data.id;
+          if (data.kind === 'capture-request') { handleCaptureRequest(); return; }
           show(data.kind, (data.title ? data.title + '\n' : '') + (data.body || ''));
         }
       })

@@ -1,6 +1,26 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer, screen } = require('electron');
 const { execSync } = require('child_process');
 const path = require('path');
+
+// Screenshot av skarmens topp-remsa (Dota-topbaren) for fiendehjalte-avlasning.
+// BARA remsan lamnar datorn — aldrig hela skarmen. Se preload.js + servern.
+ipcMain.handle('dhs-capture-top-strip', async () => {
+  try {
+    const disp = screen.getPrimaryDisplay();
+    const size = {
+      width: Math.round(disp.size.width * disp.scaleFactor),
+      height: Math.round(disp.size.height * disp.scaleFactor)
+    };
+    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: size });
+    const src = sources.find(s => String(s.display_id) === String(disp.id)) || sources[0];
+    if (!src || src.thumbnail.isEmpty()) return null;
+    const stripH = Math.max(60, Math.round(size.width * 80 / 1919)); // samma proportion som servern raknar med
+    const strip = src.thumbnail.crop({ x: 0, y: 0, width: size.width, height: stripH });
+    return strip.toPNG().toString('base64');
+  } catch (e) {
+    return null; // servern hanterar utebliven bild som "kunde inte lasa av"
+  }
+});
 
 // Steam skriver den just nu inloggade anvandarens 32-bitars account_id hit —
 // sa widgeten kan sjalv veta vem den kors som, utan nagon per-spelare-config.
@@ -49,7 +69,7 @@ if (!gotLock) {
       resizable: false,
       focusable: false,
       hasShadow: false,
-      webPreferences: { contextIsolation: true }
+      webPreferences: { contextIsolation: true, preload: path.join(__dirname, 'preload.js') }
     });
     win.setIgnoreMouseEvents(true);
     win.setAlwaysOnTop(true, 'screen-saver');

@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const { identifyTopbarHeroes } = require('./topbar-match');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -9,7 +10,7 @@ const JSONBIN_API_KEY = process.env.JSONBIN_API_KEY;
 const JSONBIN_BASE = 'https://api.jsonbin.io/v3';
 
 app.use(cors());
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '8mb' })); // 8mb: /api/overlay-capture tar emot en base64-PNG-remsa (topbaren), stor pa 4K-skarmar
 app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy',
     "default-src 'self'; " +
@@ -667,6 +668,36 @@ app.post('/api/overlay/:alias', (req, res) => {
   res.json(overlayStates[req.params.alias]);
 });
 
+// Tar emot en topbar-screenshot fran overlay-widgeten (svar pa capture-request,
+// se GSI-handlern), identifierar FIENDESIDANS fem hjaltar via template matching
+// (topbar-match.js) och genererar itemtips — vagen runt att GSI aldrig exponerar
+// fiendehjaltar i All Pick (bekraftat 2026-07-13).
+app.post('/api/overlay-capture', async (req, res) => {
+  try {
+    const accountId = Number(req.body.accountId);
+    const image = req.body.image; // base64-PNG, bara skarmens topp-remsa
+    if (!accountId || !image) return res.status(400).json({ error: 'accountId + image kravs' });
+    const players = await readPlayers();
+    const p = players.find(pl => Number(pl.steamId) === accountId);
+    if (!p) return res.status(404).json({ error: 'okant steam-konto' });
+    const steamid64 = (BigInt(accountId) + STEAM64_OFFSET).toString();
+    const myTeam = gsiTeamBySteamId[steamid64];
+    if (!myTeam) return res.status(409).json({ error: 'GSI har inte rapporterat lagsida an — kan inte veta vilken sida som ar fienden' });
+    const enemySide = myTeam === 'radiant' ? 'dire' : 'radiant';
+    const result = await identifyTopbarHeroes(Buffer.from(image, 'base64'), enemySide);
+    console.log('[capture]', enemySide, 'ok=' + result.ok, JSON.stringify(result.heroes), result.reason || '');
+    if (!result.ok) {
+      pushOverlay(p.name, 'itemtips', 'Itemtips', 'Kunde inte lasa av fiendehjaltarna fran skarmen — fyll i dem manuellt i Playbook.');
+      return res.json({ ok: false, reason: result.reason, heroes: result.heroes, slots: result.slots });
+    }
+    const generated = await generateItemTipsForMatch(serverStatus.latestMatchId, result.heroes);
+    if (generated) {
+      pushOverlay(p.name, 'itemtips', 'Itemtips klara', 'Fiender: ' + result.heroes.join(', ') + '. Paminnelser kommer live under matchen.');
+    }
+    res.json({ ok: true, heroes: result.heroes, generated, slots: result.slots });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Nedladdningsbar overlay/config.js — EN och samma fil till alla 9 spelare.
 // Ingen alias behovs, widgeten kanner sjalv av vem som ar inloggad i Steam.
 // Skyddad av samma Basic Auth som resten av sajten.
@@ -1012,6 +1043,35 @@ function dueReminders(timings, ownedKeys, clockSeconds, nameMap, remindedSet, ma
   return due;
 }
 
+// Genererar itemtips for en match mot kanda fiendehjaltar och sparar dem.
+// Delas av CM-flodet (STRATEGY_TIME med draft-data) och All Pick-flodet
+// (/api/overlay-capture, dar fienderna lases fran en topbar-screenshot).
+let gsiItemsGenerating = false; // enkel lasning mot dubbelgenerering vid samtidiga anrop
+async function generateItemTipsForMatch(matchId, enemyHeroes) {
+  if (!matchId || gsiItemsGenerating) return false;
+  gsiItemsGenerating = true;
+  try {
+    const matches = await readMatches();
+    const match = matches.find(m => m.id === matchId);
+    if (!match || match.items) return false; // ingen aktiv match, eller redan genererat
+
+    const prompt = 'Du ar en Dota 2 item-expert. Vi har precis genererat en draft-strategi och ska nu mota dessa motstandare.\n\n'
+      + 'VAR DRAFT-STRATEGI:\n' + (match.currentStrategy || match.strategy || '') + '\n\n'
+      + 'MOTSTANDARNA SPELAR:\n' + enemyHeroes.join(', ') + '\n\n'
+      + 'Ge konkreta itemtips per spelare i vart lag. Fokusera pa 3-5 nyckelitems per spelare som ar extra viktiga MOT just dessa motstandare.\n\n'
+      + 'FORMAT: For varje spelare, skriv en rubrik pa egen rad exakt som "## [SPELARNAMN]" (spelarens alias rakt av, inget annat pa den raden), sedan hjaltens namn pa egen rad, sedan varje item pa egen rad som "**Itemnamn** - kort motivering (senast minut X)" dar X ar en ungefarlig match-minut senast nar itemet bor vara kopt. Avsluta varje spelare med en "Prioritet:"-rad. Ingen markdown-tabell, inga | tecken. Anvand svenska. Var specifik.';
+
+    match.enemies = enemyHeroes;
+    match.items = await callClaude(prompt, 2000);
+    await writeMatches(matches);
+    // Nollstall reminder-cachen sa itemtips genererade MITT I en match plockas
+    // upp av paminnelselogiken (annars ligger en tom parsning kvar for aliaset)
+    gsiItemCache = { matchId: null, timingsByAlias: {} };
+    console.log('[GSI] Itemtips auto-genererade for match', match.id);
+    return true;
+  } finally { gsiItemsGenerating = false; }
+}
+
 // Dota GSI-endpoint: auto-genererar itemtips, foreslar ersattare live under draften,
 // och paminner varje spelare individuellt om sina egna itemtips i realtid under matchen.
 // .cfg-filen i Dota 2:s gamestate_integration-mapp pekar hit med matchande auth-token.
@@ -1023,6 +1083,8 @@ let gsiLastItemCheck = {}; // alias -> timestamp, throttlar JSONBin-lasningar un
 let gsiItemCache = { matchId: null, timingsByAlias: {} };
 let gsiRemindedItems = new Set(); // matchId|alias|itemnamn
 let gsiLastRawHSLog = 0; // throttlar full-payload-dumpen under HERO_SELECTION (debug All Pick-bans)
+let gsiTeamBySteamId = {}; // steamid64 -> 'radiant'|'dire', satt av varje GSI-payload; /api/overlay-capture behover veta vilken sida som ar fienden
+let gsiCaptureState = { matchId: null, attempts: 0, lastReq: 0, done: false }; // capture-request-flodet (All Pick), max 3 forsok per match
 
 app.post('/api/gsi', async (req, res) => {
   res.sendStatus(200); // svara direkt, GSI vantar inte pa oss
@@ -1046,21 +1108,25 @@ app.post('/api/gsi', async (req, res) => {
 
     const myTeam = body.player && body.player.team_name; // 'radiant' | 'dire'
     const draft = body.draft;
-    if (!myTeam || !draft) return;
+    if (!myTeam) return;
+    if (body.player.steamid) gsiTeamBySteamId[body.player.steamid] = myTeam;
 
+    // OBS: i All Pick ar draft-objektet ALLTID tomt (bekraftat mot riktig Ranked
+    // All Pick 2026-07-13) — darfor far tom draft inte langre stoppa hela handlern.
+    // Draft-beroende delar (ersattning vid bans, CM-itemtips) hoppar over sig
+    // sjalva nedan; capture-flodet och itemtiming-paminnelserna klarar sig utan.
     const enemyTeamKey = myTeam === 'radiant' ? 'team3' : 'team2';
-    const enemyTeam = draft[enemyTeamKey];
-    if (!enemyTeam) return;
+    const enemyTeam = draft ? draft[enemyTeamKey] : null;
 
     const heroMap = await heroInternalNameMap();
     const enemyHeroes = [];
-    for (let i = 0; i < 5; i++) {
+    if (enemyTeam) for (let i = 0; i < 5; i++) {
       const cls = enemyTeam['pick' + i + '_class'];
       if (cls && heroMap[cls]) enemyHeroes.push(heroMap[cls]);
     }
 
     // ── Live under draften: foresla ersattare sa fort en planerad hjalte forsvinner ──
-    if (state === 'DOTA_GAMERULES_STATE_HERO_SELECTION') {
+    if (state === 'DOTA_GAMERULES_STATE_HERO_SELECTION' && draft) {
       const allBannedNames = [];
       ['team2', 'team3'].forEach(tk => {
         const t = draft[tk];
@@ -1141,6 +1207,31 @@ app.post('/api/gsi', async (req, res) => {
       }
     }
 
+    // ── All Pick: fiendehjaltar syns aldrig i GSI (bekraftat 2026-07-13) — be
+    // spelarens overlay om en topbar-screenshot och las fienderna darifran
+    // istallet (POST /api/overlay-capture + topbar-match.js) ──
+    if ((state === 'DOTA_GAMERULES_STATE_PRE_GAME' || state === 'DOTA_GAMERULES_STATE_GAME_IN_PROGRESS')
+        && serverStatus.latestMatchId && body.player.steamid) {
+      if (gsiCaptureState.matchId !== serverStatus.latestMatchId) {
+        gsiCaptureState = { matchId: serverStatus.latestMatchId, attempts: 0, lastReq: 0, done: false };
+      }
+      if (!gsiCaptureState.done && gsiCaptureState.attempts < 3 && Date.now() - gsiCaptureState.lastReq > 20000) {
+        gsiCaptureState.lastReq = Date.now(); // satt direkt sa tata payloads inte dubblar requesten
+        const capMatches = await readMatches();
+        const capMatch = capMatches.find(m => m.id === serverStatus.latestMatchId);
+        if (capMatch && !capMatch.items && !(capMatch.enemies || []).length) {
+          const capAlias = await findAliasBySteamId64(body.player.steamid);
+          if (capAlias) {
+            gsiCaptureState.attempts++;
+            pushOverlay(capAlias, 'capture-request', '', '');
+            console.log('[GSI] Capture-request till overlay (forsok ' + gsiCaptureState.attempts + ')');
+          }
+        } else {
+          gsiCaptureState.done = true; // fiender/items finns redan (manuellt eller via capture) — sluta fraga
+        }
+      }
+    }
+
     // ── Live under matchen: paminn den enskilda spelaren om sina egna itemtips ──
     if (state === 'DOTA_GAMERULES_STATE_GAME_IN_PROGRESS') {
       const alias = await findAliasBySteamId64(body.player && body.player.steamid);
@@ -1175,22 +1266,8 @@ app.post('/api/gsi', async (req, res) => {
     }
 
     if (!justEnteredStrategyTime) return;
-    if (enemyHeroes.length < 5) return; // ofullstandig draft-data, kanske fel faltnamn — se loggen
-
-    const matches = await readMatches();
-    const match = matches.find(m => m.id === serverStatus.latestMatchId);
-    if (!match || match.items) return; // ingen aktiv match, eller redan genererat
-
-    const prompt = 'Du ar en Dota 2 item-expert. Vi har precis genererat en draft-strategi och ska nu mota dessa motstandare.\n\n'
-      + 'VAR DRAFT-STRATEGI:\n' + (match.currentStrategy || match.strategy || '') + '\n\n'
-      + 'MOTSTANDARNA SPELAR:\n' + enemyHeroes.join(', ') + '\n\n'
-      + 'Ge konkreta itemtips per spelare i vart lag. Fokusera pa 3-5 nyckelitems per spelare som ar extra viktiga MOT just dessa motstandare.\n\n'
-      + 'FORMAT: For varje spelare, skriv en rubrik pa egen rad exakt som "## [SPELARNAMN]" (spelarens alias rakt av, inget annat pa den raden), sedan hjaltens namn pa egen rad, sedan varje item pa egen rad som "**Itemnamn** - kort motivering (senast minut X)" dar X ar en ungefarlig match-minut senast nar itemet bor vara kopt. Avsluta varje spelare med en "Prioritet:"-rad. Ingen markdown-tabell, inga | tecken. Anvand svenska. Var specifik.';
-
-    match.enemies = enemyHeroes;
-    match.items = await callClaude(prompt, 2000);
-    await writeMatches(matches);
-    console.log('[GSI] Itemtips auto-genererade for match', match.id);
+    if (enemyHeroes.length < 5) return; // ofullstandig draft-data (eller All Pick, dar draft alltid ar tom — capture-flodet tar over dar)
+    await generateItemTipsForMatch(serverStatus.latestMatchId, enemyHeroes);
   } catch(e) { console.error('[GSI] Fel:', e.message); }
 });
 
