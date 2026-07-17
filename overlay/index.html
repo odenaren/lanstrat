@@ -62,6 +62,22 @@
     }).catch(function(e){ console.error('capture fel', e); });
   }
 
+  // Servern ber om en screenshot av ban-logg-panelen (bannade hjaltar syns
+  // aldrig i GSI:s draft-objekt i All Pick) — ta panelen via
+  // preload/main-processen och skicka upp den. Visas ALDRIG som notis;
+  // eventuell draftandring kommer som en egen push senare.
+  function handleBanCaptureRequest() {
+    if (!window.dhsOverlay || !ACCOUNT_ID) return;
+    window.dhsOverlay.captureBanLog().then(function(b64) {
+      if (!b64) return;
+      var headers = Object.assign({ 'Content-Type': 'application/json' }, authHeader());
+      fetch(CONFIG.baseUrl + '-ban-capture', {
+        method: 'POST', headers: headers,
+        body: JSON.stringify({ accountId: ACCOUNT_ID, image: b64 })
+      }).catch(function(e){ console.error('ban-capture-upload fel', e); });
+    }).catch(function(e){ console.error('ban-capture fel', e); });
+  }
+
   function poll() {
     var url = overlayUrl();
     if (!url) return;
@@ -71,6 +87,7 @@
         if (data && data.id && data.id !== lastId) {
           lastId = data.id;
           if (data.kind === 'capture-request') { handleCaptureRequest(); return; }
+          if (data.kind === 'capture-ban-request') { handleBanCaptureRequest(); return; }
           show(data.kind, (data.title ? data.title + '\n' : '') + (data.body || ''));
         }
       })

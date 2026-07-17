@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const { identifyTopbarHeroes } = require('./topbar-match');
+const { readBannedHeroes } = require('./ban-log-match');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -698,6 +699,28 @@ app.post('/api/overlay-capture', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Tar emot en ban-logg-screenshot fran overlay-widgeten (svar pa
+// capture-ban-request, se GSI-handlern), laser av bannade hjaltar via OCR
+// (ban-log-match.js) och matar dem in i samma ban-ersattningslogik som
+// Captain's Mode-flodet — vagen runt att GSI:s draft-objekt alltid ar tomt
+// i All Pick (bekraftat 2026-07-13).
+app.post('/api/overlay-ban-capture', async (req, res) => {
+  try {
+    const accountId = Number(req.body.accountId);
+    const image = req.body.image; // base64-PNG, bara ban-logg-panelen
+    if (!accountId || !image) return res.status(400).json({ error: 'accountId + image kravs' });
+    const players = await readPlayers();
+    const p = players.find(pl => Number(pl.steamId) === accountId);
+    if (!p) return res.status(404).json({ error: 'okant steam-konto' });
+    const detected = await readBannedHeroes(Buffer.from(image, 'base64'));
+    const newlyUnavailable = detected.filter(h => !gsiSeenUnavailable.has(h));
+    detected.forEach(h => gsiSeenUnavailable.add(h));
+    console.log('[ban-capture]', JSON.stringify(detected), 'nya:', JSON.stringify(newlyUnavailable));
+    await applyNewlyUnavailableHeroes(newlyUnavailable);
+    res.json({ ok: true, detected, newlyUnavailable });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Nedladdningsbar overlay/config.js — EN och samma fil till alla 9 spelare.
 // Ingen alias behovs, widgeten kanner sjalv av vem som ar inloggad i Steam.
 // Skyddad av samma Basic Auth som resten av sajten.
@@ -1085,6 +1108,78 @@ let gsiRemindedItems = new Set(); // matchId|alias|itemnamn
 let gsiLastRawHSLog = 0; // throttlar full-payload-dumpen under HERO_SELECTION (debug All Pick-bans)
 let gsiTeamBySteamId = {}; // steamid64 -> 'radiant'|'dire', satt av varje GSI-payload; /api/overlay-capture behover veta vilken sida som ar fienden
 let gsiCaptureState = { matchId: null, attempts: 0, lastReq: 0, done: false }; // capture-request-flodet (All Pick), max 3 forsok per match
+let gsiBanCaptureState = { matchId: null, lastReq: 0 }; // ban-logg-OCR-flodet (All Pick), fragar hela HERO_SELECTION-fasen
+
+// Ersatt bannlysta/tagna hjaltar for de spelare som paverkas. Delad av bade
+// CM-draftflodet (GSI:s draft-objekt, se nedan) och All Pick-ban-OCR:n
+// (POST /api/overlay-ban-capture) — bada matar bara in en lista med NYA
+// otillgangliga hjaltnamn, gsiSeenUnavailable ar redan uppdaterad av
+// anroparen innan detta anrops.
+async function applyNewlyUnavailableHeroes(newlyUnavailable) {
+  if (newlyUnavailable.length === 0) return;
+  const matches = await readMatches();
+  const match = matches.find(m => m.id === serverStatus.latestMatchId);
+  const plannedDraft = match ? (match.currentDraft || match.draft || {}) : {};
+  const affected = Object.keys(plannedDraft).filter(alias => newlyUnavailable.includes(plannedDraft[alias]));
+  if (!match || affected.length === 0) return;
+
+  const idToName = await studioHeroes();
+  const takenThisBatch = new Set(); // undvik att foresla samma ersattare till tva spelare i samma omgang
+  const pools = {};
+  affected.forEach(alias => {
+    const p = (match.players || []).find(pl => pl.name === alias);
+    pools[alias] = ((p && p.heroes) || []).map(id => idToName[id]).filter(Boolean)
+      .filter(h => !gsiSeenUnavailable.has(h));
+  });
+
+  const bannedList = affected.map(alias => plannedDraft[alias] + ' (' + alias + ')').join(', ');
+  const poolList = affected.map(alias => alias + ': ' + (pools[alias].join(', ') || 'Tom pool - valj basta alternativ')).join('\n');
+
+  const replacePrompt = 'Du ar en Dota 2 draft-expert. Ersatt bannlysta/tagna hjaltar sa snabbt som mojligt.\n\n'
+    + 'STRATEGI (valj hjaltar som passar denna win condition och spelstil): ' + (match.currentStrategy || match.strategy || '').substring(0, 800) + '\n\n'
+    + 'ERSATT: ' + bannedList + '\n'
+    + 'POOLER: ' + poolList + '\n'
+    + 'EJ VALBARA: ' + [...gsiSeenUnavailable].join(', ') + '\n\n'
+    + 'Svara ENDAST med ersattningarna, en rad per spelare:\n'
+    + '**[SPELARNAMN]: [NY HJALTE]** — en mening om varfor och hur hjalten fyller samma roll i planen.\n'
+    + 'Skriv INGET annat — ingen omskriven strategi, ingen inledning.\n\n'
+    + 'Anvand svenska.';
+
+  const replaceText = await callClaude(replacePrompt, 500);
+  const newDraft = Object.assign({}, plannedDraft);
+  const overlayLines = [];
+
+  affected.forEach(alias => {
+    const oldHero = plannedDraft[alias];
+    const escaped = alias.replace(/[.*+?^${}()|\[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped + '[^\\n]*?:\\s*([A-Za-z\\- ]+)', 'i');
+    const m2 = replaceText.match(regex);
+    let newHero = m2 ? m2[1].trim().replace(/\*+/g, '').split(' - ')[0].split('(')[0].trim() : null;
+
+    // Sakerhetsnat: lita aldrig blint pa AI-svaret — om det foreslar nagot
+    // som ar bannat/taget/redan valt at nagon annan i denna omgang, fall
+    // tillbaka pa forsta lediga hjalte i spelarens egen pool istallet.
+    const available = pools[alias].filter(h => !takenThisBatch.has(h));
+    if (!newHero || gsiSeenUnavailable.has(newHero) || takenThisBatch.has(newHero)) {
+      newHero = available[0] || null;
+    }
+    if (newHero) {
+      takenThisBatch.add(newHero);
+      newDraft[alias] = newHero;
+      const line = oldHero + ' bannad → ' + newHero;
+      overlayLines.push(line + ' (' + alias + ')');
+      pushOverlay(alias, 'draft-ban', 'Draftändring', line); // varje spelare ser bara sin egen ersattning
+    }
+  });
+
+  match.currentStrategy = (match.currentStrategy || match.strategy || '')
+    + '\n\n---\n### Draftändring efter bans (' + bannedList + ')\n' + replaceText;
+  match.currentDraft = newDraft;
+  match.banned = Array.from(new Set((match.banned || []).concat(affected.map(a => plannedDraft[a]))));
+  await writeMatches(matches);
+
+  console.log('[GSI] Auto-ersatte:', overlayLines.join(' | '));
+}
 
 app.post('/api/gsi', async (req, res) => {
   res.sendStatus(200); // svara direkt, GSI vantar inte pa oss
@@ -1125,7 +1220,10 @@ app.post('/api/gsi', async (req, res) => {
       if (cls && heroMap[cls]) enemyHeroes.push(heroMap[cls]);
     }
 
-    // ── Live under draften: foresla ersattare sa fort en planerad hjalte forsvinner ──
+    // ── Live under draften (Captain's Mode): foresla ersattare sa fort en
+    // planerad hjalte forsvinner. Draft-objektet ar ALLTID tomt i All Pick
+    // (bekraftat 2026-07-13) sa det har blocket bidrar aldrig med nagot dar —
+    // se ban-logg-OCR-blocket nedan for All Pick-motsvarigheten ──
     if (state === 'DOTA_GAMERULES_STATE_HERO_SELECTION' && draft) {
       const allBannedNames = [];
       ['team2', 'team3'].forEach(tk => {
@@ -1139,71 +1237,26 @@ app.post('/api/gsi', async (req, res) => {
       const currentUnavailable = new Set([...enemyHeroes, ...allBannedNames]);
       const newlyUnavailable = [...currentUnavailable].filter(h => !gsiSeenUnavailable.has(h));
       currentUnavailable.forEach(h => gsiSeenUnavailable.add(h));
+      await applyNewlyUnavailableHeroes(newlyUnavailable);
+    }
 
-      if (newlyUnavailable.length > 0) {
-        const matches = await readMatches();
-        const match = matches.find(m => m.id === serverStatus.latestMatchId);
-        const plannedDraft = match ? (match.currentDraft || match.draft || {}) : {};
-        const affected = Object.keys(plannedDraft).filter(alias => newlyUnavailable.includes(plannedDraft[alias]));
-
-        if (match && affected.length > 0) {
-          const idToName = await studioHeroes();
-          const takenThisBatch = new Set(); // undvik att foresla samma ersattare till tva spelare i samma omgang
-          const pools = {};
-          affected.forEach(alias => {
-            const p = (match.players || []).find(pl => pl.name === alias);
-            pools[alias] = ((p && p.heroes) || []).map(id => idToName[id]).filter(Boolean)
-              .filter(h => !currentUnavailable.has(h));
-          });
-
-          const bannedList = affected.map(alias => plannedDraft[alias] + ' (' + alias + ')').join(', ');
-          const poolList = affected.map(alias => alias + ': ' + (pools[alias].join(', ') || 'Tom pool - valj basta alternativ')).join('\n');
-
-          const replacePrompt = 'Du ar en Dota 2 draft-expert. Ersatt bannlysta/tagna hjaltar sa snabbt som mojligt.\n\n'
-            + 'STRATEGI (valj hjaltar som passar denna win condition och spelstil): ' + (match.currentStrategy || match.strategy || '').substring(0, 800) + '\n\n'
-            + 'ERSATT: ' + bannedList + '\n'
-            + 'POOLER: ' + poolList + '\n'
-            + 'EJ VALBARA: ' + [...currentUnavailable].join(', ') + '\n\n'
-            + 'Svara ENDAST med ersattningarna, en rad per spelare:\n'
-            + '**[SPELARNAMN]: [NY HJALTE]** — en mening om varfor och hur hjalten fyller samma roll i planen.\n'
-            + 'Skriv INGET annat — ingen omskriven strategi, ingen inledning.\n\n'
-            + 'Anvand svenska.';
-
-          const replaceText = await callClaude(replacePrompt, 500);
-          const newDraft = Object.assign({}, plannedDraft);
-          const overlayLines = [];
-
-          affected.forEach(alias => {
-            const oldHero = plannedDraft[alias];
-            const escaped = alias.replace(/[.*+?^${}()|\[\]\\]/g, '\\$&');
-            const regex = new RegExp(escaped + '[^\\n]*?:\\s*([A-Za-z\\- ]+)', 'i');
-            const m2 = replaceText.match(regex);
-            let newHero = m2 ? m2[1].trim().replace(/\*+/g, '').split(' - ')[0].split('(')[0].trim() : null;
-
-            // Sakerhetsnat: lita aldrig blint pa AI-svaret — om det foreslar nagot
-            // som ar bannat/taget/redan valt at nagon annan i denna omgang, fall
-            // tillbaka pa forsta lediga hjalte i spelarens egen pool istallet.
-            const available = pools[alias].filter(h => !takenThisBatch.has(h));
-            if (!newHero || currentUnavailable.has(newHero) || takenThisBatch.has(newHero)) {
-              newHero = available[0] || null;
-            }
-            if (newHero) {
-              takenThisBatch.add(newHero);
-              newDraft[alias] = newHero;
-              const line = oldHero + ' bannad → ' + newHero;
-              overlayLines.push(line + ' (' + alias + ')');
-              pushOverlay(alias, 'draft-ban', 'Draftändring', line); // varje spelare ser bara sin egen ersattning
-            }
-          });
-
-          match.currentStrategy = (match.currentStrategy || match.strategy || '')
-            + '\n\n---\n### Draftändring efter bans (' + bannedList + ')\n' + replaceText;
-          match.currentDraft = newDraft;
-          match.banned = Array.from(new Set((match.banned || []).concat(affected.map(a => plannedDraft[a]))));
-          await writeMatches(matches);
-
-          console.log('[GSI] Auto-ersatte:', overlayLines.join(' | '));
-        }
+    // ── All Pick: bannade hjaltar syns aldrig i GSI:s draft-objekt (bekraftat
+    // 2026-07-13), men skrivs ut som REN TEXT i ban-loggen ("X has been
+    // Banned.") pa skarmen under HERO_SELECTION — be overlayn om en
+    // screenshot av just den panelen och las av med OCR istallet (POST
+    // /api/overlay-ban-capture + ban-log-match.js). Loggen ar skrollande sa
+    // en enskild avlasning kan klippa en rad i kanten (verifierat 2026-07-17)
+    // — darfor fragar vi ofta under hela HERO_SELECTION och later
+    // gsiSeenUnavailable ackumulera over flera avlasningar, samma monster
+    // som CM-blocket ovan.
+    if (state === 'DOTA_GAMERULES_STATE_HERO_SELECTION' && serverStatus.latestMatchId && body.player.steamid) {
+      if (gsiBanCaptureState.matchId !== serverStatus.latestMatchId) {
+        gsiBanCaptureState = { matchId: serverStatus.latestMatchId, lastReq: 0 };
+      }
+      if (Date.now() - gsiBanCaptureState.lastReq > 10000) {
+        gsiBanCaptureState.lastReq = Date.now();
+        const banAlias = await findAliasBySteamId64(body.player.steamid);
+        if (banAlias) pushOverlay(banAlias, 'capture-ban-request', '', '');
       }
     }
 
