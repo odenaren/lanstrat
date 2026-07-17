@@ -22,8 +22,16 @@ const SPACING = 62 / REF_W;
 const ICON_W = 62 / REF_W;
 const STRIP_H = 80 / REF_W; // remshojd som racker for topbaren, relativt bredden
 
-const MIN_SCORE = 0.6;   // vinnaren maste na hit...
-const MIN_MARGIN = 0.1;  // ...och vara sa har langt fore tvaan, annars ok:false
+const MIN_SCORE = 0.6;    // vinnaren maste na hit...
+const MIN_MARGIN = 0.07;  // ...och vara sa har langt fore tvaan, annars ok:false
+// MIN_MARGIN sankt fran 0.1 till 0.07 (2026-07-17): ursprungsvardet kalibrerades
+// mot en screenshot utan lagfargad kantram/rollriband/levelbricka pa ikonerna.
+// Verifierat mot en riktig live-match (Oskars skarmdump): alla 5 fiendehjaltar
+// ratt identifierade, men en slot (Tidehunter, score 0.68) hade bara 0.073
+// marginal mot tvaan (Io) — under 0.1-tröskeln trots korrekt svar, eftersom
+// riktiga HUD-ikoner har extra dekor (kantram/riband/badge) som saknas i det
+// rena CDN-referensbildet och drar ner alla scorer nagot jamfort med den
+// idealiserade kalibreringsbilden.
 
 let templatesPromise = null;
 
