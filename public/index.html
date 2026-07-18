@@ -1198,7 +1198,7 @@ async function generateStrategy() {
     + '\n\nSedan strategin - skriv på svenska, konkret och handlingsbart. Låt presentationsstilen styra struktur och längd helt. Ingen fast mall — stilen avgör allt. Inkludera spelplan för early, mid och late game samt win condition, men forma det efter stilen.'
 
   try {
-    const resp=await fetch('/api/strategy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
+    const resp=await fetch('/api/strategy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt, maxTokens:6000})});
     const data=await resp.json();
     if(data.error)throw new Error(data.error);
     const text=data.text;

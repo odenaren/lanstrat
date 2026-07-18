@@ -692,8 +692,13 @@ app.post('/api/overlay-capture', async (req, res) => {
       return res.json({ ok: false, reason: result.reason, heroes: result.heroes, slots: result.slots });
     }
     const generated = await generateItemTipsForMatch(serverStatus.latestMatchId, result.heroes);
+    // Push ALLTID nagot har — annars ser spelaren tyst ingenting alls om
+    // generateItemTipsForMatch av nagon anledning inte genererade (redan gjort,
+    // ingen matchad match, saknad strategitext) trots att fienderna las av korrekt.
     if (generated) {
       pushOverlay(p.name, 'itemtips', 'Itemtips klara', 'Fiender: ' + result.heroes.join(', ') + '. Paminnelser kommer live under matchen.');
+    } else {
+      pushOverlay(p.name, 'itemtips', 'Fiender identifierade', 'Fiender: ' + result.heroes.join(', ') + '. Kunde inte generera itemtips automatiskt just nu — kolla matchen i Playbook.');
     }
     res.json({ ok: true, heroes: result.heroes, generated, slots: result.slots });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1077,6 +1082,15 @@ async function generateItemTipsForMatch(matchId, enemyHeroes) {
     const matches = await readMatches();
     const match = matches.find(m => m.id === matchId);
     if (!match || match.items) return false; // ingen aktiv match, eller redan genererat
+    if (!(match.currentStrategy || match.strategy || '').trim()) {
+      // Sant hant 2026-07-18: en match sparad utan fardig strategitext (AI-svaret
+      // klipptes av innan strategidelen, se TODO.md) gav ett forvirrat AI-svar
+      // nar itemtips genererades mot en tom prompt-sektion. Hoppa over istallet
+      // for att skicka ett garanterat daligt anrop OCH permanent lasa match.items
+      // (som annars aldrig kan genereras om) med skrapsvaret.
+      console.log('[GSI] Hoppar over itemtips-generering for match', match.id, '— saknar strategitext');
+      return false;
+    }
 
     const prompt = 'Du ar en Dota 2 item-expert. Vi har precis genererat en draft-strategi och ska nu mota dessa motstandare.\n\n'
       + 'VAR DRAFT-STRATEGI:\n' + (match.currentStrategy || match.strategy || '') + '\n\n'
