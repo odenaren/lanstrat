@@ -687,6 +687,12 @@ app.post('/api/overlay-capture', async (req, res) => {
     const enemySide = myTeam === 'radiant' ? 'dire' : 'radiant';
     const result = await identifyTopbarHeroes(Buffer.from(image, 'base64'), enemySide);
     console.log('[capture]', enemySide, 'ok=' + result.ok, JSON.stringify(result.heroes), result.reason || '');
+    // Per-slot score/margin/runnerUp — utan detta kravdes en extra rond med
+    // riktiga skarmdumpar 2026-07-20 for att forsta VARFOR ett gissat namn
+    // (Visage/Puck) inte var den faktiska hjalten (Spectre, aldrig ens
+    // tvaa-kandidat i finpasset). Loggas alltid, inte bara vid ok:false, sa
+    // aven "lyckade" avlasningar kan granskas i efterhand.
+    console.log('[capture-slots]', JSON.stringify(result.slots));
     if (!result.ok) {
       pushOverlay(p.name, 'itemtips', 'Itemtips', 'Kunde inte lasa av fiendehjaltarna fran skarmen — fyll i dem manuellt i Playbook.');
       return res.json({ ok: false, reason: result.reason, heroes: result.heroes, slots: result.slots });
