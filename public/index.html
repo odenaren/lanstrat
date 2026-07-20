@@ -2335,7 +2335,6 @@ async function ensureOdHeroes() {
 }
 function odHeroName(id){ var h = odHeroesById && odHeroesById[id]; return h ? h.name : ('Hjälte '+id); }
 function odHeroImg(id){ var h = odHeroesById && odHeroesById[id]; return h ? OD_CDN + h.slug + '.png' : null; }
-function normHeroName(n){ return String(n||'').toLowerCase().replace(/[^a-z]/g,''); }
 
 // Slimmad matchcache i localStorage — parsade matcher andras aldrig
 function slimOdMatch(od) {
@@ -2367,21 +2366,24 @@ async function fetchOdMatch(matchId) {
 
 function ourSideIsRadiant(m, od) { return (m.matchResult === 'win') === !!od.radiant_win; }
 
-// Koppla vara alias till OpenDota-rader via HJALTENAMN (draften vs faktiskt spelad)
+// Koppla vara alias till OpenDota-rader via STEAM-ID (account_id) — INTE
+// hjaltenamn. Buggfixad 2026-07-20: hjaltenamn-matchning bröt totalt sa fort
+// nagons hjalte andrades efter en ban (bade auto-ersattning och spelarens
+// eget val pa plats) — i vart fall lyckades den till och med matcha fel
+// spelares rader av misstag (om nagon annan i matchen rakade spela den
+// hjalte som currentDraft fortfarande trodde pa). Steam-ID ar sant oavsett
+// vad som hande under draften.
 function mapOurRows(m, od) {
-  var weAreRadiant = ourSideIsRadiant(m, od);
   var draft = m.currentDraft || m.draft || {};
+  var steamByAlias = {};
+  players.forEach(function(p){ if(p.steamId) steamByAlias[p.name] = Number(p.steamId); });
   var rows = [];
   (m.players||[]).forEach(function(p){
-    var hn = draft[p.name];
-    if(!hn) return;
-    var target = normHeroName(hn);
-    var row = (od.players||[]).find(function(op){
-      if((op.player_slot < 128) !== weAreRadiant) return false;
-      var oh = odHeroesById[op.hero_id];
-      return oh && normHeroName(oh.name) === target;
-    });
-    rows.push({ alias: p.name, od: row || null, draftHero: hn });
+    var accountId = steamByAlias[p.name];
+    var row = accountId != null
+      ? (od.players||[]).find(function(op){ return Number(op.account_id) === accountId; })
+      : null;
+    rows.push({ alias: p.name, od: row || null, draftHero: draft[p.name] || '?' });
   });
   return rows;
 }
@@ -2498,6 +2500,7 @@ async function loadOpenDotaStats(m) {
   var od;
   try {
     await ensureOdHeroes();
+    if(!players.length) await loadPlayers();
     od = await fetchOdMatch(m.openDotaMatchId);
   } catch(err) {
     el.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:32px">Kunde inte hämta matchdata från OpenDota ('+err.message+')</div>';
@@ -2724,7 +2727,7 @@ async function loadOpenDotaStats(m) {
     });
     html += '</tbody></table></div>';
     var unmatchedRows = ourRows.filter(function(r){ return !r.od; });
-    if(unmatchedRows.length) html += '<div style="font-size:11px;color:var(--text-dim);margin-top:8px">Kunde inte matcha: '+unmatchedRows.map(function(r){return r.alias+' ('+r.draftHero+')';}).join(', ')+' — troligen hjältbyte efter att strategin sparades.</div>';
+    if(unmatchedRows.length) html += '<div style="font-size:11px;color:var(--text-dim);margin-top:8px">Kunde inte matcha: '+unmatchedRows.map(function(r){return r.alias;}).join(', ')+' — saknar Steam-ID pa Hero Pool-sidan, eller privat profil (syns inte i matchdatan).</div>';
   }
 
   el.innerHTML = html;
