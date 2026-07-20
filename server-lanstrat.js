@@ -345,6 +345,16 @@ async function studioHeroes() {
   return heroes;
 }
 
+let _heroNameToIdCache = null;
+async function heroNameToIdMap() {
+  if (_heroNameToIdCache) return _heroNameToIdCache;
+  const map = {};
+  const hRes = await fetch('https://api.opendota.com/api/heroes');
+  if (hRes.ok) (await hRes.json()).forEach(h => { map[h.localized_name.toLowerCase()] = h.id; });
+  _heroNameToIdCache = map;
+  return map;
+}
+
 let _gsiHeroNameCache = null;
 async function heroInternalNameMap() {
   if (_gsiHeroNameCache) return _gsiHeroNameCache;
@@ -961,6 +971,130 @@ app.put('/api/matches/:id/strategy', async (req, res) => {
     await writeMatches(matches);
     res.json(match);
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Automatisk OpenDota-lankning (ersatter det manuella steget att kora
+// link-matches.js lokalt och sjalv klistra in openDotaMatchId i JSONBin —
+// den vagen fanns aldrig nagot skrivsteg, bara en dry-run-rapport, se TODO.md).
+// Atervander exakt samma poangsattningslogik (spelarmatch + hjaltematch via
+// currentDraft/draft) som link-matches.js, men hittar KANDIDATER sjalv via
+// OpenDotas /players/:id/matches istallet for att krava en fardig lista med
+// match-id:n som indata.
+const LINK_TIME_WINDOW_MS = 45 * 60 * 1000; // matchen ska ha startat inom 45 min efter att strategin skapades
+
+function scoreOpenDotaMatch(odMatch, accountToAlias, heroIds) {
+  const matchedPlayers = [];
+  for (const p of odMatch.players) {
+    const alias = accountToAlias[p.account_id];
+    if (alias) matchedPlayers.push({ alias, hero_id: p.hero_id, isRadiant: p.player_slot < 128 });
+  }
+  if (!matchedPlayers.length) return null;
+  const radiantCount = matchedPlayers.filter(p => p.isRadiant).length;
+  const ourSideIsRadiant = radiantCount >= matchedPlayers.length / 2;
+  const ourResult = ourSideIsRadiant === odMatch.radiant_win ? 'win' : 'loss';
+  let playerScore = 0, heroScore = 0;
+  for (const mp of matchedPlayers) {
+    if (heroIds[mp.alias] != null) {
+      playerScore++;
+      if (heroIds[mp.alias] === mp.hero_id) heroScore++;
+    }
+  }
+  const confidence = matchedPlayers.length >= 3 ? 'HÖG' : matchedPlayers.length === 2 ? 'MEDEL' : 'LÅG';
+  return { matchedPlayers, ourResult, playerScore, heroScore, total: playerScore + heroScore, confidence };
+}
+
+async function findOpenDotaCandidates(match) {
+  const players = await readPlayers();
+  const accountToAlias = {};
+  players.forEach(p => { if (p.steamId) accountToAlias[Number(p.steamId)] = p.name; });
+
+  const draft = match.currentDraft || match.draft || {};
+  const rosterAliases = (match.players || []).map(p => p.name).filter(Boolean);
+  const rosterSteamIds = players
+    .filter(p => rosterAliases.includes(p.name) && p.steamId)
+    .map(p => Number(p.steamId));
+  if (!rosterSteamIds.length) return { candidates: [], reason: 'Ingen spelare i matchen har Steam-ID satt pa Hero Pool-sidan.' };
+
+  const heroNameToId = await heroNameToIdMap();
+  const heroIds = {};
+  for (const [alias, heroName] of Object.entries(draft)) {
+    const id = heroNameToId[String(heroName).toLowerCase()];
+    if (id != null) heroIds[alias] = id;
+  }
+
+  const createdMs = new Date(match.createdAt).getTime();
+  const daysBack = Math.min(30, Math.max(1, Math.ceil((Date.now() - createdMs) / 86400000) + 1));
+
+  const candidateIds = new Set();
+  for (const accountId of rosterSteamIds) {
+    try {
+      const res = await fetch(`https://api.opendota.com/api/players/${accountId}/matches?date=${daysBack}`);
+      if (!res.ok) continue;
+      const recent = await res.json();
+      recent.forEach(rm => {
+        const startMs = rm.start_time * 1000;
+        if (startMs - createdMs >= 0 && startMs - createdMs <= LINK_TIME_WINDOW_MS) candidateIds.add(rm.match_id);
+      });
+    } catch (e) { console.error('[opendota-link] kunde inte hamta matcher for', accountId, e.message); }
+  }
+  if (!candidateIds.size) return { candidates: [], reason: 'Inga OpenDota-matcher hittades inom 45 minuter efter att strategin skapades.' };
+
+  const scored = [];
+  for (const matchId of candidateIds) {
+    try {
+      const res = await fetch(`https://api.opendota.com/api/matches/${matchId}`);
+      if (!res.ok) continue;
+      const odMatch = await res.json();
+      const result = scoreOpenDotaMatch(odMatch, accountToAlias, heroIds);
+      if (result) scored.push(Object.assign({ matchId, startMs: odMatch.start_time * 1000 }, result));
+    } catch (e) { console.error('[opendota-link] kunde inte hamta match', matchId, e.message); }
+  }
+  scored.sort((a, b) => b.total - a.total);
+  const decisive = scored.length > 0 && (scored.length === 1 || scored[0].total > scored[1].total);
+  return { candidates: scored, decisive };
+}
+
+app.get('/api/matches/:id/opendota-candidates', async (req, res) => {
+  try {
+    const matches = await readMatches();
+    const match = matches.find(m => m.id === req.params.id);
+    if (!match) return res.status(404).json({ error: 'Not found' });
+    const result = await findOpenDotaCandidates(match);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/matches/:id/link-opendota', async (req, res) => {
+  try {
+    const openDotaMatchId = String(req.body.openDotaMatchId || '');
+    if (!openDotaMatchId) return res.status(400).json({ error: 'openDotaMatchId kravs' });
+    const matches = await readMatches();
+    const match = matches.find(m => m.id === req.params.id);
+    if (!match) return res.status(404).json({ error: 'Not found' });
+
+    const odRes = await fetch(`https://api.opendota.com/api/matches/${openDotaMatchId}`);
+    if (!odRes.ok) return res.status(400).json({ error: 'Kunde inte hamta matchen fran OpenDota (HTTP ' + odRes.status + ')' });
+    const odMatch = await odRes.json();
+
+    const players = await readPlayers();
+    const accountToAlias = {};
+    players.forEach(p => { if (p.steamId) accountToAlias[Number(p.steamId)] = p.name; });
+    const draft = match.currentDraft || match.draft || {};
+    const heroNameToId = await heroNameToIdMap();
+    const heroIds = {};
+    for (const [alias, heroName] of Object.entries(draft)) {
+      const id = heroNameToId[String(heroName).toLowerCase()];
+      if (id != null) heroIds[alias] = id;
+    }
+    const scoreResult = scoreOpenDotaMatch(odMatch, accountToAlias, heroIds);
+    if (!scoreResult) return res.status(400).json({ error: 'Ingen kand spelare hittades i den har OpenDota-matchen — troligen fel match-id.' });
+
+    match.openDotaMatchId = openDotaMatchId;
+    match.matchResult = scoreResult.ourResult;
+    match.matchConfidence = scoreResult.confidence;
+    await writeMatches(matches);
+    res.json(match);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.put('/api/matches/:id/result', async (req, res) => {
