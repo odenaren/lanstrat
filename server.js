@@ -875,6 +875,47 @@ async function generateChallengesForMatch(matchId) {
   console.log('Utmaningar genererade for match ' + matchId + ' (' + valid.length + ' st)');
 }
 
+// Omgenererar EN spelares personliga utmaning nar deras hjalte byts ut mitt
+// i draften (ban-ersattning) — annars kan en utmaning som antog den gamla
+// hjaltens formaga ("25 sek stun med Berserker's Call") bli omojlig eller
+// missvisande om spelaren aldrig fick spela den hjalten. Pushas till just
+// den spelarens overlay, samma monster som draft-ban-notisen.
+async function regenerateChallengeForAlias(matchId, alias, newHero) {
+  try {
+    const matches = await readMatches();
+    const match = matches.find(m => m.id === matchId);
+    if (!match || !Array.isArray(match.challenges) || !match.challenges.some(c => c.alias === alias)) return;
+
+    const prompt = 'Du ar utmaningsgeneratorn for en Dota 2-LAN-kvall. En spelares hjalte har just bytts ut mitt i draften (bannlyst/taget). '
+      + 'Skapa EN ny personlig utmaning for just den har spelaren, anpassad efter deras NYA hjalte och roll i strategin. '
+      + 'Matbar via OpenDota-statistik, realistisk for rollen, klarbar men inte gratis — man ska behova tanka pa den under matchen.\n\n'
+      + 'Tillgangliga metrics (anvand exakt dessa nycklar): ' + JSON.stringify(CHALLENGE_METRICS)
+      + '\nop ar ">=" (minst) eller "<=" (hogst, typiskt for deaths).'
+      + '\n\nSPELARE: ' + alias + '\nNY HJALTE: ' + newHero
+      + '\nSTRATEGI (roller och plan): ' + (match.currentStrategy || match.strategy || '').slice(0, 1500)
+      + '\n\nSvara ENDAST med JSON, ingen markdown:'
+      + '\n{"text":"kort slagkraftig utmaningstext pa svenska, max 12 ord","metric":"nyckel ur menyn","op":">=","value":42}';
+
+    const text = (await callClaude(prompt, 500)).replace(/```json|```/g, '').trim();
+    const jsonStart = text.indexOf('{');
+    const jsonEnd = text.lastIndexOf('}');
+    if (jsonStart === -1 || jsonEnd === -1) return;
+    const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1));
+    if (!(parsed && CHALLENGE_METRICS[parsed.metric] && (parsed.op === '>=' || parsed.op === '<=') && typeof parsed.value === 'number' && parsed.text)) return;
+
+    // Las om binen — annan skrivning kan ha hunnit fore under AI-anropet
+    const fresh = await readMatches();
+    const freshMatch = fresh.find(m => m.id === matchId);
+    if (!freshMatch || !Array.isArray(freshMatch.challenges)) return;
+    const idx = freshMatch.challenges.findIndex(c => c.alias === alias);
+    if (idx === -1) return;
+    freshMatch.challenges[idx] = { alias, text: parsed.text, metric: parsed.metric, op: parsed.op, value: parsed.value };
+    await writeMatches(fresh);
+    pushOverlay(alias, 'challenge-update', 'Ny utmaning', parsed.text);
+    console.log('[GSI] Utmaning omgenererad for', alias, '(' + newHero + '):', parsed.text);
+  } catch (e) { console.error('[GSI] Kunde inte omgenerera utmaning for', alias, e.message); }
+}
+
 // MATCHES
 app.get('/api/matches', async (req, res) => {
   try { res.json(await readMatches()); }
@@ -1302,6 +1343,7 @@ async function applyNewlyUnavailableHeroes(newlyUnavailable) {
   const replaceText = await callClaude(replacePrompt, 500);
   const newDraft = Object.assign({}, plannedDraft);
   const overlayLines = [];
+  const swapped = []; // {alias, newHero} — for utmaningsomgenerering efter skrivningen
 
   affected.forEach(alias => {
     const oldHero = plannedDraft[alias];
@@ -1323,6 +1365,7 @@ async function applyNewlyUnavailableHeroes(newlyUnavailable) {
       const line = oldHero + ' bannad → ' + newHero;
       overlayLines.push(line + ' (' + alias + ')');
       pushOverlay(alias, 'draft-ban', 'Draftändring', line); // varje spelare ser bara sin egen ersattning
+      swapped.push({ alias, newHero });
     }
   });
 
@@ -1333,6 +1376,14 @@ async function applyNewlyUnavailableHeroes(newlyUnavailable) {
   await writeMatches(matches);
 
   console.log('[GSI] Auto-ersatte:', overlayLines.join(' | '));
+
+  // Utmaningarna omgenereras EFTER att draften sparats (sa prompten ser den
+  // uppdaterade currentStrategy/currentDraft), och blockerar inte svaret —
+  // samma fire-and-forget-monster som generateChallengesForMatch anvander
+  // nar matchen sparas forsta gangen.
+  swapped.forEach(({ alias, newHero }) => {
+    regenerateChallengeForAlias(match.id, alias, newHero).catch(e => console.error('[GSI] Utmaning-regen fel:', e.message));
+  });
 }
 
 app.post('/api/gsi', async (req, res) => {
