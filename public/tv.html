@@ -906,15 +906,42 @@ async function runStudio(strategyMatchId) {
     var spot = document.getElementById('studio-spotlight');
     spot.innerHTML = '';
 
-    // Forladdar allt ljud direkt - annars borjar natlasningen forst nar .play()
-    // anropas, vilket ger dod luft mellan varje replik.
+    // Forladdar bara aktuellt + nasta segment - inte hela manifestet pa en
+    // gang. Att forladdda ALLA repliker samtidigt (som tidigare) triggade en
+    // skur av parallella JSONBin-hamtningar dar nagra hann faila/timeouta
+    // innan de behovdes - darav att bara vissa repliker hordes, slumpmassigt.
     var STUDIO_OVERLAP_MS = 180; // hur mycket nasta replik far klippa in i forra
-    var segAudios = manifest.segments.map(function(s){
-      var a = new Audio('/studio/' + odId + '/' + s.file);
-      a.preload = 'auto';
-      return a;
-    });
+    var STUDIO_FADE_MS = 35; // kort volymfade over overlappet sa det inte klickar mellan filerna
+    function fadeVolume(a, from, to, ms) {
+      var t0 = performance.now();
+      function step(){
+        var p = Math.min(1, (performance.now() - t0) / ms);
+        try { a.volume = from + (to - from) * p; } catch(e) {}
+        if(p < 1 && !a.paused) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
     function segAudioStarted(a) { return a.currentTime > 0 || !a.paused; }
+    var segCache = new Map();
+    function getSegAudio(i) {
+      if(i < 0 || i >= manifest.segments.length) return null;
+      if(!segCache.has(i)) {
+        var a = new Audio('/studio/' + odId + '/' + manifest.segments[i].file);
+        a.preload = 'auto';
+        var settled = false;
+        a._done = new Promise(function(resolve){
+          function done(){ if(!settled){ settled = true; resolve(); } }
+          // Battas vid SKAPANDET, inte nar loopen nar fram till detta index -
+          // annars kan en tidigt forladdad replik hinna sluta innan nagon
+          // lyssnar, och uppspelningen hanger sig pa den repliken.
+          a.onended = done;
+          a.onerror = done;
+          a._fallbackDone = done;
+        });
+        segCache.set(i, a);
+      }
+      return segCache.get(i);
+    }
 
     for(var i = 0; i < manifest.segments.length; i++) {
       var seg = manifest.segments[i];
@@ -951,22 +978,26 @@ async function runStudio(strategyMatchId) {
 
       // Spela segmentets (forladdade) ljud. Nasta replik far klippa in nar
       // den har lite kvar - kanns som en riktig panel istallet for dod luft.
-      var nextAudio = i + 1 < segAudios.length ? segAudios[i+1] : null;
-      await new Promise(function(resolve) {
-        var a = segAudios[i];
-        var settled = false;
-        function done(){ if(!settled){ settled = true; resolve(); } }
+      var a = getSegAudio(i);
+      var nextAudio = getSegAudio(i + 1);
+      (function(a, nextAudio){
+        var startedNext = false;
         function startNextEarly() {
-          if(nextAudio && !segAudioStarted(nextAudio)) nextAudio.play().catch(function(){});
+          if(!nextAudio || startedNext || segAudioStarted(nextAudio)) return;
+          startedNext = true;
+          nextAudio.volume = 0;
+          fadeVolume(a, a.volume, 0, STUDIO_FADE_MS);
+          nextAudio.play().then(function(){ fadeVolume(nextAudio, 0, 1, STUDIO_FADE_MS); }).catch(function(){});
         }
         a.ontimeupdate = function(){
           if(a.duration && isFinite(a.duration) && (a.duration - a.currentTime) * 1000 <= STUDIO_OVERLAP_MS) startNextEarly();
         };
-        a.onended = done;
-        a.onerror = function(){ startNextEarly(); setTimeout(done, Math.min(9000, 2500 + seg.text.length * 55)); };
-        if(segAudioStarted(a)) { /* redan igang - klippt in fran forra repliken */ }
-        else a.play().catch(function(){ startNextEarly(); setTimeout(done, Math.min(9000, 2500 + seg.text.length * 55)); });
-      });
+        if(!segAudioStarted(a)) {
+          a.volume = 1;
+          a.play().catch(function(){ startNextEarly(); a._fallbackDone(); });
+        }
+      })(a, nextAudio);
+      await a._done;
     }
 
     document.querySelectorAll('.studio-seat').forEach(function(seat){

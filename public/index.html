@@ -3044,37 +3044,75 @@ async function startStudioPlayback(fromIdx) {
   document.getElementById('studio-play-btn').textContent = '⏹ Stoppa';
   var s = _studioState;
   var odId = s.m.openDotaMatchId;
-  // Forladdar allt ljud sa det inte blir dod luft medan naesta replik hamtas.
-  var STUDIO_OVERLAP_MS = 180;
-  var segAudios = s.manifest.segments.map(function(seg){
-    var a = new Audio('/studio/' + odId + '/' + seg.file);
-    a.preload = 'auto';
-    return a;
-  });
-  s.segAudios = segAudios; // sa stopStudioPlayback kan pausa aven forladdade/overlappande repliker
+  var STUDIO_OVERLAP_MS = 180; // hur mycket nasta replik far klippa in i forra
+  var STUDIO_FADE_MS = 35; // kort volymfade over overlappet sa det inte klickar mellan filerna
+
+  function fadeVolume(a, from, to, ms) {
+    var t0 = performance.now();
+    function step(){
+      var p = Math.min(1, (performance.now() - t0) / ms);
+      try { a.volume = from + (to - from) * p; } catch(e) {}
+      if(p < 1 && !a.paused) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
   function segAudioStarted(a) { return a.currentTime > 0 || !a.paused; }
+
+  // Forladdar bara aktuellt + nasta segment - inte hela manifestet pa en gang.
+  // Buggen (bara vissa repliker hordes, slumpmassigt) berodde pa att ALLA
+  // repliker forladdades samtidigt vid varje uppspelning (aven en enskild
+  // klick pa en rad i historiken), vilket triggade en skur av parallella
+  // JSONBin-hamtningar - nagra hann faila/timeouta innan just den repliken
+  // behovdes, och felet upptacktes for sent for att hanteras (se nedan).
+  var segCache = new Map();
+  function getSegAudio(i) {
+    if(i < 0 || i >= s.manifest.segments.length) return null;
+    if(!segCache.has(i)) {
+      var a = new Audio('/studio/' + odId + '/' + s.manifest.segments[i].file);
+      a.preload = 'auto';
+      var settled = false;
+      a._done = new Promise(function(resolve){
+        function done(){ if(!settled){ settled = true; resolve(); } }
+        // Battas vid SKAPANDET, inte nar loopen nar fram till detta index -
+        // annars kan en tidigt forladdad/tidigt startad replik hinna sluta
+        // (onended/onerror) innan nagon lyssnar, och uppspelningen hanger sig.
+        a.onended = done;
+        a.onerror = done;
+        a._fallbackDone = done;
+      });
+      segCache.set(i, a);
+    }
+    return segCache.get(i);
+  }
+  s.segAudios = segCache; // sa stopStudioPlayback kan pausa aven forladdade/overlappande repliker
+
   for(var i = fromIdx; i < s.manifest.segments.length; i++) {
     if(!s.playing || _studioState !== s) return;
     s.idx = i;
     highlightStudioSeg(i);
-    var seg = s.manifest.segments[i];
-    var nextAudio = i + 1 < segAudios.length ? segAudios[i+1] : null;
-    await new Promise(function(resolve) {
-      var a = segAudios[i];
-      s.audio = a;
-      var settled = false;
-      function done(){ if(!settled){ settled = true; resolve(); } }
+    var a = getSegAudio(i);
+    var nextAudio = getSegAudio(i + 1);
+    s.audio = a;
+
+    (function(a, nextAudio){
+      var startedNext = false;
       function startNextEarly() {
-        if(nextAudio && !segAudioStarted(nextAudio)) nextAudio.play().catch(function(){});
+        if(!nextAudio || startedNext || segAudioStarted(nextAudio)) return;
+        startedNext = true;
+        nextAudio.volume = 0;
+        fadeVolume(a, a.volume, 0, STUDIO_FADE_MS);
+        nextAudio.play().then(function(){ fadeVolume(nextAudio, 0, 1, STUDIO_FADE_MS); }).catch(function(){});
       }
       a.ontimeupdate = function(){
         if(a.duration && isFinite(a.duration) && (a.duration - a.currentTime) * 1000 <= STUDIO_OVERLAP_MS) startNextEarly();
       };
-      a.onended = done;
-      a.onerror = function(){ startNextEarly(); setTimeout(done, 1500); };
-      if(segAudioStarted(a)) { /* redan igang - klippt in fran forra repliken */ }
-      else a.play().catch(function(){ startNextEarly(); setTimeout(done, 1500); });
-    });
+      if(!segAudioStarted(a)) {
+        a.volume = 1;
+        a.play().catch(function(){ startNextEarly(); a._fallbackDone(); });
+      }
+    })(a, nextAudio);
+
+    await a._done;
   }
   if(_studioState === s) stopStudioPlayback();
 }
