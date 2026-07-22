@@ -695,6 +695,35 @@ app.post('/api/overlay-capture', async (req, res) => {
     const myTeam = gsiTeamBySteamId[steamid64];
     if (!myTeam) return res.status(409).json({ error: 'GSI har inte rapporterat lagsida an — kan inte veta vilken sida som ar fienden' });
     const enemySide = myTeam === 'radiant' ? 'dire' : 'radiant';
+
+    // Pub-strategi-session? Da lases BADA sidorna av topbaren (alla 10 hjaltar)
+    // och en spelplan for den redan lasta draften genereras, istallet for
+    // LAN-flodets fiende-avlasning mot latestMatchId.
+    const pubSess = pubFindSessionByAlias(p.name);
+    if (pubSess && !pubSess.playbookMatchId) {
+      if (pubSess.generating) return res.json({ ok: true, pending: true });
+      pubSess.generating = true;
+      try {
+        const buf = Buffer.from(image, 'base64');
+        const ownResult = await identifyTopbarHeroes(buf, myTeam);
+        const enemyResult = await identifyTopbarHeroes(buf, enemySide);
+        console.log('[PUB capture] egna ok=' + ownResult.ok, JSON.stringify(ownResult.heroes),
+          '| fiender ok=' + enemyResult.ok, JSON.stringify(enemyResult.heroes));
+        if (!ownResult.ok || !enemyResult.ok) {
+          if (pubSess.captureAttempts >= 5) {
+            pubSess.failed = true;
+            pushOverlay(p.name, 'pub-strategi', 'Pub-strategi', 'Kunde inte lasa av hjaltarna fran skarmen — ingen strategi genererad.');
+          }
+          return res.json({ ok: false, reason: ownResult.reason || enemyResult.reason, own: ownResult.slots, enemy: enemyResult.slots });
+        }
+        const pubMatch = await createPubMatch(pubSess, ownResult.heroes, enemyResult.heroes);
+        await generateItemTipsForMatch(pubMatch.id, enemyResult.heroes);
+        Object.keys(pubSess.players).forEach(a =>
+          pushOverlay(a, 'pub-strategi', 'Pub-strategi klar', pubMatch.name + ' — kolla Playbook. Itempaminnelser kommer live under matchen.'));
+        return res.json({ ok: true, pub: true, matchId: pubMatch.id, own: ownResult.heroes, enemies: enemyResult.heroes });
+      } finally { pubSess.generating = false; }
+    }
+
     const result = await identifyTopbarHeroes(Buffer.from(image, 'base64'), enemySide);
     console.log('[capture]', enemySide, 'ok=' + result.ok, JSON.stringify(result.heroes), result.reason || '');
     // Per-slot score/margin/runnerUp — utan detta kravdes en extra rond med
@@ -741,6 +770,124 @@ app.post('/api/overlay-ban-capture', async (req, res) => {
     res.json({ ok: true, detected, newlyUnavailable });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// ── PUB-STRATEGI (omvand strategigenerering: last draft → spelplan) ──────────
+// For casual/ranked utanfor LAN: en spelare "armerar" sig via knappen pa sitt
+// spelarkort (Hero Pool-sidan). Nar GSI sedan rapporterar en match grupperas
+// alla armerade DHS-spelare i SAMMA match+lag (map.matchid + team_name) till en
+// session, topbaren lases av (BADA sidorna = alla 10 hjaltar) via samma
+// overlay-capture-flode som LAN-matcherna, och en spelplan genereras for den
+// redan lasta draften. Ingen hemlig arketyp — briefingen kan visas direkt.
+// Matchen lankas till OpenDota direkt via GSI:s matchid (ingen 45-min-heuristik).
+let pubArmed = {}; // alias -> { armedAt, playbookMatchId }
+let pubSessions = {}; // "dotaMatchId:team" -> session (se GSI-hooken for falten)
+const PUB_ARM_TTL_MS = 2 * 60 * 60 * 1000; // armering sjalvdör efter 2h utan match
+
+function pubPrune() {
+  const now = Date.now();
+  Object.keys(pubArmed).forEach(a => { if (now - pubArmed[a].armedAt > PUB_ARM_TTL_MS) delete pubArmed[a]; });
+  Object.keys(pubSessions).forEach(k => { if (now - pubSessions[k].createdAt > 3 * 60 * 60 * 1000) delete pubSessions[k]; });
+}
+function pubFindSessionByAlias(alias) {
+  return Object.values(pubSessions).find(s => s.players[alias]) || null;
+}
+
+app.post('/api/pub/arm/:alias', async (req, res) => {
+  try {
+    const players = await readPlayers();
+    if (!players.find(p => p.name === req.params.alias)) return res.status(404).json({ error: 'Okand spelare' });
+    pubArmed[req.params.alias] = { armedAt: Date.now(), playbookMatchId: null };
+    // Nytt forsok efter misslyckad avlasning: nollstall en fastnad session
+    const sess = pubFindSessionByAlias(req.params.alias);
+    if (sess && !sess.playbookMatchId) { sess.captureAttempts = 0; sess.failed = false; }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/pub/disarm/:alias', (req, res) => {
+  delete pubArmed[req.params.alias];
+  res.json({ ok: true });
+});
+app.get('/api/pub/status', (req, res) => {
+  pubPrune();
+  const out = {};
+  Object.keys(pubArmed).forEach(alias => {
+    const sess = pubFindSessionByAlias(alias);
+    const ready = pubArmed[alias].playbookMatchId || (sess && sess.playbookMatchId) || null;
+    const failed = sess && !ready && (sess.failed
+      || (sess.captureAttempts >= 5 && Date.now() - sess.lastCaptureReq > 60000)); // overlayn svarar inte
+    out[alias] = {
+      state: ready ? 'ready' : failed ? 'failed' : sess ? 'match' : 'armed',
+      playbookMatchId: ready
+    };
+  });
+  res.json(out);
+});
+
+// Bygger Playbook-matchen for en pub-session nar bada topbar-sidorna ar avlasta.
+async function createPubMatch(sess, ownHeroes, enemyHeroes) {
+  const idToName = await studioHeroes();
+  const draft = {};
+  Object.keys(sess.players).forEach(alias => {
+    const hid = sess.players[alias].heroId;
+    if (hid && idToName[hid]) draft[alias] = idToName[hid];
+  });
+  const dhsList = Object.keys(draft).map(a => a + ' - ' + draft[a]).join(', ') || '(ingen identifierad an)';
+
+  const prompt = 'Du ar en Dota 2-coach. En match ar REDAN IGANG — draften ar last och kan inte andras. '
+    + 'Skriv en spelplan for hur VART lag vinner med exakt den har sammansattningen.\n\n'
+    + 'VART LAG (alla 5 hjaltar): ' + ownHeroes.join(', ') + '\n'
+    + 'VARA EGNA SPELARE i laget: ' + dhsList + ' — ovriga ar okanda lagkamrater (randoms).\n'
+    + 'MOTSTANDARNA: ' + enemyHeroes.join(', ') + '\n\n'
+    + 'Fokusera pa: win condition, laning, powerspikes/timing-fonster, teamfight-roller och vad som ska undvikas. '
+    + 'Ge konkreta individuella instruktioner for VARA spelare (alias ovan); okanda lagkamrater behandlas oversiktligt utifran deras hjaltar.\n\n'
+    + 'Svara EXAKT i detta format:\n'
+    + 'PUBSTRAT_JSON_START\n{"name":"Kort slagkraftigt strateginamn pa svenska"}\nPUBSTRAT_JSON_END\n\n'
+    + 'KAPTENSBRIEFING_START\nMax 4 meningar pa svenska, kan lasas hogt direkt i voicen.\nKAPTENSBRIEFING_END\n\n'
+    + 'Darefter sjalva spelplanen i markdown med max 3 rubriker. Anvand svenska.';
+
+  const text = await callClaude(prompt, 2500);
+  let name = 'Pub-strategi';
+  const nameMatch = text.match(/PUBSTRAT_JSON_START([\s\S]*?)PUBSTRAT_JSON_END/);
+  if (nameMatch) { try { name = JSON.parse(nameMatch[1].trim()).name || name; } catch (e) {} }
+  const briefMatch = text.match(/KAPTENSBRIEFING_START([\s\S]*?)KAPTENSBRIEFING_END/);
+  const briefing = briefMatch ? briefMatch[1].trim() : '';
+  const strategy = text
+    .replace(/PUBSTRAT_JSON_START[\s\S]*?PUBSTRAT_JSON_END/, '')
+    .replace(/KAPTENSBRIEFING_START[\s\S]*?KAPTENSBRIEFING_END/, '')
+    .trim();
+
+  const allPlayers = await readPlayers();
+  const matches = await readMatches();
+  const match = {
+    id: Date.now().toString(),
+    createdAt: new Date().toISOString(),
+    gameNumber: matches.length + 1,
+    mode: 'pub',
+    name: name,
+    briefing: briefing,
+    briefingEn: '',
+    captainNotes: '',
+    wildcard: false,
+    style: 'standard',
+    archetype: null,
+    players: allPlayers.filter(p => draft[p.name]),
+    strategy: strategy,
+    draft: draft,
+    teamHeroes: ownHeroes,
+    enemies: enemyHeroes,
+    items: null,
+    openDotaMatchId: sess.dotaMatchId
+  };
+  matches.unshift(match);
+  await writeMatches(matches);
+  sess.playbookMatchId = match.id;
+  Object.keys(sess.players).forEach(a => { if (pubArmed[a]) pubArmed[a].playbookMatchId = match.id; });
+  serverStatus.latestMatchId = match.id; // sa itemtiming-paminnelserna (GAME_IN_PROGRESS-blocket i /api/gsi) hittar matchen
+
+  generateChallengesForMatch(match.id).catch(e => console.error('[PUB] Utmaningar:', e.message));
+  console.log('[PUB] Match skapad:', match.id, name, '(OpenDota ' + sess.dotaMatchId + ')');
+  return match;
+}
 
 // Nedladdningsbar overlay/config.js — EN och samma fil till alla 9 spelare.
 // Ingen alias behovs, widgeten kanner sjalv av vem som ar inloggad i Steam.
@@ -1410,6 +1557,41 @@ app.post('/api/gsi', async (req, res) => {
     const draft = body.draft;
     if (!myTeam) return;
     if (body.player.steamid) gsiTeamBySteamId[body.player.steamid] = myTeam;
+
+    // ── Pub-strategi (omvand strategigenerering): armerade spelare utanfor LAN.
+    // Grupperar armerade DHS-spelare per matchid+lag (tva DHS-gang kan hamna pa
+    // varsin sida i samma pubmatch), samlar deras egna hjaltar fran GSI:s
+    // hero-block, och ber om en topbar-screenshot nar matchen startat — bada
+    // sidorna lases av i /api/overlay-capture och spelplan genereras dar. ──
+    if (Object.keys(pubArmed).length && body.player.steamid && body.map && body.map.matchid && String(body.map.matchid) !== '0') {
+      pubPrune();
+      const pubStates = ['DOTA_GAMERULES_STATE_HERO_SELECTION', 'DOTA_GAMERULES_STATE_STRATEGY_TIME',
+        'DOTA_GAMERULES_STATE_TEAM_SHOWCASE', 'DOTA_GAMERULES_STATE_WAIT_FOR_MAP_TO_LOAD',
+        'DOTA_GAMERULES_STATE_PRE_GAME', 'DOTA_GAMERULES_STATE_GAME_IN_PROGRESS'];
+      if (pubStates.includes(state)) {
+        const pubAlias = await findAliasBySteamId64(body.player.steamid);
+        if (pubAlias && pubArmed[pubAlias] && !pubArmed[pubAlias].playbookMatchId) {
+          const pubKey = String(body.map.matchid) + ':' + myTeam;
+          let sess = pubSessions[pubKey];
+          if (!sess) {
+            sess = pubSessions[pubKey] = { dotaMatchId: String(body.map.matchid), team: myTeam, players: {},
+              captureAttempts: 0, lastCaptureReq: 0, generating: false, failed: false, playbookMatchId: null, createdAt: Date.now() };
+            console.log('[PUB] Ny session', pubKey, 'via', pubAlias);
+          }
+          const pd = sess.players[pubAlias] || (sess.players[pubAlias] = {});
+          if (body.hero && body.hero.id > 0) pd.heroId = body.hero.id;
+
+          if ((state === 'DOTA_GAMERULES_STATE_PRE_GAME' || state === 'DOTA_GAMERULES_STATE_GAME_IN_PROGRESS')
+              && !sess.playbookMatchId && !sess.generating && !sess.failed
+              && sess.captureAttempts < 5 && Date.now() - sess.lastCaptureReq > 20000) {
+            sess.lastCaptureReq = Date.now();
+            sess.captureAttempts++;
+            pushOverlay(pubAlias, 'capture-request', '', '');
+            console.log('[PUB] Capture-request till ' + pubAlias + ' (forsok ' + sess.captureAttempts + ')');
+          }
+        }
+      }
+    }
 
     // OBS: i All Pick ar draft-objektet ALLTID tomt (bekraftat mot riktig Ranked
     // All Pick 2026-07-13) — darfor far tom draft inte langre stoppa hela handlern.

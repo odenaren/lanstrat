@@ -160,6 +160,9 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .challenge-gen-btn{width:100%;padding:7px;background:none;border:1px dashed #8e44ad88;color:#9b59b6;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;border-radius:4px;transition:all .15s;}
 .challenge-gen-btn:hover{background:rgba(155,89,182,.12);border-color:#9b59b6;}
 .challenge-gen-btn:disabled{opacity:.4;cursor:not-allowed;}
+.pub-strat-btn{margin-top:8px;border-color:#e67e2288;color:#e67e22;}
+.pub-strat-btn:hover{background:rgba(230,126,34,.12);border-color:#e67e22;}
+.pub-strat-btn.ready{border-style:solid;border-color:#2ecc71;color:#2ecc71;}
 .gsi-config-link{font-size:12px;color:var(--text-dim);text-decoration:underline;margin-top:6px;display:inline-block;}
 .gsi-config-link:hover{color:var(--gold);}
 .overlay-start-link{display:block;width:100%;box-sizing:border-box;margin-top:8px;padding:7px;background:none;border:1px dashed #2a9d8f88;color:#4ecdc4;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;text-align:center;text-decoration:none;cursor:pointer;border-radius:4px;transition:all .15s;}
@@ -665,6 +668,13 @@ function renderHome() {
     cpBtn.onclick = (function(idx){ return function(){ generateChallengePool(idx); }; })(i);
     cpSection.appendChild(cpBtn);
     card.appendChild(cpSection);
+    var pubBtn = document.createElement('button');
+    pubBtn.className = 'challenge-gen-btn pub-strat-btn';
+    pubBtn.id = 'pub-btn-' + i;
+    pubBtn.textContent = '🎲 Pub-strategi';
+    pubBtn.title = 'Armera infor en pubmatch (ranked/casual utanfor LAN): nar din match startar lases draften av automatiskt och en spelplan genereras. Kraver GSI-cfg + overlay igang.';
+    pubBtn.onclick = (function(alias){ return function(){ togglePubArm(alias); }; })(p.name);
+    card.appendChild(pubBtn);
     var overlayStartLink = document.createElement('a');
     overlayStartLink.className = 'overlay-start-link';
     overlayStartLink.href = 'dhsoverlay://start';
@@ -678,6 +688,53 @@ function renderHome() {
   add.innerHTML = `<div class="plus">+</div><span>Lägg till spelare</span>`;
   add.onclick = ()=>document.getElementById('modal-overlay').classList.add('open');
   grid.appendChild(add);
+  refreshPubStatus();
+}
+
+// ===================== PUB-STRATEGI =====================
+// Armera en spelare infor en pubmatch: servern vantar pa GSI, laser av hela
+// draften via overlay-screenshot nar matchen startat och genererar en spelplan
+// for den redan lasta sammansattningen. Knappen visar status via polling.
+var pubStatusCache = {};
+var pubStatusTimer = null;
+async function togglePubArm(alias) {
+  var st = pubStatusCache[alias];
+  try {
+    if (st && (st.state === 'armed' || st.state === 'match')) {
+      await apiFetch('/pub/disarm/' + encodeURIComponent(alias), { method: 'POST' });
+    } else if (st && st.state === 'ready' && st.playbookMatchId) {
+      await apiFetch('/pub/disarm/' + encodeURIComponent(alias), { method: 'POST' });
+      refreshPubStatus();
+      openDetail(st.playbookMatchId); // byter sjalv till detaljvyn
+      return;
+    } else {
+      await apiFetch('/pub/arm/' + encodeURIComponent(alias), { method: 'POST' });
+    }
+  } catch (err) { alert('Pub-strategi: ' + err.message); }
+  refreshPubStatus();
+}
+async function refreshPubStatus() {
+  try { pubStatusCache = await apiFetch('/pub/status'); } catch (err) { return; }
+  updatePubButtons();
+  var anyActive = Object.keys(pubStatusCache).some(function(a){
+    var s = pubStatusCache[a].state;
+    return s === 'armed' || s === 'match';
+  });
+  if (anyActive && !pubStatusTimer) pubStatusTimer = setInterval(refreshPubStatus, 5000);
+  if (!anyActive && pubStatusTimer) { clearInterval(pubStatusTimer); pubStatusTimer = null; }
+}
+function updatePubButtons() {
+  players.forEach(function(p, i) {
+    var btn = document.getElementById('pub-btn-' + i);
+    if (!btn) return;
+    var st = pubStatusCache[p.name];
+    btn.classList.remove('ready');
+    if (!st) { btn.textContent = '🎲 Pub-strategi'; return; }
+    if (st.state === 'armed') btn.textContent = '⏳ Väntar på match — klicka för att avbryta';
+    else if (st.state === 'match') btn.textContent = '🎮 Match hittad — läser draften…';
+    else if (st.state === 'failed') btn.textContent = '⚠️ Kunde inte läsa draften — klicka för nytt försök';
+    else if (st.state === 'ready') { btn.textContent = '✅ Strategi klar — öppna'; btn.classList.add('ready'); }
+  });
 }
 function getTopRoles(ids) {
   const rc={};
