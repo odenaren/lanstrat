@@ -180,13 +180,25 @@ async function generateForMatch(strategyMatch, heroes, allMatches) {
       const nick = aliasByHero[normHero(heroName(p.hero_id))];
       if (nick) odRowByAlias[nick] = p;
     });
+    const TIER_OUTCOMES = ['missed all tiers', 'reached tier 1 (fairly hard)', 'reached tier 2 (hard)', 'reached tier 3 (nearly impossible)'];
     challengeResults = strategyMatch.challenges.map(ch => {
       const row = odRowByAlias[ch.alias];
       if (!row) return { alias: ch.alias, challenge: ch.text, result: 'unknown — player not found in match data' };
       const raw = ch.metric === 'stuns' ? (row.stuns || 0) : (row[ch.metric] || 0);
       const actual = Math.round(raw);
-      const passed = ch.op === '<=' ? actual <= ch.value : actual >= ch.value;
-      return { alias: ch.alias, challenge: ch.text, target: ch.op + ' ' + ch.value + ' ' + ch.metric, actual, passed };
+      // tiers = [niva1,niva2,niva3] i stigande svarighetsgrad, samma logik som
+      // evalChallenge/tiersValid i server.js (hall synkad). Aldre matcher utan
+      // tiers (bara `value`) tolkas som en enda niva.
+      let tier, passed;
+      if (Array.isArray(ch.tiers) && ch.tiers.length === 3) {
+        const meets = v => ch.op === '<=' ? actual <= v : actual >= v;
+        tier = meets(ch.tiers[2]) ? 3 : meets(ch.tiers[1]) ? 2 : meets(ch.tiers[0]) ? 1 : 0;
+        passed = tier > 0;
+      } else {
+        passed = ch.op === '<=' ? actual <= ch.value : actual >= ch.value;
+        tier = passed ? 1 : 0;
+      }
+      return { alias: ch.alias, challenge: ch.text, tiers: ch.tiers || null, actual, tier, outcome: TIER_OUTCOMES[tier], passed };
     });
   }
 
@@ -237,8 +249,12 @@ async function generateForMatch(strategyMatch, heroes, allMatches) {
     + '\n\nPERSONAL COLOR: Where the data genuinely earns it, drop a natural personal remark about one of the DHS players — '
     + 'one or two per recap. NEVER walk through the roster player by player; most of our players should go unmentioned.'
     + '\n\nPERSONAL CHALLENGES: if personal_challenges is present in MATCH DATA, each DHS player had a public personal '
-    + 'challenge for this match, with verified results. Weave the 1-3 most interesting outcomes into the discussion — '
-    + 'celebrate a clutch clear or roast a spectacular fail. Do NOT recite the full challenge list.'
+    + 'challenge for this match with three difficulty tiers (fairly hard / hard / nearly impossible) and a verified outcome. '
+    + 'Weave the 1-3 most interesting outcomes into the discussion — celebrate someone who hit the nearly-impossible tier, '
+    + 'roast a miss, or point out when a challenge plausibly EXPLAINS an unusual decision during the match (why a support '
+    + 'kept diving for one more ward, why a carry pushed for extra farm instead of grouping) — the audience did not know '
+    + 'the challenge existed until now, so that reveal can land as a fun "aha" moment. The full results screen with all '
+    + 'challenges is shown separately after the panel segment, so do NOT recite the full challenge list here.'
     + (recentAngles.length ? '\n\nANGLES ALREADY USED in recent recaps tonight (find DIFFERENT threads): ' + recentAngles.join('; ') : '')
     + '\n\nFormat: 10-14 dialogue lines. HOST opens with a short scene-setting line and closes the segment. '
     + 'Both analysts must speak multiple times, and at least once react directly to what the OTHER analyst just said. '

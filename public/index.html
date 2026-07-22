@@ -2114,6 +2114,39 @@ async function clearAllMemory() {
 }
 
 // ===================== DETAIL PAGE =====================
+// Delad logik for personliga utmaningar (bade pre-match-boxen och det lankade
+// utfallskortet anvander denna) — tiers = [niva1,niva2,niva3] i STIGANDE
+// svarighetsgrad, samma icke-linjara upplagg som prompten i server.js.
+var CHALLENGE_METRIC_LABELS = { kills:'kills', deaths:'dödsfall', assists:'assists', last_hits:'last hits', denies:'denies',
+  gold_per_min:'GPM', xp_per_min:'XPM', hero_damage:'hjälteskada', tower_damage:'tornskada', hero_healing:'healing',
+  obs_placed:'obs wards', sen_placed:'sentry wards', stuns:'stun-sek' };
+var CHALLENGE_TIER_LABELS = ['Missad', 'Ganska svårt', 'Svårt', 'Väldigt svårt'];
+var CHALLENGE_TIER_COLORS = ['#e74c3c', '#2ecc71', '#3498db', 'var(--gold)'];
+function escChallenge(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function evalChallengeTier(ch, odRow) {
+  var raw = ch.metric === 'stuns' ? (odRow.stuns||0) : (odRow[ch.metric]||0);
+  var actual = Math.round(raw);
+  var tier, passed;
+  if(Array.isArray(ch.tiers) && ch.tiers.length === 3) {
+    var meets = function(v){ return ch.op === '<=' ? actual <= v : actual >= v; };
+    tier = meets(ch.tiers[2]) ? 3 : meets(ch.tiers[1]) ? 2 : meets(ch.tiers[0]) ? 1 : 0;
+    passed = tier > 0;
+  } else {
+    passed = ch.op === '<=' ? actual <= ch.value : actual >= ch.value;
+    tier = passed ? 1 : 0;
+  }
+  return { actual: actual, tier: tier, passed: passed };
+}
+function challengeTiersLine(ch) {
+  var unit = CHALLENGE_METRIC_LABELS[ch.metric] || ch.metric;
+  var dir = ch.op === '<=' ? 'max' : 'minst';
+  if(!Array.isArray(ch.tiers) || ch.tiers.length !== 3) {
+    return ch.value != null ? ('krav ' + dir + ' ' + ch.value + ' ' + unit) : '';
+  }
+  var labels = ['Ganska svårt', 'Svårt', 'Väldigt svårt'];
+  return ch.tiers.map(function(v, i){ return labels[i] + ' ' + dir + ' ' + v + ' ' + unit; }).join(' &nbsp;·&nbsp; ');
+}
+
 async function openDetail(id) {
   var m;
   try {
@@ -2233,12 +2266,19 @@ async function openDetail(id) {
     chBox.appendChild(chTitle);
     m.challenges.forEach(function(ch){
       var row = document.createElement('div');
-      row.style.cssText = 'font-size:13px;color:var(--text);padding:3px 0';
+      row.style.cssText = 'font-size:13px;color:var(--text);padding:5px 0';
       var who = document.createElement('strong');
       who.style.cssText = 'color:var(--gold)';
       who.textContent = ch.alias;
       row.appendChild(who);
       row.appendChild(document.createTextNode(' — ' + ch.text));
+      var tiersLine = challengeTiersLine(ch);
+      if(tiersLine) {
+        var tiersEl = document.createElement('div');
+        tiersEl.style.cssText = 'font-size:11px;color:var(--text-dim);margin-top:2px';
+        tiersEl.innerHTML = tiersLine;
+        row.appendChild(tiersEl);
+      }
       chBox.appendChild(row);
     });
     detailEl.insertBefore(chBox, detailEl.children[1]);
@@ -2523,23 +2563,18 @@ async function loadOpenDotaStats(m) {
   html += '<div style="background:rgba(200,155,60,.06);border:1px solid var(--gold-dim);border-radius:6px;padding:16px 18px;margin-bottom:20px;font-size:14px;line-height:1.8">'
     + buildMatchStory(m, od, ourRows, series) + '</div>';
 
-  // --- 1.5 Utmaningsutfall: verifierade mot matchdatan ---
+  // --- 1.5 Utmaningsutfall: verifierade mot matchdatan, visar hogsta klarade niva ---
   if((m.challenges||[]).length) {
-    var chMetricLabels = { kills:'kills', deaths:'dödsfall', assists:'assists', last_hits:'last hits', denies:'denies',
-      gold_per_min:'GPM', xp_per_min:'XPM', hero_damage:'hjälteskada', tower_damage:'tornskada', hero_healing:'healing',
-      obs_placed:'obs wards', sen_placed:'sentry wards', stuns:'stun-sek' };
-    function escCh(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
     html += '<div style="background:rgba(155,89,182,.07);border:1px solid #8e44ad66;border-radius:6px;padding:16px 18px;margin-bottom:20px">'
       + '<div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:#9b59b6;margin-bottom:10px">🎯 Utmaningsutfall</div>';
     m.challenges.forEach(function(ch){
       var row = matched.find(function(r){ return r.alias === ch.alias; });
-      var line = '<strong style="color:var(--gold)">' + escCh(ch.alias) + '</strong> — ' + escCh(ch.text);
+      var line = '<strong style="color:var(--gold)">' + escChallenge(ch.alias) + '</strong> — ' + escChallenge(ch.text);
       if(row) {
-        var raw = ch.metric === 'stuns' ? (row.od.stuns||0) : (row.od[ch.metric]||0);
-        var actual = Math.round(raw);
-        var passed = ch.op === '<=' ? actual <= ch.value : actual >= ch.value;
-        line += ' &nbsp;<span style="font-weight:700;color:' + (passed?'#2ecc71':'#e74c3c') + '">' + (passed?'✅ Klarad':'❌ Missad')
-          + '</span> <span style="color:var(--text-dim);font-size:12px">(' + actual + ' ' + (chMetricLabels[ch.metric]||ch.metric) + ', krav ' + (ch.op==='<='?'max':'minst') + ' ' + ch.value + ')</span>';
+        var r = evalChallengeTier(ch, row.od);
+        var badge = r.tier > 0 ? '✅'.repeat(r.tier) + ' ' + CHALLENGE_TIER_LABELS[r.tier] : '❌ Missad';
+        line += ' &nbsp;<span style="font-weight:700;color:' + CHALLENGE_TIER_COLORS[r.tier] + '">' + badge
+          + '</span> <span style="color:var(--text-dim);font-size:12px">(' + r.actual + ' ' + (CHALLENGE_METRIC_LABELS[ch.metric]||ch.metric) + ' — ' + challengeTiersLine(ch) + ')</span>';
       } else {
         line += ' &nbsp;<span style="color:var(--text-dim);font-size:12px">kunde inte verifieras — spelaren hittades inte i matchdatan</span>';
       }

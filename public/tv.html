@@ -77,6 +77,19 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
 .ch-hero{font-size:12px;color:var(--text-dim);letter-spacing:.1em;text-transform:uppercase;margin-top:2px;}
 .ch-text{font-size:17px;color:var(--text);margin-top:10px;line-height:1.45;font-style:italic;}
 
+/* UTMANINGSUTFALL — visas efter Eftersnack, oavsett om studion namnde dem */
+#challenge-results-screen{display:none;flex-direction:column;align-items:center;justify-content:center;gap:32px;padding:60px;}
+#challenge-results-screen .ch-title{font-size:clamp(28px,4vw,52px);font-weight:700;color:#9b59b6;text-transform:uppercase;letter-spacing:.12em;text-shadow:0 0 40px rgba(155,89,182,.4);}
+#challenge-result-cards{display:flex;flex-wrap:wrap;gap:18px;justify-content:center;max-width:1300px;}
+.chr-card{width:min(400px,42vw);padding:18px 22px;border:1px solid #8e44ad66;border-radius:10px;background:rgba(155,89,182,.07);opacity:0;transform:translateY(30px);}
+.chr-card.shown{transition:opacity .4s ease,transform .4s ease;opacity:1;transform:translateY(0);}
+.chr-card.tier-3{border-color:var(--gold-dim);background:rgba(200,155,60,.1);box-shadow:0 0 30px rgba(200,155,60,.15);}
+.chr-player{font-size:20px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;}
+.chr-hero{font-size:12px;color:var(--text-dim);letter-spacing:.1em;text-transform:uppercase;margin-top:2px;}
+.chr-text{font-size:16px;color:var(--text);margin-top:8px;line-height:1.4;font-style:italic;}
+.chr-badge{margin-top:12px;font-size:15px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;}
+.chr-detail{font-size:12px;color:var(--text-dim);margin-top:4px;}
+
 /* DRAFT OVERVIEW */
 #overview{display:none;flex-direction:column;align-items:center;justify-content:center;gap:40px;padding:60px;}
 #overview .ov-title{font-size:clamp(28px,4vw,52px);font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.1em;}
@@ -228,6 +241,11 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
   <div id="challenge-screen">
     <div class="ch-title">🎯 Kvällens utmaningar</div>
     <div id="challenge-cards"></div>
+  </div>
+
+  <div id="challenge-results-screen">
+    <div class="ch-title">🎯 Utmaningarnas utfall</div>
+    <div id="challenge-result-cards"></div>
   </div>
 
   <div id="overview">
@@ -476,7 +494,7 @@ function playHypeAudio(matchId) {
 }
 
 function show(id) {
-  ['idle','welcome','splash','hero-reveal','briefing-screen','hype-screen','challenge-screen','overview','studio-screen'].forEach(function(s){
+  ['idle','welcome','splash','hero-reveal','briefing-screen','hype-screen','challenge-screen','overview','studio-screen','challenge-results-screen'].forEach(function(s){
     var el = document.getElementById(s);
     el.style.display = 'none';
     el.style.animation = '';
@@ -1005,7 +1023,58 @@ async function runStudio(strategyMatchId) {
       seat.querySelectorAll('.studio-seat-bars span').forEach(function(bar){ bar.style.background = ''; });
     });
 
-    await wait(4000);
+    await wait(1500);
+
+    // Utmaningarnas utfall — visas ALLTID i sin helhet efter panelen, aven om
+    // studion bara hann kommentera nagra fa av dem (server.js instrueras att
+    // valja 1-3 höjdpunkter, inte recitera hela listan). challengeResults
+    // beraknas redan med tiers av generateStudioForMatch/generate-studio.js
+    // och ligger i manifestet — ingen egen matchdata-hamtning behovs har.
+    var results = manifest.challengeResults || [];
+    if(results.length) {
+      var crCards = document.getElementById('challenge-result-cards');
+      crCards.innerHTML = '';
+      var TIER_LABELS = ['Missad', 'Ganska svårt', 'Svårt', 'Väldigt svårt'];
+      var TIER_COLORS = ['#e74c3c', '#2ecc71', '#3498db', 'var(--gold)'];
+      var crCardEls = results.map(function(r){
+        var card = document.createElement('div');
+        card.className = 'chr-card' + (r.tier === 3 ? ' tier-3' : '');
+        var pl = document.createElement('div'); pl.className = 'chr-player'; pl.textContent = r.alias;
+        var he = document.createElement('div'); he.className = 'chr-hero'; he.textContent = draft[r.alias] || '';
+        var tx = document.createElement('div'); tx.className = 'chr-text'; tx.textContent = r.challenge || '';
+        card.appendChild(pl); card.appendChild(he); card.appendChild(tx);
+        if(typeof r.tier === 'number') {
+          var badge = document.createElement('div');
+          badge.className = 'chr-badge';
+          badge.style.color = TIER_COLORS[r.tier];
+          badge.textContent = (r.tier > 0 ? '✅'.repeat(r.tier) + ' ' : '❌ ') + TIER_LABELS[r.tier];
+          card.appendChild(badge);
+          if(r.actual != null) {
+            var det = document.createElement('div');
+            det.className = 'chr-detail';
+            det.textContent = 'Resultat: ' + r.actual;
+            card.appendChild(det);
+          }
+        } else {
+          var unk = document.createElement('div');
+          unk.className = 'chr-detail';
+          unk.textContent = 'Kunde inte verifieras';
+          card.appendChild(unk);
+        }
+        crCards.appendChild(card);
+        return card;
+      });
+      show('challenge-results-screen');
+      await wait(600);
+      for(var cri = 0; cri < crCardEls.length; cri++) {
+        crCardEls[cri].classList.add('shown');
+        await wait(900);
+      }
+      await wait(Math.max(6000, crCardEls.length * 1400));
+    } else {
+      await wait(2500);
+    }
+
     if(bg) fadeAudio(bg, bg.volume, 0, 2000, function(){ try{ bg.pause(); }catch(e){} });
   } catch(e) {
     console.error('Studio:', e);
