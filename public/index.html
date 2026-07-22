@@ -7,12 +7,16 @@
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500&display=swap');
 :root {
-  --bg:#0a0b0d; --surface:#12151a; --surface2:#1a1f28; --border:#252c38;
-  --gold:#c89b3c; --gold-light:#e8c06a; --gold-dim:#7a5c1e;
-  --text:#d4cfc7; --text-dim:#7a7a7a; --green:#27ae60; --red:#e74c3c;
+  /* HUD-skin (cyberpunk) — variabelnamnen behalls sa hela UI:t foljer med; --gold* ar nu cyan */
+  --bg:#06080f; --surface:#0b1020; --surface2:#101a2c; --border:#1b2942;
+  --gold:#2ce0e0; --gold-light:#7bf3f3; --gold-dim:#1c6a6a;
+  --text:#cfe6ec; --text-dim:#6a8590; --green:#33e6a6; --red:#ff5c72;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Code",Consolas,monospace;
 }
 *{margin:0;padding:0;box-sizing:border-box;}
-body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;min-height:100vh;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;min-height:100vh;
+  background-image:linear-gradient(rgba(44,224,224,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(44,224,224,.03) 1px,transparent 1px);
+  background-size:44px 44px;background-position:center top;background-attachment:fixed;}
 h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 /* NAV */
 .nav{background:var(--surface);border-bottom:1px solid var(--gold-dim);padding:0 24px;display:flex;align-items:center;height:56px;gap:24px;position:sticky;top:0;z-index:100;}
@@ -21,7 +25,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .nav-tabs{display:flex;gap:4px;margin-left:auto;}
 .nav-tab{padding:6px 16px;background:none;border:1px solid transparent;color:var(--text-dim);font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:600;letter-spacing:.08em;cursor:pointer;text-transform:uppercase;transition:all .15s;border-radius:3px;}
 .nav-tab:hover{color:var(--text);border-color:var(--border);}
-.nav-tab.active{color:var(--gold);border-color:var(--gold-dim);background:rgba(200,155,60,.08);}
+.nav-tab.active{color:var(--gold);border-color:var(--gold-dim);background:rgba(44,224,224,.08);}
 /* PAGES */
 .page{display:none;padding:28px 24px;max-width:1400px;margin:0 auto;}
 .page.active{display:block;}
@@ -47,8 +51,8 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .role-pill{padding:2px 8px;border-radius:3px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);}
 .role-pill.carry{border-color:#c0392b55;color:#e74c3c;} .role-pill.support{border-color:#2980b955;color:#3498db;}
 .role-pill.mid{border-color:#8e44ad55;color:#9b59b6;} .role-pill.offlane{border-color:#16a08555;color:#1abc9c;}
-.player-card-btn{margin-top:14px;width:100%;padding:8px;background:rgba(200,155,60,.1);border:1px solid var(--gold-dim);color:var(--gold);font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-radius:4px;transition:all .15s;}
-.player-card-btn:hover{background:rgba(200,155,60,.2);}
+.player-card-btn{margin-top:14px;width:100%;padding:8px;background:rgba(44,224,224,.1);border:1px solid var(--gold-dim);color:var(--gold);font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-radius:4px;transition:all .15s;}
+.player-card-btn:hover{background:rgba(44,224,224,.2);}
 .add-card{background:var(--surface);border:1px dashed var(--border);border-radius:6px;padding:20px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:120px;gap:8px;color:var(--text-dim);transition:all .15s;}
 .add-card:hover{border-color:var(--gold-dim);color:var(--gold);}
 .add-card .plus{font-size:32px;line-height:1;}
@@ -65,7 +69,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center;}
 .filter-label{color:var(--text-dim);font-size:12px;text-transform:uppercase;letter-spacing:.06em;margin-right:2px;}
 .filter-btn{padding:4px 12px;border:1px solid var(--border);background:none;color:var(--text-dim);font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;border-radius:3px;transition:all .15s;}
-.filter-btn:hover,.filter-btn.active{color:var(--gold);border-color:var(--gold-dim);background:rgba(200,155,60,.08);}
+.filter-btn:hover,.filter-btn.active{color:var(--gold);border-color:var(--gold-dim);background:rgba(44,224,224,.08);}
 .selected-count{margin-left:auto;font-size:13px;color:var(--text-dim);}
 .selected-count strong{color:var(--gold);}
 #hero-grid{display:block;}
@@ -91,7 +95,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .player-select-list{display:flex;flex-direction:column;gap:8px;}
 .player-toggle{display:flex;align-items:center;gap:6px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer;transition:all .15s;user-select:none;}
 .player-toggle:hover{border-color:var(--gold-dim);}
-.player-toggle.active{border-color:var(--gold);background:rgba(200,155,60,.08);}
+.player-toggle.active{border-color:var(--gold);background:rgba(44,224,224,.08);}
 .player-toggle-name{font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .player-toggle-heroes{font-size:11px;color:var(--text-dim);white-space:nowrap;}
 .player-toggle.active .player-toggle-heroes{color:var(--gold);}
@@ -119,7 +123,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .match-entry-players{font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;flex:1;}
 .match-entry-badge{padding:3px 10px;border-radius:3px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;}
 .badge-has-items{background:rgba(39,174,96,.15);border:1px solid #27ae6055;color:#2ecc71;}
-.badge-no-items{background:rgba(200,155,60,.1);border:1px solid var(--gold-dim);color:var(--gold);}
+.badge-no-items{background:rgba(44,224,224,.1);border:1px solid var(--gold-dim);color:var(--gold);}
 .match-entry-del{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px;padding:4px;opacity:.5;transition:opacity .15s;}
 .match-entry-del:hover{opacity:1;color:var(--red);}
 /* MATCH DETAIL PAGE */
@@ -150,7 +154,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .page-header{display:flex;align-items:center;gap:16px;margin-bottom:24px;flex-wrap:wrap;}
 .page-header h2{font-size:28px;font-weight:700;text-transform:uppercase;color:var(--gold);letter-spacing:.1em;}
 .tag{display:inline-block;padding:2px 10px;border-radius:3px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;}
-.tag-gold{background:rgba(200,155,60,.15);border:1px solid var(--gold-dim);color:var(--gold);}
+.tag-gold{background:rgba(44,224,224,.15);border:1px solid var(--gold-dim);color:var(--gold);}
 /* CHALLENGE POOL - HOME */
 .challenge-pool-section{margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
 .challenge-pool-label{font-family:Rajdhani,sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#9b59b6;margin-bottom:8px;}
@@ -176,6 +180,8 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 @keyframes portraitPop{from{opacity:0;transform:scale(.85);}to{opacity:1;transform:scale(1);}}
 .strat-reveal{animation:fadeIn .4s ease both;}
 .portrait-pop{animation:portraitPop .3s ease both;}
+/* HUD-skin: monospace pa korta data-etiketter (selektivt sa layouter inte spracks av bredare glyfer) */
+.nav-tab,.match-entry-badge,.tag,.badge-has-items,.badge-no-items,.player-card-count,.selected-count,.attr-count,.match-entry-date{font-family:var(--mono);letter-spacing:.04em;}
 </style>
 </head>
 <body>
@@ -261,7 +267,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
   <div class="page-header">
     <h2>Matchhistorik</h2>
     <span style="color:var(--text-dim);font-size:13px">Klicka på en match för detaljer &amp; itemtips</span>
-    <button onclick="openLanModal()" style="margin-left:auto;padding:6px 14px;background:rgba(200,155,60,.15);border:1px solid var(--gold-dim);color:var(--gold);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s">⚔️ Inför lanet</button>
+    <button onclick="openLanModal()" style="margin-left:auto;padding:6px 14px;background:rgba(44,224,224,.15);border:1px solid var(--gold-dim);color:var(--gold);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s">⚔️ Inför lanet</button>
     <button onclick="clearAllMemory()" style="margin-left:auto;padding:6px 14px;background:none;border:1px solid #c0392b44;color:var(--red);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='#c0392b44'">Rensa minne</button>
   </div>
   <div id="history-list" class="history-grid"></div>
@@ -1352,7 +1358,7 @@ async function generateStrategy() {
     }
     if(chosenStyle.name !== 'standard') {
       var styleBadge = document.createElement('span');
-      styleBadge.style.cssText = 'font-size:12px;background:rgba(200,155,60,.1);border:1px solid var(--gold-dim);color:var(--gold);padding:2px 8px;border-radius:3px;vertical-align:middle;letter-spacing:.04em;text-transform:uppercase;margin-left:8px';
+      styleBadge.style.cssText = 'font-size:12px;background:rgba(44,224,224,.1);border:1px solid var(--gold-dim);color:var(--gold);padding:2px 8px;border-radius:3px;vertical-align:middle;letter-spacing:.04em;text-transform:uppercase;margin-left:8px';
       styleBadge.textContent = chosenStyle.name;
       titleEl.appendChild(styleBadge);
     }
@@ -1372,7 +1378,7 @@ async function generateStrategy() {
     // Briefing
     if(briefing) {
       var briefDiv = document.createElement('div');
-      briefDiv.style.cssText = 'background:rgba(200,155,60,.08);border:1px solid var(--gold-dim);border-radius:6px;padding:18px 20px;margin-bottom:20px';
+      briefDiv.style.cssText = 'background:rgba(44,224,224,.08);border:1px solid var(--gold-dim);border-radius:6px;padding:18px 20px;margin-bottom:20px';
       var briefTitle = document.createElement('div');
       briefTitle.style.cssText = 'font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:10px';
       briefTitle.textContent = 'Kaptensbriefing - las hogt for laget';
@@ -1453,7 +1459,7 @@ async function generateStrategy() {
       if(rimg) {
         var bigImg = document.createElement('img');
         bigImg.src = rimg;
-        bigImg.style.cssText = 'width:min(340px,85vw);height:min(190px,48vw);object-fit:cover;object-position:center top;border-radius:8px;border:2px solid var(--gold-dim);box-shadow:0 0 40px rgba(200,155,60,.25)';
+        bigImg.style.cssText = 'width:min(340px,85vw);height:min(190px,48vw);object-fit:cover;object-position:center top;border-radius:8px;border:2px solid var(--gold-dim);box-shadow:0 0 40px rgba(44,224,224,.25)';
         reveal.appendChild(bigImg);
       }
       var revHeroName = document.createElement('div');
@@ -1543,7 +1549,7 @@ function renderStrategyFromMatch(m) {
   // Briefing
   if(briefing) {
     var briefDiv = document.createElement('div');
-    briefDiv.style.cssText = 'background:rgba(200,155,60,.08);border:1px solid var(--gold-dim);border-radius:6px;padding:18px 20px;margin-bottom:20px';
+    briefDiv.style.cssText = 'background:rgba(44,224,224,.08);border:1px solid var(--gold-dim);border-radius:6px;padding:18px 20px;margin-bottom:20px';
     var briefTitle = document.createElement('div');
     briefTitle.style.cssText = 'font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:10px';
     briefTitle.textContent = 'Kaptensbriefing - las hogt for laget';
@@ -1680,7 +1686,7 @@ async function loadHistory() {
       <div class="match-entry-date">${date}</div>
       <div style="flex:1">
         <div class="match-entry-players">${playerNames}</div>
-        ${m.name?`<div style="font-size:12px;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-top:2px"><span style="color:${m.wildcard?'#9b59b6':'var(--gold)'}">${m.name}</span>${m.wildcard?' <span style="font-size:10px;background:rgba(155,89,182,.2);border:1px solid #8e44ad88;color:#9b59b6;padding:1px 6px;border-radius:3px;vertical-align:middle">🎲 WILD</span>':''}${m.mode==='pub'?' <span title="Genererad omvänt: draften var redan låst, strategin skrevs för den" style="font-size:10px;background:rgba(230,126,34,.15);border:1px solid #e67e2288;color:#e67e22;padding:1px 6px;border-radius:3px;vertical-align:middle">↩ PUB</span>':''} ${m.style&&m.style!=='standard'?'<span style="font-size:10px;background:rgba(200,155,60,.08);border:1px solid var(--gold-dim);color:var(--gold);padding:1px 6px;border-radius:3px;vertical-align:middle">'+m.style+'</span>':''}</div>`:""}
+        ${m.name?`<div style="font-size:12px;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-top:2px"><span style="color:${m.wildcard?'#9b59b6':'var(--gold)'}">${m.name}</span>${m.wildcard?' <span style="font-size:10px;background:rgba(155,89,182,.2);border:1px solid #8e44ad88;color:#9b59b6;padding:1px 6px;border-radius:3px;vertical-align:middle">🎲 WILD</span>':''}${m.mode==='pub'?' <span title="Genererad omvänt: draften var redan låst, strategin skrevs för den" style="font-size:10px;background:rgba(230,126,34,.15);border:1px solid #e67e2288;color:#e67e22;padding:1px 6px;border-radius:3px;vertical-align:middle">↩ PUB</span>':''} ${m.style&&m.style!=='standard'?'<span style="font-size:10px;background:rgba(44,224,224,.08);border:1px solid var(--gold-dim);color:var(--gold);padding:1px 6px;border-radius:3px;vertical-align:middle">'+m.style+'</span>':''}</div>`:""}
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${(m.players||[]).map(p=>{
           const hero=(m.draft||{})[p.name];
           const img=hero?heroImgByName(hero):null;
@@ -1690,7 +1696,7 @@ async function loadHistory() {
       </div>
       <div style="display:flex;gap:5px;align-items:center" onclick="event.stopPropagation()">
         ${resultCell}
-        <button onclick="event.stopPropagation();replayOnTv('${m.id}')" title="Visa på TV igen" style="padding:8px 14px;border-radius:4px;font-family:Rajdhani,sans-serif;font-size:16px;font-weight:700;cursor:pointer;border:1px solid var(--gold-dim);background:rgba(200,155,60,.08);color:var(--gold);min-width:44px;min-height:36px">📺</button>
+        <button onclick="event.stopPropagation();replayOnTv('${m.id}')" title="Visa på TV igen" style="padding:8px 14px;border-radius:4px;font-family:Rajdhani,sans-serif;font-size:16px;font-weight:700;cursor:pointer;border:1px solid var(--gold-dim);background:rgba(44,224,224,.08);color:var(--gold);min-width:44px;min-height:36px">📺</button>
       </div>
       <span class="match-entry-badge ${hasItems?'badge-has-items':'badge-no-items'}">${hasItems?'Items klara':'Lägg till motståndare'}</span>
       <button onclick="toggleMemory(event,'${m.id}',${!m.excludeFromMemory})" title="${m.excludeFromMemory?'Inkludera i minne':'Exkludera från minne'}" style="background:none;border:1px solid ${m.excludeFromMemory?'var(--border)':'var(--gold-dim)'};color:${m.excludeFromMemory?'var(--text-dim)':'var(--gold)'};cursor:pointer;font-size:12px;padding:3px 8px;border-radius:3px;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.04em;white-space:nowrap;transition:all .15s">${m.excludeFromMemory?'● Ej minne':'● Minne'}</button>
@@ -1806,7 +1812,7 @@ async function loadStats() {
   var unknownCount = matches.filter(function(m){return !m.archetype;}).length;
   var guessedCount = matches.filter(function(m){return m.archetypeGuessed;}).length;
   html += '<div class="card" style="margin-bottom:20px"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div class="section-title" style="margin-bottom:0;border-bottom:none;padding-bottom:0">Arketyper — nu avslöjade 🎭</div>'
-    + (unknownCount ? '<button id="analyze-arch-btn" onclick="analyzeArchetypes()" style="padding:6px 14px;background:rgba(200,155,60,.15);border:1px solid var(--gold-dim);color:var(--gold);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px">🔍 Analysera '+unknownCount+' äldre matcher</button>' : '')
+    + (unknownCount ? '<button id="analyze-arch-btn" onclick="analyzeArchetypes()" style="padding:6px 14px;background:rgba(44,224,224,.15);border:1px solid var(--gold-dim);color:var(--gold);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px">🔍 Analysera '+unknownCount+' äldre matcher</button>' : '')
     + '</div>'
     + '<p style="color:var(--text-dim);font-size:12px;margin:10px 0 14px">Varje strategi byggdes i hemlighet på en av 13 arketyper. Så här fördelade de sig:'
     + (guessedCount ? '<br>🔍 = '+guessedCount+' arketyper är AI-gissade i efterhand från strategitexten, inte sparade fakta.' : '')
@@ -2217,7 +2223,7 @@ async function openDetail(id) {
 
   // Notes and briefing html
   var notesHtml = m.captainNotes ? '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:12px 14px;margin-bottom:16px"><div style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-dim);margin-bottom:5px">Kaptenens instruktioner</div><div style="font-size:13px;color:var(--text)">'+m.captainNotes+'</div></div>' : '';
-  var briefingHtml = m.briefing ? '<div style="background:rgba(200,155,60,.08);border:1px solid var(--gold-dim);border-radius:6px;padding:18px 20px;margin-bottom:20px"><div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;color:var(--gold);margin-bottom:10px">Kaptensbriefing</div><div style="font-size:15px;line-height:1.8;color:var(--text)">'+m.briefing.split('\n').join('<br>')+'</div></div>' : '';
+  var briefingHtml = m.briefing ? '<div style="background:rgba(44,224,224,.08);border:1px solid var(--gold-dim);border-radius:6px;padding:18px 20px;margin-bottom:20px"><div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;color:var(--gold);margin-bottom:10px">Kaptensbriefing</div><div style="font-size:15px;line-height:1.8;color:var(--text)">'+m.briefing.split('\n').join('<br>')+'</div></div>' : '';
 
   // Build draft portraits
   var draftContainer = document.createElement('div');
@@ -2577,7 +2583,7 @@ async function loadOpenDotaStats(m) {
   var html = '';
 
   // --- 1. Matchberattelsen ---
-  html += '<div style="background:rgba(200,155,60,.06);border:1px solid var(--gold-dim);border-radius:6px;padding:16px 18px;margin-bottom:20px;font-size:14px;line-height:1.8">'
+  html += '<div style="background:rgba(44,224,224,.06);border:1px solid var(--gold-dim);border-radius:6px;padding:16px 18px;margin-bottom:20px;font-size:14px;line-height:1.8">'
     + buildMatchStory(m, od, ourRows, series) + '</div>';
 
   // --- 1.5 Utmaningsutfall: verifierade mot matchdatan ---
@@ -3089,7 +3095,7 @@ function highlightStudioSeg(idx) {
     var active = i === idx;
     row.style.opacity = active ? '1' : '.55';
     row.style.borderLeftColor = active ? 'var(--gold)' : 'transparent';
-    row.style.background = active ? 'rgba(200,155,60,.07)' : 'none';
+    row.style.background = active ? 'rgba(44,224,224,.07)' : 'none';
     if(active) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   });
 }
