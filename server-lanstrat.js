@@ -889,6 +889,31 @@ app.post('/api/overlay-ban-capture', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Tar emot matchid-observationer fran overlay-widgetens console.log-tail
+// (Dota skriver "Player AccountID N connecting to MatchID M" i klartext vid
+// anslutning till matchservern — kraver -condebug i Steams launch options,
+// se overlay/console-tail.js). Anvands som verifiering/fallback for GSI:s
+// map.matchid i pub-strategiflodet: console-raden dyker upp redan innan
+// HERO_SELECTION och ar oberoende av GSI.
+let consoleMatchIdByAccount = {}; // accountId (32-bit) -> { matchId, ts }
+app.post('/api/overlay-console-event', async (req, res) => {
+  try {
+    const accountId = Number(req.body.accountId);
+    const matchId = String(req.body.matchId || '');
+    if (!accountId || !/^\d+$/.test(matchId)) return res.status(400).json({ error: 'accountId + matchId kravs' });
+    const players = await readPlayers();
+    const p = players.find(pl => Number(pl.steamId) === accountId);
+    if (!p) return res.status(404).json({ error: 'okant steam-konto' });
+    // logAccountId ar id:t Dota sjalv skrev i loggraden — ska normalt matcha Steam-kontot
+    if (req.body.logAccountId && String(req.body.logAccountId) !== String(accountId)) {
+      console.log('[console-event] accountId-avvikelse: steam=' + accountId + ' logg=' + req.body.logAccountId);
+    }
+    consoleMatchIdByAccount[accountId] = { matchId: matchId, ts: Date.now() };
+    console.log('[console-event]', p.name, 'ansluten till match', matchId);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── PUB-STRATEGI (omvand strategigenerering: last draft → spelplan) ──────────
 // For casual/ranked utanfor LAN: en spelare "armerar" sig via knappen pa sitt
 // spelarkort (Hero Pool-sidan). Nar GSI sedan rapporterar en match grupperas
@@ -1681,7 +1706,17 @@ app.post('/api/gsi', async (req, res) => {
     // varsin sida i samma pubmatch), samlar deras egna hjaltar fran GSI:s
     // hero-block, och ber om en topbar-screenshot nar matchen startat — bada
     // sidorna lases av i /api/overlay-capture och spelplan genereras dar. ──
-    if (Object.keys(pubArmed).length && body.player.steamid && body.map && body.map.matchid && String(body.map.matchid) !== '0') {
+    if (Object.keys(pubArmed).length && body.player.steamid) {
+      // Matchid: GSI:s map.matchid i forsta hand; console.log-tailens
+      // observation (POST /api/overlay-console-event) som fallback om
+      // GSI-faltet saknas/ar "0". Avvikelse mellan kallorna loggas —
+      // verifieringsdata for TODO-punkten om map.matchid:s palitlighet.
+      const gsiMid = (body.map && body.map.matchid && String(body.map.matchid) !== '0') ? String(body.map.matchid) : null;
+      const conEntry = consoleMatchIdByAccount[steam64ToAccountId(body.player.steamid)];
+      const conMid = (conEntry && Date.now() - conEntry.ts < 2 * 60 * 60 * 1000) ? conEntry.matchId : null;
+      if (gsiMid && conMid && gsiMid !== conMid) console.log('[PUB] matchid-avvikelse: GSI=' + gsiMid + ' console.log=' + conMid + ' — GSI anvands');
+      const pubMid = gsiMid || conMid;
+      if (pubMid) {
       pubPrune();
       const pubStates = ['DOTA_GAMERULES_STATE_HERO_SELECTION', 'DOTA_GAMERULES_STATE_STRATEGY_TIME',
         'DOTA_GAMERULES_STATE_TEAM_SHOWCASE', 'DOTA_GAMERULES_STATE_WAIT_FOR_MAP_TO_LOAD',
@@ -1689,10 +1724,10 @@ app.post('/api/gsi', async (req, res) => {
       if (pubStates.includes(state)) {
         const pubAlias = await findAliasBySteamId64(body.player.steamid);
         if (pubAlias && pubArmed[pubAlias] && !pubArmed[pubAlias].playbookMatchId) {
-          const pubKey = String(body.map.matchid) + ':' + myTeam;
+          const pubKey = pubMid + ':' + myTeam;
           let sess = pubSessions[pubKey];
           if (!sess) {
-            sess = pubSessions[pubKey] = { dotaMatchId: String(body.map.matchid), team: myTeam, players: {},
+            sess = pubSessions[pubKey] = { dotaMatchId: pubMid, team: myTeam, players: {},
               captureAttempts: 0, lastCaptureReq: 0, generating: false, failed: false, playbookMatchId: null, createdAt: Date.now() };
             console.log('[PUB] Ny session', pubKey, 'via', pubAlias);
           }
@@ -1708,6 +1743,7 @@ app.post('/api/gsi', async (req, res) => {
             console.log('[PUB] Capture-request till ' + pubAlias + ' (forsok ' + sess.captureAttempts + ')');
           }
         }
+      }
       }
     }
 

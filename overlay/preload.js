@@ -6,5 +6,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('dhsOverlay', {
   captureTopStrip: () => ipcRenderer.invoke('dhs-capture-top-strip'),
-  captureBanLog: () => ipcRenderer.invoke('dhs-capture-ban-log')
+  captureBanLog: () => ipcRenderer.invoke('dhs-capture-ban-log'),
+  // Handelser fran console.log-tailen i main.js (matchid sedd / GSI-cfg saknas)
+  onConsoleEvent: (cb) => ipcRenderer.on('dhs-console-event', (e, data) => cb(data))
 });

@@ -94,6 +94,25 @@
       .catch(function(e){ console.error('overlay poll fel', e); });
   }
 
+  // Console.log-handelser fran main-processen (se console-tail.js): matchid
+  // rapporteras till servern (verifiering/fallback for GSI:s map.matchid i
+  // pub-strategiflodet), GSI-saknas-varningen visas som lokal notis.
+  if (window.dhsOverlay && window.dhsOverlay.onConsoleEvent) {
+    window.dhsOverlay.onConsoleEvent(function (ev) {
+      if (!ev) return;
+      if (ev.type === 'match-connect' && ACCOUNT_ID) {
+        var headers = Object.assign({ 'Content-Type': 'application/json' }, authHeader());
+        fetch(CONFIG.baseUrl + '-console-event', {
+          method: 'POST', headers: headers,
+          body: JSON.stringify({ accountId: ACCOUNT_ID, logAccountId: ev.logAccountId, matchId: ev.matchId })
+        }).catch(function (e) { console.error('console-event fel', e); });
+      }
+      if (ev.type === 'gsi-missing') {
+        show('varning', 'Dota verkar inte ladda GSI-configen — kontrollera att gamestate_integration_dhs.cfg ligger i dota 2 beta/game/dota/cfg/gamestate_integration/.');
+      }
+    });
+  }
+
   setInterval(poll, CONFIG.pollMs);
   poll();
 </script>

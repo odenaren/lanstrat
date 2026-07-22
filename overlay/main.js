@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, desktopCapturer, screen } = require('electron');
 const { execSync } = require('child_process');
 const path = require('path');
+const { createConsoleTail } = require('./console-tail');
 
 // Screenshot av skarmens topp-remsa (Dota-topbaren) for fiendehjalte-avlasning.
 // BARA remsan lamnar datorn — aldrig hela skarmen. Se preload.js + servern.
@@ -103,6 +104,15 @@ if (!gotLock) {
     loadWithCurrentAccount();
     // Om Steam startas/loggas in EFTER widgeten — hamta ratt konto inom 10 sek utan omstart.
     setInterval(loadWithCurrentAccount, 10000);
+
+    // Taila Dota:s console.log (kraver -condebug i launch options, se
+    // console-tail.js): matchid rapporteras till servern via renderern
+    // (som har baseUrl+losenord fran config.js), GSI-saknas-varningen
+    // visas lokalt i overlayn. Saknas loggen gor tailern ingenting.
+    const tail = createConsoleTail(function (ev) {
+      if (win) win.webContents.send('dhs-console-event', ev);
+    });
+    setInterval(tail.poll, 3000);
   }
 
   app.whenReady().then(() => {
