@@ -507,6 +507,35 @@ function buildSeasonContext(allMatches, currentMatch, archetypeLabels) {
   return lines.join('\n');
 }
 
+// Pre-match sasongskontext for hype-announcern — draft-OBEROENDE lag-narrativ (facit + svit + matchnummer),
+// till skillnad fran buildSeasonContext som ar draft-/resultatberoende och racknas EFTER matchen. Racker for
+// hype eftersom draften genereras i samma AI-anrop och alltsa inte finns nar hype-texten skrivs.
+function buildPreMatchSeasonContext(allMatches) {
+  const resultOf = m => m.matchResult || m.result || null; // bada falten forekommer (kand inkonsekvens)
+  const season = (allMatches || [])
+    .filter(m => !m.excludeFromMemory && m.mode !== 'pub' && resultOf(m))
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  const gameNumber = season.length + 1;
+  if (season.length < 2) return { gameNumber, record: { wins: 0, losses: 0 }, streak: null, recentForm: [], text: null };
+
+  const forms = season.map(m => resultOf(m) === 'win' ? 'win' : 'loss');
+  const wins = forms.filter(r => r === 'win').length;
+  const losses = forms.length - wins;
+
+  const last = forms[forms.length - 1];
+  let streakLen = 1;
+  for (let i = forms.length - 2; i >= 0 && forms[i] === last; i--) streakLen++;
+  const streak = streakLen >= 2 ? { type: last, length: streakLen } : null;
+  const recentForm = forms.slice(-5);
+
+  const parts = ['This is game ' + gameNumber + ' of the season.'];
+  parts.push('DHS season record so far: ' + wins + 'W-' + losses + 'L.');
+  if (streak) parts.push('Going into tonight the squad is on a ' + streak.length + '-game ' + (streak.type === 'win' ? 'winning' : 'losing') + ' streak.');
+  parts.push('Recent form (oldest to newest): ' + recentForm.map(r => r === 'win' ? 'W' : 'L').join('-') + '.');
+
+  return { gameNumber, record: { wins, losses }, streak, recentForm, text: parts.join(' ') };
+}
+
 async function generateStudioForMatch(strategyMatch, force) {
   const odId = strategyMatch.openDotaMatchId;
   if (strategyMatch.studioBinId && !force) return { alreadyExists: true };
@@ -1209,6 +1238,12 @@ async function regenerateChallengeForAlias(matchId, alias, newHero) {
 // MATCHES
 app.get('/api/matches', async (req, res) => {
   try { res.json(await readMatches()); }
+  catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Sasongskontext for hype-announcern (draft-oberoende lag-narrativ) — index.html bakar in text-faltet i strategipromten
+app.get('/api/season-context', async (req, res) => {
+  try { res.json(buildPreMatchSeasonContext(await readMatches())); }
   catch(e) { res.status(500).json({ error: e.message }); }
 });
 
