@@ -83,6 +83,8 @@ Sånt som inte finns än — helt nya delar av produkten.
 Befintliga funktioner som funkar men kan bli bättre.
 
 - **Streaming av strategitext** — visa AI-svaret i realtid medan det genereras istället för att vänta på hela svaret innan något visas.
+- **Designlaboration: ny visuell identitet för Playbook** *(idé 2026-07-22, ej påbörjad)* — nuvarande UI är funktionellt och Dota-relevant men ganska Dota-generiskt (guld på svart). Målet: laborera med helt olika visuella identiteter där FUNKTIONEN ÄR EXAKT DENSAMMA — ingen markup- eller JS-ändring, inget flöde ändras.
+  **Arbetsgång (beslutad med Claude):** (1) ev. strukturerad designkritik av nuläget först; (2) Claude bygger 3–4 fristående statiska mockup-varianter som privata artifact-sidor med samma komponenter och fejkdata (spelarkort, strategivy, historik med badges, detaljvy) — produktionskoden rörs inte alls under laborationen, mockuperna jämförs i mobilen; (3) vinnaren portas i första hand som ett CSS-jobb: `index.html` styr redan det mesta via CSS-variabler (`--gold`, `--surface2`, `--border` …), så en reskin ≈ nytt `:root`-block + typsnitt + begränsade riktade regler. Kandidatriktningar: broadcast/ESL-grafik (lower thirds, tickers), militärbriefing/terminal (rimmar med Kaptensbriefing), sportredaktionellt (tidningslayout), minimalt/skandinaviskt. Triggas genom att be Claude "kör designkritiken" / "bygg designvarianterna" i en session.
 
 ## Buggfixar / teknisk skuld
 
