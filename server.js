@@ -397,6 +397,116 @@ async function findAliasBySteamId64(steamid64) {
   return p ? p.name : null;
 }
 
+// ── SASONGSKONTEXT (storylines over sasongen) ────────────────────────────────
+// Deterministiska fakta ur matchhistoriken (bara matches-binen, inga extra
+// OpenDota-anrop): lagets och spelarnas sviter, hjaltupprepningar, arketypfacit,
+// aterkommande fiendehjaltar och lagkamratpar. Koden raknar — AI:n far bara
+// formulera (projektregel: hitta aldrig pa data). Pubmatcher (mode:'pub') och
+// excludeFromMemory-matcher raknas inte in i sasongen.
+// OBS: identisk kopia finns i generate-studio.js — hall dem synkade.
+const SEASON_ALIAS_MERGE = { 'TOBBE': 'PUGGE' }; // PUGGE har alias Tobbe/TOBBE — mergas i all aggregering (samma som statssidan)
+function seasonAlias(name) {
+  const up = String(name || '').toUpperCase();
+  return SEASON_ALIAS_MERGE[up] || up;
+}
+function seasonOrd(n) {
+  return n + (n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th');
+}
+function buildSeasonContext(allMatches, currentMatch, archetypeLabels) {
+  const resultOf = m => m.matchResult || m.result || null; // bada falten forekommer (kand inkonsekvens)
+  const season = allMatches
+    .filter(m => !m.excludeFromMemory && m.mode !== 'pub' && resultOf(m))
+    .filter(m => new Date(m.createdAt) <= new Date(currentMatch.createdAt))
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  const games = season.map((m, i) => ({
+    num: m.gameNumber || (i + 1),
+    id: m.id,
+    win: resultOf(m) === 'win',
+    draft: m.currentDraft || m.draft || {},
+    enemies: m.enemies || [],
+    archetype: m.archetype || null,
+    wildcard: !!m.wildcard
+  }));
+  const curIdx = games.findIndex(g => g.id === currentMatch.id);
+  if (curIdx === -1 || games.length < 3) return null; // kvallens match saknar resultat/ar exkluderad, eller for lite historik
+  const cur = games[curIdx];
+  const upTo = games.slice(0, curIdx + 1); // sasongen t.o.m. kvallen
+  const before = upTo.slice(0, -1);
+  const lines = [];
+
+  const wins = upTo.filter(g => g.win).length;
+  lines.push('DHS season record incl. tonight: ' + wins + 'W-' + (upTo.length - wins) + 'L over ' + upTo.length + ' games.');
+
+  let streak = 1;
+  for (let i = upTo.length - 2; i >= 0 && upTo[i].win === cur.win; i--) streak++;
+  if (streak >= 2) lines.push('The squad is on a ' + streak + '-game ' + (cur.win ? 'winning' : 'losing') + ' streak, tonight included.');
+
+  Object.keys(cur.draft).forEach(rawAlias => {
+    const alias = seasonAlias(rawAlias);
+    const inDraft = g => Object.keys(g.draft).some(a => seasonAlias(a) === alias);
+    const mine = upTo.filter(inDraft);
+    if (mine.length < 2) return;
+    const w = mine.filter(g => g.win).length;
+    let line = rawAlias + ': ' + w + 'W-' + (mine.length - w) + 'L in the games ' + rawAlias + ' played this season';
+    let ps = 1;
+    for (let i = mine.length - 2; i >= 0 && mine[i].win === cur.win; i--) ps++;
+    if (ps >= 2) line += '; ' + ps + ' straight personal ' + (cur.win ? 'wins' : 'losses');
+    const hero = cur.draft[rawAlias];
+    const prevOnHero = before.filter(g => Object.keys(g.draft).some(a => seasonAlias(a) === alias && g.draft[a] === hero));
+    if (prevOnHero.length) {
+      const hw = prevOnHero.filter(g => g.win).length;
+      line += '; plays ' + hero + ' for the ' + seasonOrd(prevOnHero.length + 1) + ' time (' + hw + 'W-' + (prevOnHero.length - hw) + 'L on it before tonight)';
+    } else {
+      line += '; first season game on ' + hero;
+    }
+    lines.push(line + '.');
+  });
+
+  if (cur.archetype) {
+    const label = (archetypeLabels && archetypeLabels[cur.archetype]) || cur.archetype;
+    const prevArch = before.filter(g => g.archetype === cur.archetype);
+    if (!prevArch.length) lines.push("Tonight's archetype (" + label + ') was played for the FIRST time this season.');
+    else {
+      const aw = prevArch.filter(g => g.win).length;
+      lines.push("Tonight's archetype (" + label + '): played for the ' + seasonOrd(prevArch.length + 1) + ' time; ' + aw + 'W-' + (prevArch.length - aw) + 'L before tonight.');
+    }
+  }
+
+  (cur.enemies || []).map(hero => {
+    const prevE = before.filter(g => (g.enemies || []).includes(hero));
+    return { hero, prevE };
+  }).filter(x => x.prevE.length >= 1)
+    .sort((a, b) => b.prevE.length - a.prevE.length).slice(0, 3)
+    .forEach(x => {
+      const w = x.prevE.filter(g => g.win).length;
+      lines.push('Enemy ' + x.hero + ' showed up for the ' + seasonOrd(x.prevE.length + 1) + ' time this season — DHS were ' + w + 'W-' + (x.prevE.length - w) + 'L against it before tonight.');
+    });
+
+  // Lagkamratpar som spelar ihop igen efter lang paus (max 1, minst 5 spel sedan sist)
+  const curAliasKeys = Object.keys(cur.draft);
+  let bestPair = null;
+  for (let i = 0; i < curAliasKeys.length; i++) for (let j = i + 1; j < curAliasKeys.length; j++) {
+    const a = seasonAlias(curAliasKeys[i]), b = seasonAlias(curAliasKeys[j]);
+    let lastNum = null;
+    before.forEach(g => {
+      const al = Object.keys(g.draft).map(seasonAlias);
+      if (al.includes(a) && al.includes(b)) lastNum = g.num;
+    });
+    if (lastNum !== null && cur.num - lastNum >= 5 && (!bestPair || cur.num - lastNum > bestPair.gap)) {
+      bestPair = { gap: cur.num - lastNum, text: curAliasKeys[i] + ' and ' + curAliasKeys[j] + ' are teammates again for the first time since game ' + lastNum + '.' };
+    }
+  }
+  if (bestPair) lines.push(bestPair.text);
+
+  if (cur.wildcard) {
+    const prevW = before.filter(g => g.wildcard);
+    const ww = prevW.filter(g => g.win).length;
+    lines.push('Tonight was a WILDCARD game (AI given free rein)' + (prevW.length ? '; previous wildcard games: ' + ww + 'W-' + (prevW.length - ww) + 'L.' : ' — the first one this season.'));
+  }
+
+  return lines.join('\n');
+}
+
 async function generateStudioForMatch(strategyMatch, force) {
   const odId = strategyMatch.openDotaMatchId;
   if (strategyMatch.studioBinId && !force) return { alreadyExists: true };
@@ -498,6 +608,11 @@ async function generateStudioForMatch(strategyMatch, force) {
   try { history = JSON.parse(fs.readFileSync(RECAP_HISTORY_FILE, 'utf8')); } catch(e) {}
   const recentAngles = history.slice(-4).flatMap(h => h.angles || []);
 
+  // Sasongskontext for storylines — deterministiskt beraknad ur matchhistoriken
+  let seasonContext = null;
+  try { seasonContext = buildSeasonContext(await readMatches(), strategyMatch, STUDIO_ARCHETYPE_LABELS); }
+  catch (e) { console.error('SeasonContext:', e.message); }
+
   const prompt = 'You are writing the post-match STUDIO segment for an esports broadcast at a private Dota 2 LAN (Dreamhack Skyrup). '
     + 'Three voices on the panel: HOST (curious, guides the conversation, asks real questions, occasionally challenges), '
     + 'ANALYST1 (female, the strategic mind: big picture, momentum, macro decisions, what the teams were TRYING to do) and '
@@ -520,6 +635,9 @@ async function generateStudioForMatch(strategyMatch, force) {
     + '\n\nPERSONAL CHALLENGES: if personal_challenges is present in MATCH DATA, each DHS player had a public personal '
     + 'challenge for this match, with verified results. Weave the 1-3 most interesting outcomes into the discussion — '
     + 'celebrate a clutch clear or roast a spectacular fail. Do NOT recite the full challenge list.'
+    + (seasonContext ? '\n\nSEASON CONTEXT — verified facts computed in code from the season\'s match history. '
+      + 'Use them for storyline continuity across the season: streaks, revenge games, firsts, deja vu. Weave in the 1-2 '
+      + 'that genuinely fit tonight\'s story — never recite the list, and NEVER invent season facts beyond these:\n' + seasonContext : '')
     + (recentAngles.length ? '\n\nANGLES ALREADY USED in recent recaps tonight (find DIFFERENT threads): ' + recentAngles.join('; ') : '')
     + '\n\nFormat: 10-14 dialogue lines. HOST opens with a short scene-setting line and closes the segment. '
     + 'Both analysts must speak multiple times, and at least once react directly to what the OTHER analyst just said. '
