@@ -1680,7 +1680,7 @@ async function loadHistory() {
       <div class="match-entry-date">${date}</div>
       <div style="flex:1">
         <div class="match-entry-players">${playerNames}</div>
-        ${m.name?`<div style="font-size:12px;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-top:2px"><span style="color:${m.wildcard?'#9b59b6':'var(--gold)'}">${m.name}</span>${m.wildcard?' <span style="font-size:10px;background:rgba(155,89,182,.2);border:1px solid #8e44ad88;color:#9b59b6;padding:1px 6px;border-radius:3px;vertical-align:middle">🎲 WILD</span>':''} ${m.style&&m.style!=='standard'?'<span style="font-size:10px;background:rgba(200,155,60,.08);border:1px solid var(--gold-dim);color:var(--gold);padding:1px 6px;border-radius:3px;vertical-align:middle">'+m.style+'</span>':''}</div>`:""}
+        ${m.name?`<div style="font-size:12px;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-top:2px"><span style="color:${m.wildcard?'#9b59b6':'var(--gold)'}">${m.name}</span>${m.wildcard?' <span style="font-size:10px;background:rgba(155,89,182,.2);border:1px solid #8e44ad88;color:#9b59b6;padding:1px 6px;border-radius:3px;vertical-align:middle">🎲 WILD</span>':''}${m.mode==='pub'?' <span title="Genererad omvänt: draften var redan låst, strategin skrevs för den" style="font-size:10px;background:rgba(230,126,34,.15);border:1px solid #e67e2288;color:#e67e22;padding:1px 6px;border-radius:3px;vertical-align:middle">↩ PUB</span>':''} ${m.style&&m.style!=='standard'?'<span style="font-size:10px;background:rgba(200,155,60,.08);border:1px solid var(--gold-dim);color:var(--gold);padding:1px 6px;border-radius:3px;vertical-align:middle">'+m.style+'</span>':''}</div>`:""}
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${(m.players||[]).map(p=>{
           const hero=(m.draft||{})[p.name];
           const img=hero?heroImgByName(hero):null;
@@ -2185,7 +2185,7 @@ async function openDetail(id) {
   currentEnemies = new Set(m.enemies||[]);
   var date = new Date(m.createdAt).toLocaleString('sv-SE',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
   document.getElementById('detail-title').textContent = m.name||(m.players||[]).map(function(p){return p.name;}).join(' / ');
-  document.getElementById('detail-date').textContent = date;
+  document.getElementById('detail-date').textContent = date + (m.mode === 'pub' ? ' · ↩ Pub-strategi — genererad omvänt från en redan låst draft' : '');
 
   // Result buttons
   var resultEl = document.getElementById('match-result-btns');
