@@ -2564,7 +2564,7 @@ function slimOdMatch(od) {
         players: (tf.players||[]).map(function(p){ return { deaths: p.deaths||0, gold_delta: p.gold_delta||0 }; }) };
     }),
     players: (od.players||[]).map(function(p){ return {
-      player_slot: p.player_slot, hero_id: p.hero_id, kills: p.kills, deaths: p.deaths, assists: p.assists,
+      player_slot: p.player_slot, account_id: p.account_id, hero_id: p.hero_id, kills: p.kills, deaths: p.deaths, assists: p.assists,
       gold_per_min: p.gold_per_min, xp_per_min: p.xp_per_min, net_worth: p.net_worth,
       hero_damage: p.hero_damage, tower_damage: p.tower_damage, stuns: p.stuns,
       teamfight_participation: p.teamfight_participation, firstblood_claimed: p.firstblood_claimed
@@ -2572,7 +2572,7 @@ function slimOdMatch(od) {
   };
 }
 async function fetchOdMatch(matchId) {
-  var key = 'odm_v2_' + matchId;
+  var key = 'odm_v3_' + matchId;
   try { var c = localStorage.getItem(key); if(c) return JSON.parse(c); } catch(e){}
   var res = await fetch('https://api.opendota.com/api/matches/' + matchId);
   if(!res.ok) throw new Error('HTTP ' + res.status);
@@ -2768,9 +2768,13 @@ async function loadOpenDotaStats(m) {
   // --- 2. Lagen: era fem + deras fem, med portratt och riktiga namn ---
   html += '<div style="display:flex;flex-wrap:wrap;gap:24px;margin-bottom:20px">';
   html += '<div><div style="font-family:Rajdhani,sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gold);margin-bottom:6px">Ert lag ('+(weAreRadiant?'Radiant':'Dire')+')</div><div style="display:flex;gap:8px;flex-wrap:wrap">';
-  ourRows.forEach(function(r){
-    if(r.od) html += heroChip(odHeroImg(r.od.hero_id), r.alias, odHeroName(r.od.hero_id), true);
-    else html += heroChip(null, r.alias, r.draftHero + ' (ej matchad)', true);
+  ourIdx.forEach(function(i){
+    var p = od.players[i];
+    var mine = matched.find(function(r){ return r.od === p; });
+    var kda = p.kills+'/'+p.deaths+'/'+p.assists;
+    var top = mine ? mine.alias : odHeroName(p.hero_id);
+    var sub = mine ? (odHeroName(p.hero_id) + ' · ' + kda) : kda;
+    html += heroChip(odHeroImg(p.hero_id), top, sub, true);
   });
   html += '</div></div>';
   html += '<div><div style="font-family:Rajdhani,sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">Motståndarna</div><div style="display:flex;gap:8px;flex-wrap:wrap">';
