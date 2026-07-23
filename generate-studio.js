@@ -295,8 +295,15 @@ async function generateForMatch(strategyMatch, heroes, allMatches) {
       if (!row) return { alias: ch.alias, challenge: ch.text, result: 'unknown — player not found in match data' };
       const raw = ch.metric === 'stuns' ? (row.stuns || 0) : (row[ch.metric] || 0);
       const actual = Math.round(raw);
-      const passed = ch.op === '<=' ? actual <= ch.value : actual >= ch.value;
-      return { alias: ch.alias, challenge: ch.text, target: ch.op + ' ' + ch.value + ' ' + ch.metric, actual, passed };
+      // Tre trosklar (niva 1-3, latt->svar); aldre matcher har bara ett `value` som fallback
+      const levels = (Array.isArray(ch.levels) && ch.levels.length && ch.levels.every(n => typeof n === 'number')) ? ch.levels : (typeof ch.value === 'number' ? [ch.value] : []);
+      let level = 0;
+      for (let i = 0; i < levels.length; i++) {
+        const ok = ch.op === '<=' ? actual <= levels[i] : actual >= levels[i];
+        if (ok) level = i + 1;
+      }
+      const target = levels.length ? levels.map((v, i) => 'L' + (i + 1) + ' ' + ch.op + v).join(' / ') + ' ' + ch.metric : (ch.op + ' ' + ch.value + ' ' + ch.metric);
+      return { alias: ch.alias, challenge: ch.text, target, actual, passed: level >= 1, achieved_level: level, max_level: levels.length };
     });
   }
 
@@ -352,8 +359,9 @@ async function generateForMatch(strategyMatch, heroes, allMatches) {
     + '\n\nPERSONAL COLOR: Where the data genuinely earns it, drop a natural personal remark about one of the DHS players — '
     + 'one or two per recap. NEVER walk through the roster player by player; most of our players should go unmentioned.'
     + '\n\nPERSONAL CHALLENGES: if personal_challenges is present in MATCH DATA, each DHS player had a public personal '
-    + 'challenge for this match, with verified results. Weave the 1-3 most interesting outcomes into the discussion — '
-    + 'celebrate a clutch clear or roast a spectacular fail. Do NOT recite the full challenge list.'
+    + 'challenge for this match, with verified results. Each challenge has three escalating levels (L1 hard, L2 harder, '
+    + 'L3 nearly impossible); achieved_level says how far they got (0 = missed even L1, 3 = the near-impossible feat). '
+    + 'Weave the 1-3 most interesting outcomes into the discussion — a level 3 is a huge deal, a 0 is a flop. Do NOT recite the full challenge list.'
     + (seasonContext ? '\n\nSEASON CONTEXT — verified facts computed in code from the season\'s match history. '
       + 'Use them for storyline continuity across the season: streaks, revenge games, firsts, deja vu. Weave in the 1-2 '
       + 'that genuinely fit tonight\'s story — never recite the list, and NEVER invent season facts beyond these:\n' + seasonContext : '')

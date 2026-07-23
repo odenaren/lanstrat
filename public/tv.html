@@ -76,6 +76,7 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
 .ch-player{font-size:20px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;}
 .ch-hero{font-size:12px;color:var(--text-dim);letter-spacing:.1em;text-transform:uppercase;margin-top:2px;}
 .ch-text{font-size:17px;color:var(--text);margin-top:10px;line-height:1.45;font-style:italic;}
+.ch-levels{font-size:13px;color:#b980e0;margin-top:12px;letter-spacing:.04em;line-height:1.6;}
 
 /* DRAFT OVERVIEW */
 #overview{display:none;flex-direction:column;align-items:center;justify-content:center;gap:40px;padding:60px;}
@@ -489,6 +490,10 @@ function show(id) {
 }
 
 function wait(ms) { return new Promise(function(r){ setTimeout(r, ms); }); }
+var CH_METRIC_LABELS_TV = { kills:'kills', deaths:'dödsfall', assists:'assists', last_hits:'last hits', denies:'denies',
+  gold_per_min:'GPM', xp_per_min:'XPM', hero_damage:'hjälteskada', tower_damage:'tornskada', hero_healing:'healing',
+  obs_placed:'obs wards', sen_placed:'sentry wards', stuns:'stun-sek' };
+function chMetricLabelTv(m){ return CH_METRIC_LABELS_TV[m] || m; }
 
 var _audioUnlocked = false;
 
@@ -762,6 +767,13 @@ function fadeAudio(el, from, to, durationMs, onDone) {
         var he = document.createElement('div'); he.className = 'ch-hero'; he.textContent = draft[ch.alias] || '';
         var tx = document.createElement('div'); tx.className = 'ch-text'; tx.textContent = ch.text;
         card.appendChild(pl); card.appendChild(he); card.appendChild(tx);
+        var chLevels = (ch.levels && ch.levels.length) ? ch.levels : (typeof ch.value === 'number' ? [ch.value] : []);
+        if(chLevels.length > 1) {
+          var pre = ch.op === '<=' ? 'max ' : '';
+          var lv = document.createElement('div'); lv.className = 'ch-levels';
+          lv.textContent = chLevels.map(function(v,i){ return 'Nivå ' + (i+1) + ': ' + pre + v; }).join('   ·   ') + ' ' + chMetricLabelTv(ch.metric);
+          card.appendChild(lv);
+        }
         chCards.appendChild(card);
         return card;
       });

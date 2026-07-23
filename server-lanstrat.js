@@ -607,7 +607,7 @@ async function generateStudioForMatch(strategyMatch, force) {
       const row = odRowByAlias[ch.alias];
       if (!row) return { alias: ch.alias, challenge: ch.text, result: 'unknown — player not found in match data' };
       const r = evalChallenge(ch, row);
-      return { alias: ch.alias, challenge: ch.text, target: ch.op + ' ' + ch.value + ' ' + ch.metric, actual: r.actual, passed: r.passed };
+      return { alias: ch.alias, challenge: ch.text, target: challengeTargetLabel(ch), actual: r.actual, passed: r.passed, achieved_level: r.level, max_level: r.maxLevel };
     });
   }
 
@@ -662,8 +662,9 @@ async function generateStudioForMatch(strategyMatch, force) {
     + '\n\nPERSONAL COLOR: Where the data genuinely earns it, drop a natural personal remark about one of the DHS players — '
     + 'one or two per recap. NEVER walk through the roster player by player; most of our players should go unmentioned.'
     + '\n\nPERSONAL CHALLENGES: if personal_challenges is present in MATCH DATA, each DHS player had a public personal '
-    + 'challenge for this match, with verified results. Weave the 1-3 most interesting outcomes into the discussion — '
-    + 'celebrate a clutch clear or roast a spectacular fail. Do NOT recite the full challenge list.'
+    + 'challenge for this match, with verified results. Each challenge has three escalating levels (L1 hard, L2 harder, '
+    + 'L3 nearly impossible); achieved_level says how far they got (0 = missed even L1, 3 = the near-impossible feat). '
+    + 'Weave the 1-3 most interesting outcomes into the discussion — a level 3 is a huge deal, a 0 is a flop. Do NOT recite the full challenge list.'
     + (seasonContext ? '\n\nSEASON CONTEXT — verified facts computed in code from the season\'s match history. '
       + 'Use them for storyline continuity across the season: streaks, revenge games, firsts, deja vu. Weave in the 1-2 '
       + 'that genuinely fit tonight\'s story — never recite the list, and NEVER invent season facts beyond these:\n' + seasonContext : '')
@@ -1147,11 +1148,32 @@ const CHALLENGE_METRICS = {
   stuns: 'stun-sekunder totalt'
 };
 
+// Tre trosklar per utmaning (niva 1-3, ordnade latt->svar). Aldre matcher har
+// bara ett enda `value` — fall tillbaka pa det sa gammal data fortfarande funkar.
+function challengeLevels(ch) {
+  if (Array.isArray(ch.levels) && ch.levels.length && ch.levels.every(n => typeof n === 'number')) return ch.levels;
+  if (typeof ch.value === 'number') return [ch.value];
+  return [];
+}
+
+// Kompakt malbeskrivning at studiopromtens MATCH DATA (t.ex. "L1 <=4 / L2 <=2 / L3 <=0 deaths")
+function challengeTargetLabel(ch) {
+  const levels = challengeLevels(ch);
+  if (!levels.length) return ch.op + ' ' + ch.value + ' ' + ch.metric;
+  return levels.map((v, i) => 'L' + (i + 1) + ' ' + ch.op + v).join(' / ') + ' ' + ch.metric;
+}
+
 function evalChallenge(ch, odRow) {
   const raw = ch.metric === 'stuns' ? (odRow.stuns || 0) : (odRow[ch.metric] || 0);
   const actual = Math.round(raw);
-  const passed = ch.op === '<=' ? actual <= ch.value : actual >= ch.value;
-  return { actual, passed };
+  const levels = challengeLevels(ch);
+  // Hogsta niva vars troskel klaras (nivaerna ar monotona latt->svar)
+  let level = 0;
+  for (let i = 0; i < levels.length; i++) {
+    const ok = ch.op === '<=' ? actual <= levels[i] : actual >= levels[i];
+    if (ok) level = i + 1;
+  }
+  return { actual, passed: level >= 1, level, maxLevel: levels.length };
 }
 
 async function generateChallengesForMatch(matchId) {
@@ -1165,13 +1187,18 @@ async function generateChallengesForMatch(matchId) {
   const prompt = 'Du ar utmaningsgeneratorn for en Dota 2-LAN-kvall. Laget har fatt en hemlig strategi och varje spelare en roll. '
     + 'Skapa EN personlig utmaning per spelare, anpassad efter spelarens hjalte och roll i strategin. '
     + 'Utmaningen ska vara matbar via OpenDota-statistik och REALISTISK for rollen: en support ska fa ward/assist/stun-utmaningar, '
-    + 'en carry farm/damage-utmaningar, en offlane tanka/disrupta. Svarighetsgrad: klarbar men inte gratis — man ska behova tanka pa den under matchen.'
+    + 'en carry farm/damage-utmaningar, en offlane tanka/disrupta.'
+    + '\n\nVarje utmaning har TRE nivaer pa SAMMA metric — en brant, ICKE-LINJAR svarighetstrappa (hoppen mellan nivaerna ska OKA, inte vara jamnt fordelade):'
+    + '\n- Niva 1: redan ganska svar (klart over genomsnittet for rollen, aldrig gratis).'
+    + '\n- Niva 2: svar.'
+    + '\n- Niva 3: nastan omojlig — en exceptionell insats som bara hander valdigt sallan (t.ex. for en do-sallan-utmaning: niva 3 = 0 deaths).'
     + '\n\nTillgangliga metrics (anvand exakt dessa nycklar): ' + JSON.stringify(CHALLENGE_METRICS)
     + '\nop ar ">=" (minst) eller "<=" (hogst, typiskt for deaths).'
+    + '\n"levels" ordnas alltid niva 1 -> niva 3. For op ">=" ska vardena STIGA (niva 3 hogst); for op "<=" ska de SJUNKA (niva 3 lagst, ofta 0).'
     + '\n\nDRAFT (spelare -> hjalte): ' + JSON.stringify(draft)
     + '\nSTRATEGI (roller och plan): ' + (match.currentStrategy || match.strategy || '').slice(0, 1500)
     + '\n\nSvara ENDAST med JSON, ingen markdown:'
-    + '\n{"challenges":[{"alias":"exakt spelarnamn ur draften","text":"kort slagkraftig utmaningstext pa svenska, max 12 ord","metric":"nyckel ur menyn","op":">=","value":42}]}';
+    + '\n{"challenges":[{"alias":"exakt spelarnamn ur draften","text":"kort slagkraftig utmaningstext pa svenska, max 12 ord","metric":"nyckel ur menyn","op":">=","levels":[42,60,85]}]}';
 
   const text = (await callClaude(prompt, 1500)).replace(/```json|```/g, '').trim();
   const jsonStart = text.indexOf('{');
@@ -1181,7 +1208,8 @@ async function generateChallengesForMatch(matchId) {
 
   const valid = (parsed.challenges || []).filter(c =>
     c && aliases.includes(c.alias) && CHALLENGE_METRICS[c.metric]
-    && (c.op === '>=' || c.op === '<=') && typeof c.value === 'number' && c.text
+    && (c.op === '>=' || c.op === '<=') && c.text
+    && Array.isArray(c.levels) && c.levels.length === 3 && c.levels.every(n => typeof n === 'number')
   );
   if (!valid.length) throw new Error('Inga giltiga utmaningar i AI-svaret');
 
@@ -1189,7 +1217,8 @@ async function generateChallengesForMatch(matchId) {
   const fresh = await readMatches();
   const freshMatch = fresh.find(m => m.id === matchId);
   if (!freshMatch) return;
-  freshMatch.challenges = valid.map(c => ({ alias: c.alias, text: c.text, metric: c.metric, op: c.op, value: c.value }));
+  // value = niva 1 (bakatkompatibilitet: aldre lasare och GSI-castern laser `value`)
+  freshMatch.challenges = valid.map(c => ({ alias: c.alias, text: c.text, metric: c.metric, op: c.op, levels: c.levels, value: c.levels[0] }));
   await writeMatches(fresh);
   console.log('Utmaningar genererade for match ' + matchId + ' (' + valid.length + ' st)');
 }
@@ -1207,20 +1236,24 @@ async function regenerateChallengeForAlias(matchId, alias, newHero) {
 
     const prompt = 'Du ar utmaningsgeneratorn for en Dota 2-LAN-kvall. En spelares hjalte har just bytts ut mitt i draften (bannlyst/taget). '
       + 'Skapa EN ny personlig utmaning for just den har spelaren, anpassad efter deras NYA hjalte och roll i strategin. '
-      + 'Matbar via OpenDota-statistik, realistisk for rollen, klarbar men inte gratis — man ska behova tanka pa den under matchen.\n\n'
+      + 'Matbar via OpenDota-statistik, realistisk for rollen.\n\n'
+      + 'Utmaningen har TRE nivaer pa SAMMA metric — en brant, ICKE-LINJAR svarighetstrappa (hoppen mellan nivaerna ska OKA): '
+      + 'niva 1 = redan ganska svar (aldrig gratis), niva 2 = svar, niva 3 = nastan omojlig (en exceptionell insats som sallan hander, t.ex. 0 deaths).\n\n'
       + 'Tillgangliga metrics (anvand exakt dessa nycklar): ' + JSON.stringify(CHALLENGE_METRICS)
       + '\nop ar ">=" (minst) eller "<=" (hogst, typiskt for deaths).'
+      + '\n"levels" ordnas niva 1 -> niva 3. For op ">=" ska vardena STIGA (niva 3 hogst); for op "<=" ska de SJUNKA (niva 3 lagst).'
       + '\n\nSPELARE: ' + alias + '\nNY HJALTE: ' + newHero
       + '\nSTRATEGI (roller och plan): ' + (match.currentStrategy || match.strategy || '').slice(0, 1500)
       + '\n\nSvara ENDAST med JSON, ingen markdown:'
-      + '\n{"text":"kort slagkraftig utmaningstext pa svenska, max 12 ord","metric":"nyckel ur menyn","op":">=","value":42}';
+      + '\n{"text":"kort slagkraftig utmaningstext pa svenska, max 12 ord","metric":"nyckel ur menyn","op":">=","levels":[42,60,85]}';
 
     const text = (await callClaude(prompt, 500)).replace(/```json|```/g, '').trim();
     const jsonStart = text.indexOf('{');
     const jsonEnd = text.lastIndexOf('}');
     if (jsonStart === -1 || jsonEnd === -1) return;
     const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1));
-    if (!(parsed && CHALLENGE_METRICS[parsed.metric] && (parsed.op === '>=' || parsed.op === '<=') && typeof parsed.value === 'number' && parsed.text)) return;
+    if (!(parsed && CHALLENGE_METRICS[parsed.metric] && (parsed.op === '>=' || parsed.op === '<=') && parsed.text
+      && Array.isArray(parsed.levels) && parsed.levels.length === 3 && parsed.levels.every(n => typeof n === 'number'))) return;
 
     // Las om binen — annan skrivning kan ha hunnit fore under AI-anropet
     const fresh = await readMatches();
@@ -1228,7 +1261,7 @@ async function regenerateChallengeForAlias(matchId, alias, newHero) {
     if (!freshMatch || !Array.isArray(freshMatch.challenges)) return;
     const idx = freshMatch.challenges.findIndex(c => c.alias === alias);
     if (idx === -1) return;
-    freshMatch.challenges[idx] = { alias, text: parsed.text, metric: parsed.metric, op: parsed.op, value: parsed.value };
+    freshMatch.challenges[idx] = { alias, text: parsed.text, metric: parsed.metric, op: parsed.op, levels: parsed.levels, value: parsed.levels[0] };
     await writeMatches(fresh);
     pushOverlay(alias, 'challenge-update', 'Ny utmaning', parsed.text);
     console.log('[GSI] Utmaning omgenererad for', alias, '(' + newHero + '):', parsed.text);
