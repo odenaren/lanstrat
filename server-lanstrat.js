@@ -1168,7 +1168,7 @@ const CHALLENGE_TIMELINE_METRICS = { lh_t: 'last hits vid minut `at`', gold_t: '
 // Item-timing — kraver faltet `item` (nyckel ur menyn). Levels ar MINUTER, op '<=' (tidigare = svarare).
 // Alla nycklar verifierade mot OpenDotas item-konstanter.
 const CHALLENGE_ITEMS = {
-  blink: 'Blink Dagger', black_king_bar: 'BKB', manta: 'Manta Style', radiance: 'Radiance', desolator: 'Desolator',
+  blink: 'Blink Dagger', black_king_bar: 'BKB', manta: 'Manta Style', radiance: 'Radiance', desolator: 'Desolator', bfury: 'Battle Fury',
   power_treads: 'Power Treads', phase_boots: 'Phase Boots', arcane_boots: 'Arcane Boots', travel_boots: 'Boots of Travel',
   hand_of_midas: 'Hand of Midas', maelstrom: 'Maelstrom', mjollnir: 'Mjollnir', diffusal_blade: 'Diffusal Blade',
   echo_sabre: 'Echo Sabre', dragon_lance: 'Dragon Lance', ultimate_scepter: 'Aghanims Scepter', aghanims_shard: 'Aghanims Shard',
