@@ -133,6 +133,10 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .badge-no-items{background:rgba(44,224,224,.1);border:1px solid var(--gold-dim);color:var(--gold);}
 .match-entry-del{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px;padding:4px;opacity:.5;transition:opacity .15s;}
 .match-entry-del:hover{opacity:1;color:var(--red);}
+/* Klickbara statistikkort/-rader som lankar till en match */
+.stat-click{cursor:pointer;transition:border-color .15s,background .15s;}
+.stat-click:hover{border-color:var(--gold-dim);background:var(--surface);}
+tr.stat-click:hover{background:rgba(44,224,224,.06);}
 /* MATCH DETAIL PAGE */
 .detail-layout{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
 @media(max-width:900px){.detail-layout{grid-template-columns:1fr;}}
@@ -2046,7 +2050,7 @@ async function loadStats() {
       if(r.level >= 3) {
         chStats[pl].lvl3++;
         var chDef = (m.challenges||[]).find(function(c){ return c.alias === r.alias; });
-        chLvl3Feats.push({ pl:pl, text:(chDef?chDef.text:''), gameNumber:m.gameNumber });
+        chLvl3Feats.push({ pl:pl, text:(chDef?chDef.text:''), gameNumber:m.gameNumber, id:m.id });
       }
     });
   });
@@ -2123,7 +2127,8 @@ async function loadStats() {
     if(chLvl3Feats.length) {
       html += '<div style="margin-top:16px"><div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:#f1c40f;margin-bottom:8px">🔥 Nivå 3-bragder</div>';
       chLvl3Feats.forEach(function(f){
-        html += '<div style="font-size:13px;padding:2px 0"><strong style="color:var(--gold)">'+f.pl+'</strong> — '+f.text+' <span style="color:var(--text-dim);font-size:12px">(match '+(f.gameNumber||'?')+')</span></div>';
+        var featMatch = f.id ? '<span class="stat-click" onclick="openDetail(\''+f.id+'\')" title="Öppna matchen" style="color:var(--text-dim);font-size:12px;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">(match '+(f.gameNumber||'?')+')</span>' : '<span style="color:var(--text-dim);font-size:12px">(match '+(f.gameNumber||'?')+')</span>';
+        html += '<div style="font-size:13px;padding:2px 0"><strong style="color:var(--gold)">'+f.pl+'</strong> — '+f.text+' '+featMatch+'</div>';
       });
       html += '</div>';
     }
@@ -2150,7 +2155,7 @@ async function loadStats() {
     var info = m.archetype ? ARCHETYPE_LABELS[m.archetype] : null;
     var arch = (info ? info.name : (m.archetype || '—')) + (m.archetypeGuessed ? ' 🔍' : '');
     var res = effResult(m)==='win' ? '<span style="color:#2ecc71">Vinst</span>' : effResult(m)==='loss' ? '<span style="color:#e74c3c">Förlust</span>' : '<span style="color:var(--text-dim)">—</span>';
-    html += '<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px;color:var(--text-dim)">'+(m.gameNumber||'')+'</td><td style="padding:6px 8px;font-weight:600;color:'+(m.wildcard?'#9b59b6':'var(--gold)')+'">'+(m.name||'(namnlös)')+(m.wildcard?' 🎲':'')+'</td><td style="padding:6px 8px">'+arch+'</td><td style="padding:6px 8px;color:var(--text-dim)">'+(m.style||'standard')+'</td><td style="padding:6px 8px">'+res+'</td></tr>';
+    html += '<tr class="stat-click" onclick="openDetail(\''+m.id+'\')" title="Öppna matchen" style="border-top:1px solid var(--border)"><td style="padding:6px 8px;color:var(--text-dim)">'+(m.gameNumber||'')+'</td><td style="padding:6px 8px;font-weight:600;color:'+(m.wildcard?'#9b59b6':'var(--gold)')+'">'+(m.name||'(namnlös)')+(m.wildcard?' 🎲':'')+'</td><td style="padding:6px 8px">'+arch+'</td><td style="padding:6px 8px;color:var(--text-dim)">'+(m.style||'standard')+'</td><td style="padding:6px 8px">'+res+'</td></tr>';
   });
   html += '</tbody></table></div>';
 
@@ -3158,46 +3163,46 @@ async function renderSeasonOd(matches) {
       if(r.od.gold_per_min){ agg[a].gpmSum += r.od.gold_per_min; agg[a].gpmN++; }
       if(r.od.firstblood_claimed) fbCount[a] = (fbCount[a]||0)+1;
       if(!agg[a].best || (r.od.kills||0) > agg[a].best.kills) {
-        agg[a].best = { kills: r.od.kills||0, hero_id: r.od.hero_id, match: m.name||('spel #'+m.gameNumber) };
+        agg[a].best = { kills: r.od.kills||0, hero_id: r.od.hero_id, match: m.name||('spel #'+m.gameNumber), id: m.id };
       }
       if(!highlights.bestPerf || (r.od.kills||0) > highlights.bestPerf.kills) {
-        highlights.bestPerf = { alias: a, kills: r.od.kills||0, deaths: r.od.deaths, assists: r.od.assists, hero_id: r.od.hero_id, match: m.name||('spel #'+m.gameNumber) };
+        highlights.bestPerf = { alias: a, kills: r.od.kills||0, deaths: r.od.deaths, assists: r.od.assists, hero_id: r.od.hero_id, match: m.name||('spel #'+m.gameNumber), id: m.id };
       }
       // Enskild-match-rekord (k/d/a/gpm finns aven i oparsade matcher)
-      var ro = r.od, rlbl = m.name||('spel #'+m.gameNumber);
-      if(ro.gold_per_min && (!records.gpm || ro.gold_per_min > records.gpm.val)) records.gpm = { val:ro.gold_per_min, alias:a, hero_id:ro.hero_id, match:rlbl };
-      if(!records.kills || (ro.kills||0) > records.kills.val) records.kills = { val:ro.kills||0, alias:a, hero_id:ro.hero_id, match:rlbl };
-      if(!records.assists || (ro.assists||0) > records.assists.val) records.assists = { val:ro.assists||0, alias:a, hero_id:ro.hero_id, match:rlbl };
-      if(!records.deaths || (ro.deaths||0) > records.deaths.val) records.deaths = { val:ro.deaths||0, alias:a, hero_id:ro.hero_id, match:rlbl };
+      var ro = r.od, rlbl = m.name||('spel #'+m.gameNumber), rid = m.id;
+      if(ro.gold_per_min && (!records.gpm || ro.gold_per_min > records.gpm.val)) records.gpm = { val:ro.gold_per_min, alias:a, hero_id:ro.hero_id, match:rlbl, id:rid };
+      if(!records.kills || (ro.kills||0) > records.kills.val) records.kills = { val:ro.kills||0, alias:a, hero_id:ro.hero_id, match:rlbl, id:rid };
+      if(!records.assists || (ro.assists||0) > records.assists.val) records.assists = { val:ro.assists||0, alias:a, hero_id:ro.hero_id, match:rlbl, id:rid };
+      if(!records.deaths || (ro.deaths||0) > records.deaths.val) records.deaths = { val:ro.deaths||0, alias:a, hero_id:ro.hero_id, match:rlbl, id:rid };
       var kdaVal = ((ro.kills||0)+(ro.assists||0))/Math.max(1, ro.deaths||0);
-      if(!records.kda || kdaVal > records.kda.val) records.kda = { val:Math.round(kdaVal*100)/100, alias:a, hero_id:ro.hero_id, match:rlbl };
-      if(ro.xp_per_min && (!records.xpm || ro.xp_per_min > records.xpm.val)) records.xpm = { val:ro.xp_per_min, alias:a, hero_id:ro.hero_id, match:rlbl };
-      if(!records.lasthits || (ro.last_hits||0) > records.lasthits.val) records.lasthits = { val:ro.last_hits||0, alias:a, hero_id:ro.hero_id, match:rlbl };
-      if(!records.denies || (ro.denies||0) > records.denies.val) records.denies = { val:ro.denies||0, alias:a, hero_id:ro.hero_id, match:rlbl };
+      if(!records.kda || kdaVal > records.kda.val) records.kda = { val:Math.round(kdaVal*100)/100, alias:a, hero_id:ro.hero_id, match:rlbl, id:rid };
+      if(ro.xp_per_min && (!records.xpm || ro.xp_per_min > records.xpm.val)) records.xpm = { val:ro.xp_per_min, alias:a, hero_id:ro.hero_id, match:rlbl, id:rid };
+      if(!records.lasthits || (ro.last_hits||0) > records.lasthits.val) records.lasthits = { val:ro.last_hits||0, alias:a, hero_id:ro.hero_id, match:rlbl, id:rid };
+      if(!records.denies || (ro.denies||0) > records.denies.val) records.denies = { val:ro.denies||0, alias:a, hero_id:ro.hero_id, match:rlbl, id:rid };
     });
 
     var weAreRadiant = ourSideIsRadiant(m, od);
     var series = (od.radiant_gold_adv||[]).map(function(v){ return weAreRadiant ? v : -v; });
     if(series.length > 5) {
       var maxDef = Math.min.apply(null, series), maxLead = Math.max.apply(null, series);
-      if(won && (!highlights.comeback || maxDef < highlights.comeback.deficit)) highlights.comeback = { deficit: maxDef, match: m.name, game: m.gameNumber };
-      if(!won && (!highlights.thrown || maxLead > highlights.thrown.lead)) highlights.thrown = { lead: maxLead, match: m.name, game: m.gameNumber };
+      if(won && (!highlights.comeback || maxDef < highlights.comeback.deficit)) highlights.comeback = { deficit: maxDef, match: m.name, game: m.gameNumber, id: m.id };
+      if(!won && (!highlights.thrown || maxLead > highlights.thrown.lead)) highlights.thrown = { lead: maxLead, match: m.name, game: m.gameNumber, id: m.id };
     }
-    if(won && (!highlights.fastestWin || od.duration < highlights.fastestWin.duration)) highlights.fastestWin = { duration: od.duration, match: m.name, game: m.gameNumber };
-    if(!highlights.longest || od.duration > highlights.longest.duration) highlights.longest = { duration: od.duration, match: m.name, game: m.gameNumber };
+    if(won && (!highlights.fastestWin || od.duration < highlights.fastestWin.duration)) highlights.fastestWin = { duration: od.duration, match: m.name, game: m.gameNumber, id: m.id };
+    if(!highlights.longest || od.duration > highlights.longest.duration) highlights.longest = { duration: od.duration, match: m.name, game: m.gameNumber, id: m.id };
     var totKills = (od.radiant_score||0)+(od.dire_score||0);
-    if(!highlights.bloodiest || totKills > highlights.bloodiest.kills) highlights.bloodiest = { kills: totKills, match: m.name, game: m.gameNumber };
+    if(!highlights.bloodiest || totKills > highlights.bloodiest.kills) highlights.bloodiest = { kills: totKills, match: m.name, game: m.gameNumber, id: m.id };
 
     // Match-rekord (kill-score) + Radiant/Dire-facit
     var mLbl = m.name||('spel #'+m.gameNumber);
     mrec.totalKills += totKills;
     var ourScore = weAreRadiant ? (od.radiant_score||0) : (od.dire_score||0);
     var theirScore = weAreRadiant ? (od.dire_score||0) : (od.radiant_score||0);
-    if(m.matchResult==='win' && (!mrec.stomp || (ourScore-theirScore) > mrec.stomp.margin)) mrec.stomp = { margin:ourScore-theirScore, our:ourScore, their:theirScore, match:mLbl };
+    if(m.matchResult==='win' && (!mrec.stomp || (ourScore-theirScore) > mrec.stomp.margin)) mrec.stomp = { margin:ourScore-theirScore, our:ourScore, their:theirScore, match:mLbl, id:m.id };
     var diff = Math.abs((od.radiant_score||0)-(od.dire_score||0));
-    if(!mrec.closest || diff < mrec.closest.diff) mrec.closest = { diff:diff, our:ourScore, their:theirScore, match:mLbl };
-    if(!mrec.shortest || od.duration < mrec.shortest.duration) mrec.shortest = { duration:od.duration, match:mLbl };
-    if(!mrec.teamKills || ourScore > mrec.teamKills.val) mrec.teamKills = { val:ourScore, match:mLbl };
+    if(!mrec.closest || diff < mrec.closest.diff) mrec.closest = { diff:diff, our:ourScore, their:theirScore, match:mLbl, id:m.id };
+    if(!mrec.shortest || od.duration < mrec.shortest.duration) mrec.shortest = { duration:od.duration, match:mLbl, id:m.id };
+    if(!mrec.teamKills || ourScore > mrec.teamKills.val) mrec.teamKills = { val:ourScore, match:mLbl, id:m.id };
     if(m.matchResult==='win'){ weAreRadiant ? sides.radW++ : sides.direW++; } else if(m.matchResult==='loss'){ weAreRadiant ? sides.radL++ : sides.direL++; }
   });
 
@@ -3251,25 +3256,29 @@ async function renderSeasonOd(matches) {
   html += '<div style="margin-bottom:18px"><div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">Form (kronologisk)</div><div style="display:flex;gap:5px;flex-wrap:wrap">';
   games.forEach(function(g){
     var won = g.m.matchResult==='win';
-    html += '<div title="'+(g.m.name||('spel #'+g.m.gameNumber))+' — '+(won?'vinst':'förlust')+'" style="width:26px;height:26px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:'+(won?'rgba(39,174,96,.2)':'rgba(231,76,60,.15)')+';border:1px solid '+(won?'#27ae6088':'#c0392b88')+';color:'+(won?'#2ecc71':'#e74c3c')+'">'+(won?'V':'F')+'</div>';
+    html += '<div class="stat-click" onclick="openDetail(\''+g.m.id+'\')" title="'+(g.m.name||('spel #'+g.m.gameNumber))+' — '+(won?'vinst':'förlust')+' (öppna matchen)" style="width:26px;height:26px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:'+(won?'rgba(39,174,96,.2)':'rgba(231,76,60,.15)')+';border:1px solid '+(won?'#27ae6088':'#c0392b88')+';color:'+(won?'#2ecc71':'#e74c3c')+'">'+(won?'V':'F')+'</div>';
   });
   html += '</div></div>';
 
   // hojdpunkter
+  // Ett statistikkort. h[2] = match-id -> kortet blir klickbart till matchens detaljvy.
+  function statCard(h){
+    var attrs = h[2] ? ' class="stat-click" onclick="openDetail(\''+h[2]+'\')" title="Öppna matchen"' : '';
+    return '<div'+attrs+' style="padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px"><div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--gold)">'+h[0]+'</div><div style="font-size:12px;color:var(--text);margin-top:3px">'+h[1]+'</div></div>';
+  }
+
   var hl = [];
-  if(highlights.comeback && highlights.comeback.deficit < -5000) hl.push(['🔥 Största comeback', 'Från '+Math.round(-highlights.comeback.deficit/1000)+'k underläge — '+(highlights.comeback.match||('spel #'+highlights.comeback.game))]);
-  if(highlights.thrown && highlights.thrown.lead > 5000) hl.push(['💸 Största tappet', Math.round(highlights.thrown.lead/1000)+'k-ledning som försvann — '+(highlights.thrown.match||('spel #'+highlights.thrown.game))]);
-  if(highlights.fastestWin) hl.push(['⚡ Snabbaste vinsten', fmtDuration(highlights.fastestWin.duration)+' — '+(highlights.fastestWin.match||('spel #'+highlights.fastestWin.game))]);
-  if(highlights.longest) hl.push(['🕰 Längsta matchen', fmtDuration(highlights.longest.duration)+' — '+(highlights.longest.match||('spel #'+highlights.longest.game))]);
-  if(highlights.bloodiest) hl.push(['🩸 Blodigaste matchen', highlights.bloodiest.kills+' kills totalt — '+(highlights.bloodiest.match||('spel #'+highlights.bloodiest.game))]);
-  if(highlights.bestPerf) hl.push(['⭐ Bästa insatsen', highlights.bestPerf.alias+' — '+highlights.bestPerf.kills+'/'+highlights.bestPerf.deaths+'/'+highlights.bestPerf.assists+' på '+odHeroName(highlights.bestPerf.hero_id)]);
+  if(highlights.comeback && highlights.comeback.deficit < -5000) hl.push(['🔥 Största comeback', 'Från '+Math.round(-highlights.comeback.deficit/1000)+'k underläge — '+(highlights.comeback.match||('spel #'+highlights.comeback.game)), highlights.comeback.id]);
+  if(highlights.thrown && highlights.thrown.lead > 5000) hl.push(['💸 Största tappet', Math.round(highlights.thrown.lead/1000)+'k-ledning som försvann — '+(highlights.thrown.match||('spel #'+highlights.thrown.game)), highlights.thrown.id]);
+  if(highlights.fastestWin) hl.push(['⚡ Snabbaste vinsten', fmtDuration(highlights.fastestWin.duration)+' — '+(highlights.fastestWin.match||('spel #'+highlights.fastestWin.game)), highlights.fastestWin.id]);
+  if(highlights.longest) hl.push(['🕰 Längsta matchen', fmtDuration(highlights.longest.duration)+' — '+(highlights.longest.match||('spel #'+highlights.longest.game)), highlights.longest.id]);
+  if(highlights.bloodiest) hl.push(['🩸 Blodigaste matchen', highlights.bloodiest.kills+' kills totalt — '+(highlights.bloodiest.match||('spel #'+highlights.bloodiest.game)), highlights.bloodiest.id]);
+  if(highlights.bestPerf) hl.push(['⭐ Bästa insatsen', highlights.bestPerf.alias+' — '+highlights.bestPerf.kills+'/'+highlights.bestPerf.deaths+'/'+highlights.bestPerf.assists+' på '+odHeroName(highlights.bestPerf.hero_id), highlights.bestPerf.id]);
   var fbKing = Object.keys(fbCount).sort(function(a,b){ return fbCount[b]-fbCount[a]; })[0];
   if(fbKing && fbCount[fbKing] > 1) hl.push(['🥇 First blood-kungen', fbKing+' — '+fbCount[fbKing]+' first bloods']);
   if(hl.length) {
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-bottom:18px">';
-    hl.forEach(function(h){
-      html += '<div style="padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px"><div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--gold)">'+h[0]+'</div><div style="font-size:12px;color:var(--text);margin-top:3px">'+h[1]+'</div></div>';
-    });
+    hl.forEach(function(h){ html += statCard(h); });
     html += '</div>';
   }
 
@@ -3277,31 +3286,29 @@ async function renderSeasonOd(matches) {
     if(!arr.length) return;
     html += '<div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">'+title+'</div>';
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:18px">';
-    arr.forEach(function(h){
-      html += '<div style="padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px"><div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--gold)">'+h[0]+'</div><div style="font-size:12px;color:var(--text);margin-top:3px">'+h[1]+'</div></div>';
-    });
+    arr.forEach(function(h){ html += statCard(h); });
     html += '</div>';
   }
   function recLine(r){ return r.val+' — '+r.alias+' ('+odHeroName(r.hero_id)+', '+r.match+')'; }
 
   // Spelarrekord (enskild match)
   var rec = [];
-  if(records.kills) rec.push(['⚔️ Flest kills', recLine(records.kills)]);
-  if(records.assists) rec.push(['🤝 Flest assists', recLine(records.assists)]);
-  if(records.deaths) rec.push(['💀 Flest deaths', recLine(records.deaths)]);
-  if(records.kda) rec.push(['🎯 Högst KDA', recLine(records.kda)]);
-  if(records.gpm) rec.push(['💰 Högst GPM', recLine(records.gpm)]);
-  if(records.xpm) rec.push(['📘 Högst XPM', recLine(records.xpm)]);
-  if(records.lasthits) rec.push(['🗡 Flest last hits', recLine(records.lasthits)]);
-  if(records.denies) rec.push(['🚫 Flest denies', recLine(records.denies)]);
+  if(records.kills) rec.push(['⚔️ Flest kills', recLine(records.kills), records.kills.id]);
+  if(records.assists) rec.push(['🤝 Flest assists', recLine(records.assists), records.assists.id]);
+  if(records.deaths) rec.push(['💀 Flest deaths', recLine(records.deaths), records.deaths.id]);
+  if(records.kda) rec.push(['🎯 Högst KDA', recLine(records.kda), records.kda.id]);
+  if(records.gpm) rec.push(['💰 Högst GPM', recLine(records.gpm), records.gpm.id]);
+  if(records.xpm) rec.push(['📘 Högst XPM', recLine(records.xpm), records.xpm.id]);
+  if(records.lasthits) rec.push(['🗡 Flest last hits', recLine(records.lasthits), records.lasthits.id]);
+  if(records.denies) rec.push(['🚫 Flest denies', recLine(records.denies), records.denies.id]);
   recGrid('Spelarrekord (en match)', rec);
 
   // Matchrekord + sviter
   var mr = [];
-  if(mrec.stomp) mr.push(['💥 Största övertaget', mrec.stomp.our+'–'+mrec.stomp.their+' (+'+mrec.stomp.margin+') — '+mrec.stomp.match]);
-  if(mrec.closest) mr.push(['😰 Jämnaste matchen', mrec.closest.our+'–'+mrec.closest.their+' — '+mrec.closest.match]);
-  if(mrec.shortest) mr.push(['🏃 Kortaste matchen', fmtDuration(mrec.shortest.duration)+' — '+mrec.shortest.match]);
-  if(mrec.teamKills) mr.push(['🔪 Flest lag-kills', mrec.teamKills.val+' kills — '+mrec.teamKills.match]);
+  if(mrec.stomp) mr.push(['💥 Största övertaget', mrec.stomp.our+'–'+mrec.stomp.their+' (+'+mrec.stomp.margin+') — '+mrec.stomp.match, mrec.stomp.id]);
+  if(mrec.closest) mr.push(['😰 Jämnaste matchen', mrec.closest.our+'–'+mrec.closest.their+' — '+mrec.closest.match, mrec.closest.id]);
+  if(mrec.shortest) mr.push(['🏃 Kortaste matchen', fmtDuration(mrec.shortest.duration)+' — '+mrec.shortest.match, mrec.shortest.id]);
+  if(mrec.teamKills) mr.push(['🔪 Flest lag-kills', mrec.teamKills.val+' kills — '+mrec.teamKills.match, mrec.teamKills.id]);
   if(maxW.len>=2) mr.push(['🔥 Längsta segersvit (laget)', maxW.len+' i rad (spel '+maxW.from+'–'+maxW.to+')']);
   if(maxL.len>=2) mr.push(['🥶 Längsta förlustsvit (laget)', maxL.len+' i rad (spel '+maxL.from+'–'+maxL.to+')']);
   if(pWinKey && pstr[pWinKey].mw>=2) mr.push(['🏅 Längsta segersvit (spelare)', pstr[pWinKey].mw+' i rad — '+pWinKey]);
@@ -3373,7 +3380,8 @@ function renderSeasonPlayerTable(selected) {
       var s = d.agg[a];
       var n = Math.max(1, s.gpmN);
       var kda = s.gpmN ? (Math.round(s.k/s.gpmN*10)/10)+'/'+(Math.round(s.d/s.gpmN*10)/10)+'/'+(Math.round(s.ast/s.gpmN*10)/10) : '—';
-      var best = s.best ? s.best.kills+' kills ('+odHeroName(s.best.hero_id)+')' : '—';
+      var bestTxt = s.best ? s.best.kills+' kills ('+odHeroName(s.best.hero_id)+')' : '—';
+      var best = s.best && s.best.id ? '<span class="stat-click" onclick="openDetail(\''+s.best.id+'\')" title="Öppna matchen" style="text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">'+bestTxt+'</span>' : bestTxt;
       html += '<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px;font-weight:600">'+a+'</td><td style="padding:6px 8px">'+s.games+'</td>'
         + '<td style="padding:6px 8px"><span style="color:#2ecc71">'+s.w+'</span>–<span style="color:#e74c3c">'+s.l+'</span></td>'
         + '<td style="padding:6px 8px">'+kda+'</td>'
@@ -3394,7 +3402,7 @@ function renderSeasonPlayerTable(selected) {
     var r = rows.find(function(x){ return normalizePlayer(x.alias)===selected; });
     var won = g.m.matchResult==='win';
     var img = r && r.od ? odHeroImg(r.od.hero_id) : null;
-    html += '<tr style="border-top:1px solid var(--border)">'
+    html += '<tr class="stat-click" onclick="openDetail(\''+g.m.id+'\')" title="Öppna matchen" style="border-top:1px solid var(--border)">'
       + '<td style="padding:6px 8px;font-weight:600;color:var(--gold)">'+(g.m.name||('spel #'+g.m.gameNumber))+'</td>'
       + '<td style="padding:6px 8px">'+(img?'<img src="'+img+'" title="'+odHeroName(r.od.hero_id)+'" style="width:40px;height:22px;object-fit:cover;border-radius:2px;vertical-align:middle" loading="lazy"> ':'')+(r&&r.od?odHeroName(r.od.hero_id):'<span style="color:var(--text-dim)">ej matchad</span>')+'</td>'
       + '<td style="padding:6px 8px">'+(r&&r.od?(r.od.kills+'/'+r.od.deaths+'/'+r.od.assists):'—')+'</td>'
