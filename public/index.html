@@ -3122,7 +3122,9 @@ async function renderSeasonOd(matches) {
   var agg = {}; // alias -> stats
   var pairs = {}; // "A|B" -> {w,l}
   var highlights = { comeback: null, thrown: null, fastestWin: null, longest: null, bloodiest: null, bestPerf: null };
-  var records = { gpm:null, kills:null, assists:null, deaths:null }; // enskild-match-rekord
+  var records = { gpm:null, kills:null, assists:null, deaths:null, kda:null, xpm:null, lasthits:null, denies:null }; // enskild-match-rekord
+  var mrec = { totalKills:0, stomp:null, closest:null, shortest:null, teamKills:null }; // match-rekord
+  var sides = { radW:0, radL:0, direW:0, direL:0 }; // Radiant/Dire-facit
   var fbCount = {};
 
   games.forEach(function(g){
@@ -3158,6 +3160,11 @@ async function renderSeasonOd(matches) {
       if(!records.kills || (ro.kills||0) > records.kills.val) records.kills = { val:ro.kills||0, alias:a, hero_id:ro.hero_id, match:rlbl };
       if(!records.assists || (ro.assists||0) > records.assists.val) records.assists = { val:ro.assists||0, alias:a, hero_id:ro.hero_id, match:rlbl };
       if(!records.deaths || (ro.deaths||0) > records.deaths.val) records.deaths = { val:ro.deaths||0, alias:a, hero_id:ro.hero_id, match:rlbl };
+      var kdaVal = ((ro.kills||0)+(ro.assists||0))/Math.max(1, ro.deaths||0);
+      if(!records.kda || kdaVal > records.kda.val) records.kda = { val:Math.round(kdaVal*100)/100, alias:a, hero_id:ro.hero_id, match:rlbl };
+      if(ro.xp_per_min && (!records.xpm || ro.xp_per_min > records.xpm.val)) records.xpm = { val:ro.xp_per_min, alias:a, hero_id:ro.hero_id, match:rlbl };
+      if(!records.lasthits || (ro.last_hits||0) > records.lasthits.val) records.lasthits = { val:ro.last_hits||0, alias:a, hero_id:ro.hero_id, match:rlbl };
+      if(!records.denies || (ro.denies||0) > records.denies.val) records.denies = { val:ro.denies||0, alias:a, hero_id:ro.hero_id, match:rlbl };
     });
 
     var weAreRadiant = ourSideIsRadiant(m, od);
@@ -3171,6 +3178,18 @@ async function renderSeasonOd(matches) {
     if(!highlights.longest || od.duration > highlights.longest.duration) highlights.longest = { duration: od.duration, match: m.name, game: m.gameNumber };
     var totKills = (od.radiant_score||0)+(od.dire_score||0);
     if(!highlights.bloodiest || totKills > highlights.bloodiest.kills) highlights.bloodiest = { kills: totKills, match: m.name, game: m.gameNumber };
+
+    // Match-rekord (kill-score) + Radiant/Dire-facit
+    var mLbl = m.name||('spel #'+m.gameNumber);
+    mrec.totalKills += totKills;
+    var ourScore = weAreRadiant ? (od.radiant_score||0) : (od.dire_score||0);
+    var theirScore = weAreRadiant ? (od.dire_score||0) : (od.radiant_score||0);
+    if(m.matchResult==='win' && (!mrec.stomp || (ourScore-theirScore) > mrec.stomp.margin)) mrec.stomp = { margin:ourScore-theirScore, our:ourScore, their:theirScore, match:mLbl };
+    var diff = Math.abs((od.radiant_score||0)-(od.dire_score||0));
+    if(!mrec.closest || diff < mrec.closest.diff) mrec.closest = { diff:diff, our:ourScore, their:theirScore, match:mLbl };
+    if(!mrec.shortest || od.duration < mrec.shortest.duration) mrec.shortest = { duration:od.duration, match:mLbl };
+    if(!mrec.teamKills || ourScore > mrec.teamKills.val) mrec.teamKills = { val:ourScore, match:mLbl };
+    if(m.matchResult==='win'){ weAreRadiant ? sides.radW++ : sides.direW++; } else if(m.matchResult==='loss'){ weAreRadiant ? sides.radL++ : sides.direL++; }
   });
 
   // Langsta seger-/forlustsvit (games ar kronologiskt sorterad). Bara avgjorda matcher bryter/bygger svit.
@@ -3181,6 +3200,22 @@ async function renderSeasonOd(matches) {
     else if(res==='loss'){ if(curL===0) lStart=gn; curL++; curW=0; if(curL>maxL.len) maxL={len:curL, from:lStart, to:gn}; }
     else { curW=0; curL=0; }
   });
+
+  // Per-spelare langsta seger-/forlustsvit (rullande roster -> skiljer sig fran lagets svit)
+  var pstr = {};
+  games.forEach(function(g){
+    var won = g.m.matchResult==='win', lost = g.m.matchResult==='loss';
+    (g.m.players||[]).forEach(function(p){
+      var a = normalizePlayer(p.name);
+      if(!pstr[a]) pstr[a] = { cw:0, cl:0, mw:0, ml:0 };
+      var s = pstr[a];
+      if(won){ s.cw++; s.cl=0; if(s.cw>s.mw) s.mw=s.cw; }
+      else if(lost){ s.cl++; s.cw=0; if(s.cl>s.ml) s.ml=s.cl; }
+      else { s.cw=0; s.cl=0; }
+    });
+  });
+  var pWinKey = Object.keys(pstr).sort(function(a,b){ return pstr[b].mw-pstr[a].mw; })[0];
+  var pLossKey = Object.keys(pstr).sort(function(a,b){ return pstr[b].ml-pstr[a].ml; })[0];
 
   _seasonData = { games: games, agg: agg, pairs: pairs, fbCount: fbCount };
 
@@ -3196,6 +3231,7 @@ async function renderSeasonOd(matches) {
   [[totW+'–'+totL,'Vinster–Förluster'],
    [fmtDuration(Math.round(totSec/games.length)),'Snittlängd'],
    [Math.round(totSec/3600*10)/10+' h','Total speltid'],
+   [mrec.totalKills,'Total kills'],
    [games.length,'Matcher']
   ].forEach(function(c){
     html += '<div style="text-align:center;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:4px"><div style="font-family:Rajdhani,sans-serif;font-size:22px;font-weight:700;color:var(--gold)">'+c[0]+'</div><div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em">'+c[1]+'</div></div>';
@@ -3228,21 +3264,52 @@ async function renderSeasonOd(matches) {
     html += '</div>';
   }
 
-  // sasongsrekord (enskild match) + langsta sviter
-  var rec = [];
-  if(records.gpm) rec.push(['💰 Högst GPM', records.gpm.val+' — '+records.gpm.alias+' ('+odHeroName(records.gpm.hero_id)+', '+records.gpm.match+')']);
-  if(records.kills) rec.push(['⚔️ Flest kills (en match)', records.kills.val+' — '+records.kills.alias+' ('+odHeroName(records.kills.hero_id)+', '+records.kills.match+')']);
-  if(records.assists) rec.push(['🤝 Flest assists (en match)', records.assists.val+' — '+records.assists.alias+' ('+odHeroName(records.assists.hero_id)+', '+records.assists.match+')']);
-  if(records.deaths) rec.push(['💀 Flest deaths (en match)', records.deaths.val+' — '+records.deaths.alias+' ('+odHeroName(records.deaths.hero_id)+', '+records.deaths.match+')']);
-  if(maxW.len>=2) rec.push(['🔥 Längsta segersvit', maxW.len+' i rad (spel '+maxW.from+'–'+maxW.to+')']);
-  if(maxL.len>=2) rec.push(['🥶 Längsta förlustsvit', maxL.len+' i rad (spel '+maxL.from+'–'+maxL.to+')']);
-  if(rec.length) {
-    html += '<div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">Säsongsrekord</div>';
+  function recGrid(title, arr) {
+    if(!arr.length) return;
+    html += '<div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">'+title+'</div>';
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:18px">';
-    rec.forEach(function(h){
+    arr.forEach(function(h){
       html += '<div style="padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px"><div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--gold)">'+h[0]+'</div><div style="font-size:12px;color:var(--text);margin-top:3px">'+h[1]+'</div></div>';
     });
     html += '</div>';
+  }
+  function recLine(r){ return r.val+' — '+r.alias+' ('+odHeroName(r.hero_id)+', '+r.match+')'; }
+
+  // Spelarrekord (enskild match)
+  var rec = [];
+  if(records.kills) rec.push(['⚔️ Flest kills', recLine(records.kills)]);
+  if(records.assists) rec.push(['🤝 Flest assists', recLine(records.assists)]);
+  if(records.deaths) rec.push(['💀 Flest deaths', recLine(records.deaths)]);
+  if(records.kda) rec.push(['🎯 Högst KDA', recLine(records.kda)]);
+  if(records.gpm) rec.push(['💰 Högst GPM', recLine(records.gpm)]);
+  if(records.xpm) rec.push(['📘 Högst XPM', recLine(records.xpm)]);
+  if(records.lasthits) rec.push(['🗡 Flest last hits', recLine(records.lasthits)]);
+  if(records.denies) rec.push(['🚫 Flest denies', recLine(records.denies)]);
+  recGrid('Spelarrekord (en match)', rec);
+
+  // Matchrekord + sviter
+  var mr = [];
+  if(mrec.stomp) mr.push(['💥 Största övertaget', mrec.stomp.our+'–'+mrec.stomp.their+' (+'+mrec.stomp.margin+') — '+mrec.stomp.match]);
+  if(mrec.closest) mr.push(['😰 Jämnaste matchen', mrec.closest.our+'–'+mrec.closest.their+' — '+mrec.closest.match]);
+  if(mrec.shortest) mr.push(['🏃 Kortaste matchen', fmtDuration(mrec.shortest.duration)+' — '+mrec.shortest.match]);
+  if(mrec.teamKills) mr.push(['🔪 Flest lag-kills', mrec.teamKills.val+' kills — '+mrec.teamKills.match]);
+  if(maxW.len>=2) mr.push(['🔥 Längsta segersvit (laget)', maxW.len+' i rad (spel '+maxW.from+'–'+maxW.to+')']);
+  if(maxL.len>=2) mr.push(['🥶 Längsta förlustsvit (laget)', maxL.len+' i rad (spel '+maxL.from+'–'+maxL.to+')']);
+  if(pWinKey && pstr[pWinKey].mw>=2) mr.push(['🏅 Längsta segersvit (spelare)', pstr[pWinKey].mw+' i rad — '+pWinKey]);
+  if(pLossKey && pstr[pLossKey].ml>=2) mr.push(['🧊 Längsta förlustsvit (spelare)', pstr[pLossKey].ml+' i rad — '+pLossKey]);
+  recGrid('Matchrekord & sviter', mr);
+
+  // Radiant vs Dire
+  var sTot = sides.radW+sides.radL+sides.direW+sides.direL;
+  if(sTot) {
+    var radN = sides.radW+sides.radL, direN = sides.direW+sides.direL;
+    var radWr = radN ? Math.round(sides.radW/radN*100) : 0;
+    var direWr = direN ? Math.round(sides.direW/direN*100) : 0;
+    html += '<div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">Radiant vs Dire</div>';
+    html += '<div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">'
+      + '<div style="flex:1;min-width:140px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px"><div style="font-family:Rajdhani,sans-serif;font-size:20px;font-weight:700;color:#2ecc71">'+radWr+'%</div><div style="font-size:11px;color:var(--text-dim)">Radiant — '+sides.radW+'V–'+sides.radL+'F</div></div>'
+      + '<div style="flex:1;min-width:140px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px"><div style="font-family:Rajdhani,sans-serif;font-size:20px;font-weight:700;color:#e74c3c">'+direWr+'%</div><div style="font-size:11px;color:var(--text-dim)">Dire — '+sides.direW+'V–'+sides.direL+'F</div></div>'
+      + '</div>';
   }
 
   // spelarfilter + tabell
@@ -3269,6 +3336,8 @@ async function renderSeasonOd(matches) {
     html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">';
     html += '<div style="padding:10px 14px;background:var(--surface2);border:1px solid var(--gold-dim);border-radius:4px;font-size:12px"><span style="font-family:Rajdhani,sans-serif;font-weight:700;text-transform:uppercase;color:var(--gold)">Bästa duon</span><br>'+best+' — <span style="color:#2ecc71">'+pairs[best].w+'V</span>–<span style="color:#e74c3c">'+pairs[best].l+'F</span></div>';
     if(worst !== best) html += '<div style="padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;font-size:12px"><span style="font-family:Rajdhani,sans-serif;font-weight:700;text-transform:uppercase;color:var(--text-dim)">Tuffaste duon</span><br>'+worst+' — <span style="color:#2ecc71">'+pairs[worst].w+'V</span>–<span style="color:#e74c3c">'+pairs[worst].l+'F</span></div>';
+    var mostDuo = Object.keys(pairs).sort(function(a,b){ return (pairs[b].w+pairs[b].l)-(pairs[a].w+pairs[a].l); })[0];
+    if(mostDuo) html += '<div style="padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;font-size:12px"><span style="font-family:Rajdhani,sans-serif;font-weight:700;text-transform:uppercase;color:var(--text-dim)">Mest spelade ihop</span><br>'+mostDuo+' — '+(pairs[mostDuo].w+pairs[mostDuo].l)+' matcher</div>';
     html += '</div>';
   }
 
