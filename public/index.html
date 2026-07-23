@@ -3122,6 +3122,7 @@ async function renderSeasonOd(matches) {
   var agg = {}; // alias -> stats
   var pairs = {}; // "A|B" -> {w,l}
   var highlights = { comeback: null, thrown: null, fastestWin: null, longest: null, bloodiest: null, bestPerf: null };
+  var records = { gpm:null, kills:null, assists:null, deaths:null }; // enskild-match-rekord
   var fbCount = {};
 
   games.forEach(function(g){
@@ -3151,6 +3152,12 @@ async function renderSeasonOd(matches) {
       if(!highlights.bestPerf || (r.od.kills||0) > highlights.bestPerf.kills) {
         highlights.bestPerf = { alias: a, kills: r.od.kills||0, deaths: r.od.deaths, assists: r.od.assists, hero_id: r.od.hero_id, match: m.name||('spel #'+m.gameNumber) };
       }
+      // Enskild-match-rekord (k/d/a/gpm finns aven i oparsade matcher)
+      var ro = r.od, rlbl = m.name||('spel #'+m.gameNumber);
+      if(ro.gold_per_min && (!records.gpm || ro.gold_per_min > records.gpm.val)) records.gpm = { val:ro.gold_per_min, alias:a, hero_id:ro.hero_id, match:rlbl };
+      if(!records.kills || (ro.kills||0) > records.kills.val) records.kills = { val:ro.kills||0, alias:a, hero_id:ro.hero_id, match:rlbl };
+      if(!records.assists || (ro.assists||0) > records.assists.val) records.assists = { val:ro.assists||0, alias:a, hero_id:ro.hero_id, match:rlbl };
+      if(!records.deaths || (ro.deaths||0) > records.deaths.val) records.deaths = { val:ro.deaths||0, alias:a, hero_id:ro.hero_id, match:rlbl };
     });
 
     var weAreRadiant = ourSideIsRadiant(m, od);
@@ -3164,6 +3171,15 @@ async function renderSeasonOd(matches) {
     if(!highlights.longest || od.duration > highlights.longest.duration) highlights.longest = { duration: od.duration, match: m.name, game: m.gameNumber };
     var totKills = (od.radiant_score||0)+(od.dire_score||0);
     if(!highlights.bloodiest || totKills > highlights.bloodiest.kills) highlights.bloodiest = { kills: totKills, match: m.name, game: m.gameNumber };
+  });
+
+  // Langsta seger-/forlustsvit (games ar kronologiskt sorterad). Bara avgjorda matcher bryter/bygger svit.
+  var curW=0, curL=0, wStart=null, lStart=null, maxW={len:0}, maxL={len:0};
+  games.forEach(function(g){
+    var res = g.m.matchResult, gn = g.m.gameNumber;
+    if(res==='win'){ if(curW===0) wStart=gn; curW++; curL=0; if(curW>maxW.len) maxW={len:curW, from:wStart, to:gn}; }
+    else if(res==='loss'){ if(curL===0) lStart=gn; curL++; curW=0; if(curL>maxL.len) maxL={len:curL, from:lStart, to:gn}; }
+    else { curW=0; curL=0; }
   });
 
   _seasonData = { games: games, agg: agg, pairs: pairs, fbCount: fbCount };
@@ -3212,6 +3228,23 @@ async function renderSeasonOd(matches) {
     html += '</div>';
   }
 
+  // sasongsrekord (enskild match) + langsta sviter
+  var rec = [];
+  if(records.gpm) rec.push(['💰 Högst GPM', records.gpm.val+' — '+records.gpm.alias+' ('+odHeroName(records.gpm.hero_id)+', '+records.gpm.match+')']);
+  if(records.kills) rec.push(['⚔️ Flest kills (en match)', records.kills.val+' — '+records.kills.alias+' ('+odHeroName(records.kills.hero_id)+', '+records.kills.match+')']);
+  if(records.assists) rec.push(['🤝 Flest assists (en match)', records.assists.val+' — '+records.assists.alias+' ('+odHeroName(records.assists.hero_id)+', '+records.assists.match+')']);
+  if(records.deaths) rec.push(['💀 Flest deaths (en match)', records.deaths.val+' — '+records.deaths.alias+' ('+odHeroName(records.deaths.hero_id)+', '+records.deaths.match+')']);
+  if(maxW.len>=2) rec.push(['🔥 Längsta segersvit', maxW.len+' i rad (spel '+maxW.from+'–'+maxW.to+')']);
+  if(maxL.len>=2) rec.push(['🥶 Längsta förlustsvit', maxL.len+' i rad (spel '+maxL.from+'–'+maxL.to+')']);
+  if(rec.length) {
+    html += '<div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">Säsongsrekord</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:18px">';
+    rec.forEach(function(h){
+      html += '<div style="padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px"><div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--gold)">'+h[0]+'</div><div style="font-size:12px;color:var(--text);margin-top:3px">'+h[1]+'</div></div>';
+    });
+    html += '</div>';
+  }
+
   // spelarfilter + tabell
   var aliasList = Object.keys(agg).sort(function(a,b){ return agg[b].games-agg[a].games; });
   html += '<div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">Spelarna</div>';
@@ -3223,8 +3256,9 @@ async function renderSeasonOd(matches) {
   html += '</div>';
   html += '<div id="season-player-table"></div>';
 
-  // basta duo
-  var pairKeys = Object.keys(pairs).filter(function(k){ return pairs[k].w+pairs[k].l >= 2; })
+  // basta duo — troskel for minsta antal spel ihop (>=3 nar det finns, annars >=2) sa smaurval inte dominerar
+  var pairMin = Object.keys(pairs).some(function(k){ return pairs[k].w+pairs[k].l >= 3; }) ? 3 : 2;
+  var pairKeys = Object.keys(pairs).filter(function(k){ return pairs[k].w+pairs[k].l >= pairMin; })
     .sort(function(a,b){
       var pa=pairs[a], pb=pairs[b];
       var wra=pa.w/(pa.w+pa.l), wrb=pb.w/(pb.w+pb.l);
