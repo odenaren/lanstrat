@@ -190,8 +190,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="showPage('home')">Hero Pool</button>
     <button class="nav-tab" onclick="showPage('match')">Strats</button>
-    <button class="nav-tab" onclick="showPage('history')">History</button>
-    <button class="nav-tab" onclick="showPage('stats')">Stats</button>
+    <button class="nav-tab" onclick="showPage('season')">Säsong</button>
   </div>
 </nav>
 
@@ -263,29 +262,22 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 </div>
 
 <!-- HISTORY -->
-<div id="page-history" class="page">
+<div id="page-season" class="page">
   <div class="page-header">
-    <h2>Matchhistorik</h2>
-    <span style="color:var(--text-dim);font-size:13px">Klicka på en match för detaljer &amp; itemtips</span>
+    <h2>Säsong</h2>
+    <span style="color:var(--text-dim);font-size:13px">Statistik, arketyper &amp; matchhistorik — klicka på en match för detaljer &amp; itemtips</span>
     <button onclick="openLanModal()" style="margin-left:auto;padding:6px 14px;background:rgba(44,224,224,.15);border:1px solid var(--gold-dim);color:var(--gold);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s">⚔️ Inför lanet</button>
     <button onclick="clearAllMemory()" style="margin-left:auto;padding:6px 14px;background:none;border:1px solid #c0392b44;color:var(--red);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='#c0392b44'">Rensa minne</button>
   </div>
-  <div id="history-list" class="history-grid"></div>
-</div>
-
-<!-- STATS -->
-<div id="page-stats" class="page">
-  <div class="page-header">
-    <h2>Statistik</h2>
-    <span style="color:var(--text-dim);font-size:13px">Sammanställning av genererade matcher — arketyper avslöjade</span>
-  </div>
   <div id="stats-content"></div>
+  <div class="section-title" style="margin-top:28px">Matchhistorik</div>
+  <div id="history-list" class="history-grid"></div>
 </div>
 
 <!-- MATCH DETAIL -->
 <div id="page-detail" class="page">
   <div class="page-header">
-    <button class="btn btn-ghost" onclick="showPage('history')">← Historik</button>
+    <button class="btn btn-ghost" onclick="showPage('season')">← Säsong</button>
     <h2 id="detail-title">Match</h2>
     <span id="detail-date" style="color:var(--text-dim);font-size:13px"></span>
   </div>
@@ -612,13 +604,12 @@ function showPage(id) {
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   document.querySelectorAll('.nav-tab').forEach(t=>{
-    const map={home:'hero pool',match:'strats',history:'history',stats:'stats'};
+    const map={home:'hero pool',match:'strats',season:'säsong'};
     if(t.textContent.trim().toLowerCase()===map[id]) t.classList.add('active');
   });
   if(id==='home') loadPlayers();
   if(id==='match') loadPlayers().then(()=>renderMatchPage());
-  if(id==='history') loadHistory();
-  if(id==='stats') loadStats();
+  if(id==='season'){ loadStats(); loadHistory(); }
 }
 
 // ===================== HOME =====================
@@ -1370,7 +1361,7 @@ async function generateStrategy() {
     var histBtn = document.createElement('button');
     histBtn.className = 'btn btn-ghost';
     histBtn.textContent = 'Se historik →';
-    histBtn.onclick = function(){ showPage('history'); };
+    histBtn.onclick = function(){ showPage('season'); };
     headerRow.appendChild(titleWrap);
     headerRow.appendChild(histBtn);
     areaDiv.appendChild(headerRow);
@@ -1541,7 +1532,7 @@ function renderStrategyFromMatch(m) {
   var histBtn = document.createElement('button');
   histBtn.className = 'btn btn-ghost';
   histBtn.textContent = 'Se historik →';
-  histBtn.onclick = function(){ showPage('history'); };
+  histBtn.onclick = function(){ showPage('season'); };
   headerRow.appendChild(titleWrap);
   headerRow.appendChild(histBtn);
   areaDiv.appendChild(headerRow);
