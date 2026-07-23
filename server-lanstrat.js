@@ -1139,13 +1139,48 @@ app.post('/api/replay/:id', async (req, res) => {
 // AI genererar en utmaning per spelare, anpassad efter rollen i strategin.
 // Maskinverifierbar: metric ur fast meny (OpenDota-falt), op och value —
 // verifieras automatiskt mot matchdatan nar matchen ar lankad.
+// Vanliga skalara metrics (heltal). Alla verifierade att finnas i en parsad OpenDota-match.
 const CHALLENGE_METRICS = {
-  kills: 'kills', deaths: 'deaths (getts som max, op <=)', assists: 'assists',
-  last_hits: 'last hits', denies: 'denies',
-  gold_per_min: 'GPM', xp_per_min: 'XPM',
+  // Kamp
+  kills: 'kills', hero_kills: 'kills pa hjaltar', deaths: 'deaths (op <=)', assists: 'assists',
+  // Farm & ekonomi
+  last_hits: 'last hits', denies: 'denies', gold_per_min: 'GPM', xp_per_min: 'XPM',
+  net_worth: 'natvarde (guld) totalt', gold_spent: 'spenderat guld',
+  neutral_kills: 'djungelcreeps dodade', ancient_kills: 'ancient-creeps dodade', level: 'hjaltniva',
+  // Skada & objectives
   hero_damage: 'hero damage totalt', tower_damage: 'tower damage totalt', hero_healing: 'healing totalt',
+  tower_kills: 'torn (sista slaget)', roshan_kills: 'roshan-kills (sallsynt, bra niva-3)', courier_kills: 'couriers dodade',
+  // Vision & info (support)
   obs_placed: 'observer wards placerade', sen_placed: 'sentry wards placerade',
-  stuns: 'stun-sekunder totalt'
+  purchase_ward_observer: 'observer wards kopta', purchase_ward_sentry: 'sentry wards kopta',
+  dewards: 'motstandarens wards forstorda (obs+sentry)', camps_stacked: 'lager stackade', creeps_stacked: 'creeps stackade',
+  // Utility & tempo
+  stuns: 'stun-sekunder totalt', purchase_tpscroll: 'TP-scrolls kopta', rune_pickups: 'runor plockade',
+  actions_per_min: 'APM (actions/min)', pings: 'pings (op <= for lugn, >= for shotcaller)',
+  teamfight_participation: 'andel av lagets fighter i PROCENT 0-100', lane_efficiency_pct: 'lane-effektivitet i procent',
+  // Overlevnad & disciplin
+  life_state_dead: 'sekunder dod totalt (op <=)', buyback_count: 'buybacks anvanda (op <=)'
+};
+// Decimal-metrics — jamfors utan heltalsavrundning (en decimal)
+const CHALLENGE_FLOAT_METRICS = { kda: 'KDA-kvot som decimal, t.ex. 4.5' };
+// Timeline-metrics — kraver faltet `at` (minut). Kumulativa arrayer per minut.
+const CHALLENGE_TIMELINE_METRICS = { lh_t: 'last hits vid minut `at`', gold_t: 'natvarde vid minut `at`', xp_t: 'xp vid minut `at`', dn_t: 'denies vid minut `at`' };
+// Item-timing — kraver faltet `item` (nyckel ur menyn). Levels ar MINUTER, op '<=' (tidigare = svarare).
+// Alla nycklar verifierade mot OpenDotas item-konstanter.
+const CHALLENGE_ITEMS = {
+  blink: 'Blink Dagger', black_king_bar: 'BKB', manta: 'Manta Style', radiance: 'Radiance', desolator: 'Desolator',
+  power_treads: 'Power Treads', phase_boots: 'Phase Boots', arcane_boots: 'Arcane Boots', travel_boots: 'Boots of Travel',
+  hand_of_midas: 'Hand of Midas', maelstrom: 'Maelstrom', mjollnir: 'Mjollnir', diffusal_blade: 'Diffusal Blade',
+  echo_sabre: 'Echo Sabre', dragon_lance: 'Dragon Lance', ultimate_scepter: 'Aghanims Scepter', aghanims_shard: 'Aghanims Shard',
+  octarine_core: 'Octarine Core', assault: 'Assault Cuirass', pipe: 'Pipe of Insight', crimson_guard: 'Crimson Guard',
+  guardian_greaves: 'Guardian Greaves', force_staff: 'Force Staff', glimmer_cape: 'Glimmer Cape', aeon_disk: 'Aeon Disk',
+  lotus_orb: 'Lotus Orb', blade_mail: 'Blade Mail', mekansm: 'Mekansm', vladmir: "Vladmir's Offering", spirit_vessel: 'Spirit Vessel',
+  orchid: 'Orchid', bloodthorn: 'Bloodthorn', nullifier: 'Nullifier', sheepstick: 'Scythe of Vyse', refresher: 'Refresher Orb',
+  shivas_guard: "Shiva's Guard", heart: 'Heart of Tarrasque', satanic: 'Satanic', abyssal_blade: 'Abyssal Blade',
+  butterfly: 'Butterfly', greater_crit: 'Daedalus', silver_edge: 'Silver Edge', monkey_king_bar: 'Monkey King Bar',
+  skadi: 'Eye of Skadi', bloodstone: 'Bloodstone', veil_of_discord: 'Veil of Discord', solar_crest: 'Solar Crest',
+  holy_locket: 'Holy Locket', rod_of_atos: 'Rod of Atos', gungir: 'Gleipnir', meteor_hammer: 'Meteor Hammer',
+  cyclone: "Eul's Scepter", hurricane_pike: 'Hurricane Pike', harpoon: 'Harpoon', disperser: 'Disperser', wind_waker: 'Wind Waker'
 };
 
 // Tre trosklar per utmaning (niva 1-3, ordnade latt->svar). Aldre matcher har
@@ -1156,16 +1191,54 @@ function challengeLevels(ch) {
   return [];
 }
 
-// Kompakt malbeskrivning at studiopromtens MATCH DATA (t.ex. "L1 <=4 / L2 <=2 / L3 <=0 deaths")
+// Ett giltigt utmaningsobjekt av nagon av de fyra typerna? (delas av generering + omgenerering)
+function validChallengeShape(c) {
+  if (!c || typeof c.text !== 'string' || !c.text) return false;
+  if (c.op !== '>=' && c.op !== '<=') return false;
+  if (!Array.isArray(c.levels) || c.levels.length !== 3 || !c.levels.every(n => typeof n === 'number')) return false;
+  if (c.metric === 'item_timing') return typeof c.item === 'string' && !!CHALLENGE_ITEMS[c.item] && c.op === '<=';
+  if (CHALLENGE_TIMELINE_METRICS[c.metric]) return typeof c.at === 'number' && c.at >= 2 && c.at <= 45;
+  return !!CHALLENGE_METRICS[c.metric] || !!CHALLENGE_FLOAT_METRICS[c.metric];
+}
+
+// Bygg det lagrade utmaningsobjektet (behall bara typrelevanta extrafalt). value = niva 1 (bakatkompat).
+function buildChallengeRecord(c) {
+  const rec = { alias: c.alias, text: c.text, metric: c.metric, op: c.op, levels: c.levels, value: c.levels[0] };
+  if (c.metric === 'item_timing') rec.item = c.item;
+  if (CHALLENGE_TIMELINE_METRICS[c.metric]) rec.at = c.at;
+  return rec;
+}
+
+// Det jamforbara faktiska vardet ur en OpenDota-spelarrad (per utmaningstyp)
+function challengeActual(ch, odRow) {
+  if (ch.metric === 'item_timing') {
+    const t = (odRow.first_purchase_time || {})[ch.item];
+    return (typeof t === 'number') ? t / 60 : Infinity; // minuter till forsta kop; Infinity = kopte aldrig
+  }
+  if (CHALLENGE_TIMELINE_METRICS[ch.metric]) {
+    const arr = odRow[ch.metric];
+    if (!Array.isArray(arr) || !arr.length) return 0;
+    const idx = Math.max(0, Math.min(ch.at || 0, arr.length - 1)); // klampa om matchen tog slut fore minut `at`
+    return arr[idx] || 0;
+  }
+  if (ch.metric === 'dewards') return (odRow.observer_kills || 0) + (odRow.sentry_kills || 0);
+  if (ch.metric === 'teamfight_participation') return (odRow.teamfight_participation || 0) * 100; // procent
+  return odRow[ch.metric] || 0;
+}
+
+// Kompakt malbeskrivning at studiopromtens MATCH DATA
 function challengeTargetLabel(ch) {
   const levels = challengeLevels(ch);
   if (!levels.length) return ch.op + ' ' + ch.value + ' ' + ch.metric;
-  return levels.map((v, i) => 'L' + (i + 1) + ' ' + ch.op + v).join(' / ') + ' ' + ch.metric;
+  if (ch.metric === 'item_timing') return (CHALLENGE_ITEMS[ch.item] || ch.item) + ' innan ' + levels.map(v => v + 'm').join(' / ');
+  const suffix = CHALLENGE_TIMELINE_METRICS[ch.metric] ? (' ' + ch.metric + '@min' + ch.at) : (' ' + ch.metric);
+  return levels.map((v, i) => 'L' + (i + 1) + ' ' + ch.op + v).join(' / ') + suffix;
 }
 
 function evalChallenge(ch, odRow) {
-  const raw = ch.metric === 'stuns' ? (odRow.stuns || 0) : (odRow[ch.metric] || 0);
-  const actual = Math.round(raw);
+  const raw = challengeActual(ch, odRow);
+  const decimal = !!CHALLENGE_FLOAT_METRICS[ch.metric] || ch.metric === 'item_timing';
+  const actual = decimal ? (isFinite(raw) ? Math.round(raw * 10) / 10 : raw) : Math.round(raw);
   const levels = challengeLevels(ch);
   // Hogsta niva vars troskel klaras (nivaerna ar monotona latt->svar)
   let level = 0;
@@ -1188,17 +1261,21 @@ async function generateChallengesForMatch(matchId) {
     + 'Skapa EN personlig utmaning per spelare, anpassad efter spelarens hjalte och roll i strategin. '
     + 'Utmaningen ska vara matbar via OpenDota-statistik och REALISTISK for rollen: en support ska fa ward/assist/stun-utmaningar, '
     + 'en carry farm/damage-utmaningar, en offlane tanka/disrupta.'
-    + '\n\nVarje utmaning har TRE nivaer pa SAMMA metric — en brant, ICKE-LINJAR svarighetstrappa (hoppen mellan nivaerna ska OKA, inte vara jamnt fordelade):'
+    + '\n\nVarje utmaning har TRE nivaer — en brant, ICKE-LINJAR svarighetstrappa (hoppen mellan nivaerna ska OKA, inte vara jamnt fordelade):'
     + '\n- Niva 1: redan ganska svar (klart over genomsnittet for rollen, aldrig gratis).'
     + '\n- Niva 2: svar.'
     + '\n- Niva 3: nastan omojlig — en exceptionell insats som bara hander valdigt sallan (t.ex. for en do-sallan-utmaning: niva 3 = 0 deaths).'
-    + '\n\nTillgangliga metrics (anvand exakt dessa nycklar): ' + JSON.stringify(CHALLENGE_METRICS)
-    + '\nop ar ">=" (minst) eller "<=" (hogst, typiskt for deaths).'
-    + '\n"levels" ordnas alltid niva 1 -> niva 3. For op ">=" ska vardena STIGA (niva 3 hogst); for op "<=" ska de SJUNKA (niva 3 lagst, ofta 0).'
+    + '\n\nDu kan valja EN av FYRA utmaningstyper per spelare — VARIERA typerna mellan spelarna, gor det inte enformigt:'
+    + '\n1) VANLIG metric — {"metric":"nyckel","op":">="/"<=","levels":[n1,n2,n3]}. Menyer: ' + JSON.stringify(CHALLENGE_METRICS)
+    + '\n2) DECIMAL-metric (samma form, decimaltal tillatna): ' + JSON.stringify(CHALLENGE_FLOAT_METRICS)
+    + '\n3) TIMELINE vid en viss minut — lagg till "at" (minut, t.ex. 10): {"metric":"lh_t","at":10,"op":">=","levels":[50,70,90]}. Menyer: ' + JSON.stringify(CHALLENGE_TIMELINE_METRICS)
+    + '\n4) ITEM-TIMING — kop ett hjaltviktigt item fore en viss minut: {"metric":"item_timing","item":"nyckel","op":"<=","levels":[16,12,9]} (levels ar MINUTER, MASTE falla eftersom tidigare=svarare). Valj ett item som verkligen ar ett powerspike for just den hjalten (t.ex. Blink pa Axe, BKB pa en carry). Item-meny: ' + JSON.stringify(CHALLENGE_ITEMS)
+    + '\n\nop-regler: ">=" (minst) for det mesta, "<=" for deaths/buybacks/life_state_dead/pings-lugn OCH alltid for item_timing.'
+    + '\n"levels" ordnas alltid niva 1 -> niva 3. For op ">=" ska vardena STIGA (niva 3 hogst); for op "<=" ska de SJUNKA (niva 3 lagst).'
     + '\n\nDRAFT (spelare -> hjalte): ' + JSON.stringify(draft)
     + '\nSTRATEGI (roller och plan): ' + (match.currentStrategy || match.strategy || '').slice(0, 1500)
-    + '\n\nSvara ENDAST med JSON, ingen markdown:'
-    + '\n{"challenges":[{"alias":"exakt spelarnamn ur draften","text":"kort slagkraftig utmaningstext pa svenska, max 12 ord","metric":"nyckel ur menyn","op":">=","levels":[42,60,85]}]}';
+    + '\n\nSvara ENDAST med JSON, ingen markdown. "text" = kort slagkraftig utmaningstext pa svenska, max 12 ord:'
+    + '\n{"challenges":[{"alias":"exakt spelarnamn ur draften","text":"...","metric":"...","op":">=","levels":[42,60,85]}]}';
 
   const text = (await callClaude(prompt, 1500)).replace(/```json|```/g, '').trim();
   const jsonStart = text.indexOf('{');
@@ -1206,19 +1283,14 @@ async function generateChallengesForMatch(matchId) {
   if (jsonStart === -1 || jsonEnd === -1) throw new Error('Ogiltigt utmaningssvar fran AI');
   const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1));
 
-  const valid = (parsed.challenges || []).filter(c =>
-    c && aliases.includes(c.alias) && CHALLENGE_METRICS[c.metric]
-    && (c.op === '>=' || c.op === '<=') && c.text
-    && Array.isArray(c.levels) && c.levels.length === 3 && c.levels.every(n => typeof n === 'number')
-  );
+  const valid = (parsed.challenges || []).filter(c => c && aliases.includes(c.alias) && validChallengeShape(c));
   if (!valid.length) throw new Error('Inga giltiga utmaningar i AI-svaret');
 
   // Las om binen — annan skrivning kan ha hunnit fore under AI-anropet
   const fresh = await readMatches();
   const freshMatch = fresh.find(m => m.id === matchId);
   if (!freshMatch) return;
-  // value = niva 1 (bakatkompatibilitet: aldre lasare och GSI-castern laser `value`)
-  freshMatch.challenges = valid.map(c => ({ alias: c.alias, text: c.text, metric: c.metric, op: c.op, levels: c.levels, value: c.levels[0] }));
+  freshMatch.challenges = valid.map(buildChallengeRecord);
   await writeMatches(fresh);
   console.log('Utmaningar genererade for match ' + matchId + ' (' + valid.length + ' st)');
 }
@@ -1237,23 +1309,26 @@ async function regenerateChallengeForAlias(matchId, alias, newHero) {
     const prompt = 'Du ar utmaningsgeneratorn for en Dota 2-LAN-kvall. En spelares hjalte har just bytts ut mitt i draften (bannlyst/taget). '
       + 'Skapa EN ny personlig utmaning for just den har spelaren, anpassad efter deras NYA hjalte och roll i strategin. '
       + 'Matbar via OpenDota-statistik, realistisk for rollen.\n\n'
-      + 'Utmaningen har TRE nivaer pa SAMMA metric — en brant, ICKE-LINJAR svarighetstrappa (hoppen mellan nivaerna ska OKA): '
+      + 'Utmaningen har TRE nivaer — en brant, ICKE-LINJAR svarighetstrappa (hoppen mellan nivaerna ska OKA): '
       + 'niva 1 = redan ganska svar (aldrig gratis), niva 2 = svar, niva 3 = nastan omojlig (en exceptionell insats som sallan hander, t.ex. 0 deaths).\n\n'
-      + 'Tillgangliga metrics (anvand exakt dessa nycklar): ' + JSON.stringify(CHALLENGE_METRICS)
-      + '\nop ar ">=" (minst) eller "<=" (hogst, typiskt for deaths).'
-      + '\n"levels" ordnas niva 1 -> niva 3. For op ">=" ska vardena STIGA (niva 3 hogst); for op "<=" ska de SJUNKA (niva 3 lagst).'
+      + 'Valj EN av FYRA typer som passar den nya hjalten:'
+      + '\n1) VANLIG metric — {"metric":"nyckel","op":">="/"<=","levels":[n1,n2,n3]}. Menyer: ' + JSON.stringify(CHALLENGE_METRICS)
+      + '\n2) DECIMAL-metric: ' + JSON.stringify(CHALLENGE_FLOAT_METRICS)
+      + '\n3) TIMELINE vid minut "at": {"metric":"lh_t","at":10,"op":">=","levels":[50,70,90]}. Menyer: ' + JSON.stringify(CHALLENGE_TIMELINE_METRICS)
+      + '\n4) ITEM-TIMING (kop fore minut): {"metric":"item_timing","item":"nyckel","op":"<=","levels":[16,12,9]} — powerspike-item for hjalten. Item-meny: ' + JSON.stringify(CHALLENGE_ITEMS)
+      + '\nop-regler: "<=" for deaths/buybacks/life_state_dead OCH alltid for item_timing, annars ">=".'
+      + '\n"levels" ordnas niva 1 -> niva 3. For op ">=" ska vardena STIGA; for op "<=" ska de SJUNKA.'
       + '\n\nSPELARE: ' + alias + '\nNY HJALTE: ' + newHero
       + '\nSTRATEGI (roller och plan): ' + (match.currentStrategy || match.strategy || '').slice(0, 1500)
-      + '\n\nSvara ENDAST med JSON, ingen markdown:'
-      + '\n{"text":"kort slagkraftig utmaningstext pa svenska, max 12 ord","metric":"nyckel ur menyn","op":">=","levels":[42,60,85]}';
+      + '\n\nSvara ENDAST med JSON, ingen markdown. "text" = kort slagkraftig svenska, max 12 ord:'
+      + '\n{"text":"...","metric":"...","op":">=","levels":[42,60,85]}';
 
     const text = (await callClaude(prompt, 500)).replace(/```json|```/g, '').trim();
     const jsonStart = text.indexOf('{');
     const jsonEnd = text.lastIndexOf('}');
     if (jsonStart === -1 || jsonEnd === -1) return;
     const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1));
-    if (!(parsed && CHALLENGE_METRICS[parsed.metric] && (parsed.op === '>=' || parsed.op === '<=') && parsed.text
-      && Array.isArray(parsed.levels) && parsed.levels.length === 3 && parsed.levels.every(n => typeof n === 'number'))) return;
+    if (!validChallengeShape(parsed)) return;
 
     // Las om binen — annan skrivning kan ha hunnit fore under AI-anropet
     const fresh = await readMatches();
@@ -1261,7 +1336,7 @@ async function regenerateChallengeForAlias(matchId, alias, newHero) {
     if (!freshMatch || !Array.isArray(freshMatch.challenges)) return;
     const idx = freshMatch.challenges.findIndex(c => c.alias === alias);
     if (idx === -1) return;
-    freshMatch.challenges[idx] = { alias, text: parsed.text, metric: parsed.metric, op: parsed.op, levels: parsed.levels, value: parsed.levels[0] };
+    freshMatch.challenges[idx] = buildChallengeRecord(Object.assign({ alias: alias }, parsed));
     await writeMatches(fresh);
     pushOverlay(alias, 'challenge-update', 'Ny utmaning', parsed.text);
     console.log('[GSI] Utmaning omgenererad for', alias, '(' + newHero + '):', parsed.text);

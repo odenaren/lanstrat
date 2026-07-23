@@ -852,15 +852,75 @@ async function confirmAddPlayer() {
 }
 function closeModal(){ document.getElementById('modal-overlay').classList.remove('open'); document.getElementById('new-player-steamid').value=''; }
 
-// ===================== PERSONLIGA UTMANINGAR (nivaer) =====================
-var CHALLENGE_METRIC_LABELS = { kills:'kills', deaths:'dödsfall', assists:'assists', last_hits:'last hits', denies:'denies',
-  gold_per_min:'GPM', xp_per_min:'XPM', hero_damage:'hjälteskada', tower_damage:'tornskada', hero_healing:'healing',
-  obs_placed:'obs wards', sen_placed:'sentry wards', stuns:'stun-sek' };
+// ===================== PERSONLIGA UTMANINGAR (nivaer + typer) =====================
+var CHALLENGE_METRIC_LABELS = {
+  kills:'kills', hero_kills:'hjältekills', deaths:'dödsfall', assists:'assists',
+  last_hits:'last hits', denies:'denies', gold_per_min:'GPM', xp_per_min:'XPM',
+  net_worth:'nätvärde', gold_spent:'spenderat guld', neutral_kills:'djungelkills', ancient_kills:'ancient-kills', level:'nivå',
+  hero_damage:'hjälteskada', tower_damage:'tornskada', hero_healing:'healing',
+  tower_kills:'torn', roshan_kills:'roshan-kills', courier_kills:'courier-kills',
+  obs_placed:'obs wards', sen_placed:'sentry wards', purchase_ward_observer:'köpta obs', purchase_ward_sentry:'köpta sentries',
+  dewards:'dewards', camps_stacked:'stackade läger', creeps_stacked:'stackade creeps',
+  stuns:'stun-sek', purchase_tpscroll:'TP-scrolls', rune_pickups:'runor', actions_per_min:'APM', pings:'pings',
+  teamfight_participation:'fightdeltagande', lane_efficiency_pct:'lane-effektivitet',
+  life_state_dead:'sek död', buyback_count:'buybacks', kda:'KDA',
+  lh_t:'last hits', gold_t:'nätvärde', xp_t:'xp', dn_t:'denies' };
+// Item-namn (speglar CHALLENGE_ITEMS i server.js)
+var CHALLENGE_ITEM_NAMES = {
+  blink:'Blink Dagger', black_king_bar:'BKB', manta:'Manta Style', radiance:'Radiance', desolator:'Desolator',
+  power_treads:'Power Treads', phase_boots:'Phase Boots', arcane_boots:'Arcane Boots', travel_boots:'Boots of Travel',
+  hand_of_midas:'Hand of Midas', maelstrom:'Maelstrom', mjollnir:'Mjollnir', diffusal_blade:'Diffusal Blade',
+  echo_sabre:'Echo Sabre', dragon_lance:'Dragon Lance', ultimate_scepter:'Aghanims Scepter', aghanims_shard:'Aghanims Shard',
+  octarine_core:'Octarine Core', assault:'Assault Cuirass', pipe:'Pipe of Insight', crimson_guard:'Crimson Guard',
+  guardian_greaves:'Guardian Greaves', force_staff:'Force Staff', glimmer_cape:'Glimmer Cape', aeon_disk:'Aeon Disk',
+  lotus_orb:'Lotus Orb', blade_mail:'Blade Mail', mekansm:'Mekansm', vladmir:"Vladmir's Offering", spirit_vessel:'Spirit Vessel',
+  orchid:'Orchid', bloodthorn:'Bloodthorn', nullifier:'Nullifier', sheepstick:'Scythe of Vyse', refresher:'Refresher Orb',
+  shivas_guard:"Shiva's Guard", heart:'Heart of Tarrasque', satanic:'Satanic', abyssal_blade:'Abyssal Blade',
+  butterfly:'Butterfly', greater_crit:'Daedalus', silver_edge:'Silver Edge', monkey_king_bar:'Monkey King Bar',
+  skadi:'Eye of Skadi', bloodstone:'Bloodstone', veil_of_discord:'Veil of Discord', solar_crest:'Solar Crest',
+  holy_locket:'Holy Locket', rod_of_atos:'Rod of Atos', gungir:'Gleipnir', meteor_hammer:'Meteor Hammer',
+  cyclone:"Eul's Scepter", hurricane_pike:'Hurricane Pike', harpoon:'Harpoon', disperser:'Disperser', wind_waker:'Wind Waker' };
+var CHALLENGE_TIMELINE_SET = { lh_t:1, gold_t:1, xp_t:1, dn_t:1 };
+var CHALLENGE_FLOAT_SET = { kda:1 };
 function challengeMetricLabel(m){ return CHALLENGE_METRIC_LABELS[m] || m; }
+function challengeItemName(k){ return CHALLENGE_ITEM_NAMES[k] || k; }
 // Tre trosklar (niva 1-3, latt->svar); aldre matcher har bara ett `value` som fallback
 function challengeLevelsOf(ch){ if(ch.levels && ch.levels.length) return ch.levels; if(typeof ch.value==='number') return [ch.value]; return []; }
-// "N1: max 4 · N2: max 2 · N3: max 0" (op-prefix, inga metricnamn)
-function challengeThresholds(ch){ var lv = challengeLevelsOf(ch); var pre = ch.op==='<=' ? 'max ' : ''; return lv.map(function(v,i){ return 'N'+(i+1)+': '+pre+v; }).join(' · '); }
+// Trosklar som text, typmedvetet: "N1: innan 16 min · ..." for item, annars "N1: max 4 · ..."
+function challengeThresholds(ch){
+  var lv = challengeLevelsOf(ch);
+  if(ch.metric==='item_timing') return lv.map(function(v,i){ return 'N'+(i+1)+': innan '+v+' min'; }).join(' · ');
+  var pre = ch.op==='<=' ? 'max ' : '';
+  var unit = ch.metric==='teamfight_participation' ? '%' : '';
+  return lv.map(function(v,i){ return 'N'+(i+1)+': '+pre+v+unit; }).join(' · ');
+}
+// Vad som mats (item-namn / metric @ minut / metriketikett)
+function challengeContext(ch){
+  if(ch.metric==='item_timing') return challengeItemName(ch.item);
+  if(CHALLENGE_TIMELINE_SET[ch.metric]) return challengeMetricLabel(ch.metric)+' @ min '+ch.at;
+  return challengeMetricLabel(ch.metric);
+}
+// Full rad fore matchen
+function challengeLevelLine(ch){
+  if(ch.metric==='item_timing') return challengeContext(ch)+' — '+challengeThresholds(ch);
+  return challengeThresholds(ch)+' '+challengeContext(ch);
+}
+// Faktiskt varde ur OpenDota-raden (speglar challengeActual i server.js)
+function challengeActualClient(ch, od){
+  if(ch.metric==='item_timing'){ var t=(od.first_purchase_time||{})[ch.item]; return (typeof t==='number')? t/60 : Infinity; }
+  if(CHALLENGE_TIMELINE_SET[ch.metric]){ var a=od[ch.metric]; if(!(a&&a.length)) return 0; return a[Math.max(0,Math.min(ch.at||0,a.length-1))]||0; }
+  if(ch.metric==='dewards') return (od.observer_kills||0)+(od.sentry_kills||0);
+  if(ch.metric==='teamfight_participation') return (od.teamfight_participation||0)*100;
+  return od[ch.metric]||0;
+}
+function challengeRoundActual(ch, raw){ var decimal = CHALLENGE_FLOAT_SET[ch.metric] || ch.metric==='item_timing'; return decimal ? (isFinite(raw)? Math.round(raw*10)/10 : raw) : Math.round(raw); }
+// Faktiskt utfall som text
+function challengeActualText(ch, actual){
+  if(ch.metric==='item_timing') return isFinite(actual)? (actual+' min') : 'köpte aldrig';
+  if(ch.metric==='teamfight_participation') return actual+'%';
+  if(CHALLENGE_TIMELINE_SET[ch.metric]) return actual+' '+challengeMetricLabel(ch.metric)+' @ min '+ch.at;
+  return actual+' '+challengeMetricLabel(ch.metric);
+}
 // Hogsta klarade niva (0 = ingen)
 function challengeAchievedLevel(ch, actual){ var lv = challengeLevelsOf(ch); var level=0; for(var i=0;i<lv.length;i++){ var ok = ch.op==='<=' ? actual<=lv[i] : actual>=lv[i]; if(ok) level=i+1; } return { level:level, max:lv.length }; }
 
@@ -2471,7 +2531,7 @@ async function openDetail(id) {
       if(challengeLevelsOf(ch).length > 1) {
         var lvl = document.createElement('div');
         lvl.style.cssText = 'font-size:11px;color:var(--text-dim);margin-top:1px';
-        lvl.textContent = challengeThresholds(ch) + ' ' + challengeMetricLabel(ch.metric);
+        lvl.textContent = challengeLevelLine(ch);
         row.appendChild(lvl);
       }
       chBox.appendChild(row);
@@ -2767,13 +2827,13 @@ async function loadOpenDotaStats(m) {
       var row = matched.find(function(r){ return r.alias === ch.alias; });
       var line = '<strong style="color:var(--gold)">' + escCh(ch.alias) + '</strong> — ' + escCh(ch.text);
       if(row) {
-        var raw = ch.metric === 'stuns' ? (row.od.stuns||0) : (row.od[ch.metric]||0);
-        var actual = Math.round(raw);
+        var rawA = challengeActualClient(ch, row.od);
+        var actual = challengeRoundActual(ch, rawA);
         var ev = challengeAchievedLevel(ch, actual);
         var chCol = ev.level >= 3 ? '#f1c40f' : (ev.level >= 1 ? '#2ecc71' : '#e74c3c');
         var chBadge = ev.level >= 1 ? ('✅ Nivå ' + ev.level + ' av ' + ev.max) : '❌ Ingen nivå';
         line += ' &nbsp;<span style="font-weight:700;color:' + chCol + '">' + chBadge
-          + '</span> <span style="color:var(--text-dim);font-size:12px">(' + actual + ' ' + challengeMetricLabel(ch.metric) + ' · ' + escCh(challengeThresholds(ch)) + ')</span>';
+          + '</span> <span style="color:var(--text-dim);font-size:12px">(' + escCh(challengeActualText(ch, actual)) + ' · ' + escCh(challengeThresholds(ch)) + ')</span>';
       } else {
         line += ' &nbsp;<span style="color:var(--text-dim);font-size:12px">kunde inte verifieras — spelaren hittades inte i matchdatan</span>';
       }

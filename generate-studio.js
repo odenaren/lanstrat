@@ -290,20 +290,36 @@ async function generateForMatch(strategyMatch, heroes, allMatches) {
       const nick = aliasByHero[normHero(heroName(p.hero_id))];
       if (nick) odRowByAlias[nick] = p;
     });
+    // Utmaningstyper (speglar server.js): item_timing (minut till kop), timeline (array@minut),
+    // decimal (kda), samt harledda dewards/teamfight_participation. Halls synkat med evalChallenge.
+    const CH_TIMELINE = { lh_t: 1, gold_t: 1, xp_t: 1, dn_t: 1 };
+    const CH_FLOAT = { kda: 1 };
+    const chActual = (ch, r) => {
+      if (ch.metric === 'item_timing') { const t = (r.first_purchase_time || {})[ch.item]; return (typeof t === 'number') ? t / 60 : Infinity; }
+      if (CH_TIMELINE[ch.metric]) { const a = r[ch.metric]; if (!Array.isArray(a) || !a.length) return 0; return a[Math.max(0, Math.min(ch.at || 0, a.length - 1))] || 0; }
+      if (ch.metric === 'dewards') return (r.observer_kills || 0) + (r.sentry_kills || 0);
+      if (ch.metric === 'teamfight_participation') return (r.teamfight_participation || 0) * 100;
+      return r[ch.metric] || 0;
+    };
     challengeResults = strategyMatch.challenges.map(ch => {
       const row = odRowByAlias[ch.alias];
       if (!row) return { alias: ch.alias, challenge: ch.text, result: 'unknown — player not found in match data' };
-      const raw = ch.metric === 'stuns' ? (row.stuns || 0) : (row[ch.metric] || 0);
-      const actual = Math.round(raw);
       // Tre trosklar (niva 1-3, latt->svar); aldre matcher har bara ett `value` som fallback
       const levels = (Array.isArray(ch.levels) && ch.levels.length && ch.levels.every(n => typeof n === 'number')) ? ch.levels : (typeof ch.value === 'number' ? [ch.value] : []);
+      const raw = chActual(ch, row);
+      const decimal = CH_FLOAT[ch.metric] || ch.metric === 'item_timing';
+      const actual = decimal ? (isFinite(raw) ? Math.round(raw * 10) / 10 : raw) : Math.round(raw);
       let level = 0;
       for (let i = 0; i < levels.length; i++) {
         const ok = ch.op === '<=' ? actual <= levels[i] : actual >= levels[i];
         if (ok) level = i + 1;
       }
-      const target = levels.length ? levels.map((v, i) => 'L' + (i + 1) + ' ' + ch.op + v).join(' / ') + ' ' + ch.metric : (ch.op + ' ' + ch.value + ' ' + ch.metric);
-      return { alias: ch.alias, challenge: ch.text, target, actual, passed: level >= 1, achieved_level: level, max_level: levels.length };
+      let target;
+      if (ch.metric === 'item_timing') target = (ch.item || 'item') + ' innan ' + levels.map(v => v + 'm').join(' / ');
+      else if (CH_TIMELINE[ch.metric]) target = levels.map((v, i) => 'L' + (i + 1) + ' ' + ch.op + v).join(' / ') + ' ' + ch.metric + '@min' + ch.at;
+      else target = levels.length ? levels.map((v, i) => 'L' + (i + 1) + ' ' + ch.op + v).join(' / ') + ' ' + ch.metric : (ch.op + ' ' + ch.value + ' ' + ch.metric);
+      const actualOut = isFinite(actual) ? actual : 'kopte aldrig';
+      return { alias: ch.alias, challenge: ch.text, target, actual: actualOut, passed: level >= 1, achieved_level: level, max_level: levels.length };
     });
   }
 

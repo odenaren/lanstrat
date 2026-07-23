@@ -490,10 +490,41 @@ function show(id) {
 }
 
 function wait(ms) { return new Promise(function(r){ setTimeout(r, ms); }); }
-var CH_METRIC_LABELS_TV = { kills:'kills', deaths:'dödsfall', assists:'assists', last_hits:'last hits', denies:'denies',
-  gold_per_min:'GPM', xp_per_min:'XPM', hero_damage:'hjälteskada', tower_damage:'tornskada', hero_healing:'healing',
-  obs_placed:'obs wards', sen_placed:'sentry wards', stuns:'stun-sek' };
+var CH_METRIC_LABELS_TV = {
+  kills:'kills', hero_kills:'hjältekills', deaths:'dödsfall', assists:'assists', last_hits:'last hits', denies:'denies',
+  gold_per_min:'GPM', xp_per_min:'XPM', net_worth:'nätvärde', gold_spent:'spenderat guld', neutral_kills:'djungelkills',
+  ancient_kills:'ancient-kills', level:'nivå', hero_damage:'hjälteskada', tower_damage:'tornskada', hero_healing:'healing',
+  tower_kills:'torn', roshan_kills:'roshan-kills', courier_kills:'courier-kills', obs_placed:'obs wards', sen_placed:'sentry wards',
+  purchase_ward_observer:'köpta obs', purchase_ward_sentry:'köpta sentries', dewards:'dewards', camps_stacked:'stackade läger',
+  creeps_stacked:'stackade creeps', stuns:'stun-sek', purchase_tpscroll:'TP-scrolls', rune_pickups:'runor', actions_per_min:'APM',
+  pings:'pings', teamfight_participation:'fightdeltagande', lane_efficiency_pct:'lane-effektivitet', life_state_dead:'sek död',
+  buyback_count:'buybacks', kda:'KDA', lh_t:'last hits', gold_t:'nätvärde', xp_t:'xp', dn_t:'denies' };
+var CH_ITEM_NAMES_TV = { blink:'Blink Dagger', black_king_bar:'BKB', manta:'Manta Style', radiance:'Radiance', desolator:'Desolator',
+  power_treads:'Power Treads', phase_boots:'Phase Boots', arcane_boots:'Arcane Boots', travel_boots:'Boots of Travel',
+  hand_of_midas:'Hand of Midas', maelstrom:'Maelstrom', mjollnir:'Mjollnir', diffusal_blade:'Diffusal Blade', echo_sabre:'Echo Sabre',
+  dragon_lance:'Dragon Lance', ultimate_scepter:'Aghanims Scepter', aghanims_shard:'Aghanims Shard', octarine_core:'Octarine Core',
+  assault:'Assault Cuirass', pipe:'Pipe of Insight', crimson_guard:'Crimson Guard', guardian_greaves:'Guardian Greaves',
+  force_staff:'Force Staff', glimmer_cape:'Glimmer Cape', aeon_disk:'Aeon Disk', lotus_orb:'Lotus Orb', blade_mail:'Blade Mail',
+  mekansm:'Mekansm', vladmir:"Vladmir's Offering", spirit_vessel:'Spirit Vessel', orchid:'Orchid', bloodthorn:'Bloodthorn',
+  nullifier:'Nullifier', sheepstick:'Scythe of Vyse', refresher:'Refresher Orb', shivas_guard:"Shiva's Guard", heart:'Heart of Tarrasque',
+  satanic:'Satanic', abyssal_blade:'Abyssal Blade', butterfly:'Butterfly', greater_crit:'Daedalus', silver_edge:'Silver Edge',
+  monkey_king_bar:'Monkey King Bar', skadi:'Eye of Skadi', bloodstone:'Bloodstone', veil_of_discord:'Veil of Discord',
+  solar_crest:'Solar Crest', holy_locket:'Holy Locket', rod_of_atos:'Rod of Atos', gungir:'Gleipnir', meteor_hammer:'Meteor Hammer',
+  cyclone:"Eul's Scepter", hurricane_pike:'Hurricane Pike', harpoon:'Harpoon', disperser:'Disperser', wind_waker:'Wind Waker' };
+var CH_TIMELINE_TV = { lh_t:1, gold_t:1, xp_t:1, dn_t:1 };
 function chMetricLabelTv(m){ return CH_METRIC_LABELS_TV[m] || m; }
+// Typmedveten nivarad for TV-kortet
+function chLevelLineTv(ch){
+  var lv = (ch.levels && ch.levels.length) ? ch.levels : (typeof ch.value === 'number' ? [ch.value] : []);
+  if(!lv.length) return '';
+  if(ch.metric === 'item_timing'){
+    return (CH_ITEM_NAMES_TV[ch.item] || ch.item) + ' — ' + lv.map(function(v,i){ return 'Nivå '+(i+1)+': innan '+v+' min'; }).join('   ·   ');
+  }
+  var pre = ch.op === '<=' ? 'max ' : '';
+  var unit = ch.metric === 'teamfight_participation' ? '%' : '';
+  var ctx = CH_TIMELINE_TV[ch.metric] ? (chMetricLabelTv(ch.metric)+' @ min '+ch.at) : chMetricLabelTv(ch.metric);
+  return lv.map(function(v,i){ return 'Nivå '+(i+1)+': '+pre+v+unit; }).join('   ·   ') + ' ' + ctx;
+}
 
 var _audioUnlocked = false;
 
@@ -769,9 +800,8 @@ function fadeAudio(el, from, to, durationMs, onDone) {
         card.appendChild(pl); card.appendChild(he); card.appendChild(tx);
         var chLevels = (ch.levels && ch.levels.length) ? ch.levels : (typeof ch.value === 'number' ? [ch.value] : []);
         if(chLevels.length > 1) {
-          var pre = ch.op === '<=' ? 'max ' : '';
           var lv = document.createElement('div'); lv.className = 'ch-levels';
-          lv.textContent = chLevels.map(function(v,i){ return 'Nivå ' + (i+1) + ': ' + pre + v; }).join('   ·   ') + ' ' + chMetricLabelTv(ch.metric);
+          lv.textContent = chLevelLineTv(ch);
           card.appendChild(lv);
         }
         chCards.appendChild(card);
