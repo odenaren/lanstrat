@@ -75,7 +75,7 @@ Sånt som inte finns än — helt nya delar av produkten.
   **Kvarstår:**
   1. **Testa mot en riktig pubmatch** — hela kedjan är overifierad live. Särskilt: att `map.matchid` finns och är stabilt i GSI-payloaden genom draft→match (koden ignorerar `"0"`; console.log-tailen ovan ger nu både fallback och avvikelselogg för exakt detta).
   2. Manuell inmatning som fallback (5+5 hjältar i formulär, utan GSI/overlay) — inte byggd, medvetet: automatiska vägen först eftersom infrastrukturen redan fanns.
-  3. Statssidan: `mode:"pub"`-matcher blandas nu in i historik/statistik — fundera på om de ska filtreras/märkas där (de har `gameNumber` i samma serie som LAN-matcherna).
+  3. ~~Statssidan: `mode:"pub"`-matcher blandas nu in i historik/statistik — fundera på om de ska filtreras/märkas där (de har `gameNumber` i samma serie som LAN-matcherna).~~ **MÄRKTA (inte filtrerade) 2026-07-23** — beslut: pub-matcher räknas fortfarande in men markeras. Historiklistan hade redan en `↩ PUB`-badge per match; `loadStats` (Säsong-vyn) visar nu en not under summeringskorten ("N av M matcher är pub-strategier … räknas in i siffrorna ovan") med samma orange badge-stil. Siffrorna oförändrade — bara synliggjort att LAN+pub blandas.
   4. Detaljvyn visar inte `teamHeroes` (randoms i egna laget) — bara DHS-spelarnas draft. Räcker sannolikt, men värt att veta.
   Relaterat till "Single player-läge" ovan men bredare: funkar även när flera DHS-spelare är i samma lag i ranked, inte bara en ensam spelare.
 
