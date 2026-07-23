@@ -182,11 +182,22 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .portrait-pop{animation:portraitPop .3s ease both;}
 /* HUD-skin: monospace pa korta data-etiketter (selektivt sa layouter inte spracks av bredare glyfer) */
 .nav-tab,.match-entry-badge,.tag,.badge-has-items,.badge-no-items,.player-card-count,.selected-count,.attr-count,.match-entry-date{font-family:var(--mono);letter-spacing:.04em;}
+/* HUD-dekor: horfasten pa paneler, glod pa primarknappar, scanline pa Nu-headern */
+.card,.player-card,.match-entry,.strategy-area,.modal{position:relative;}
+.card::before,.player-card::before,.match-entry::before,.strategy-area::before,.modal::before,
+.card::after,.player-card::after,.match-entry::after,.strategy-area::after,.modal::after{content:"";position:absolute;width:11px;height:11px;pointer-events:none;z-index:2;}
+.card::before,.player-card::before,.match-entry::before,.strategy-area::before,.modal::before{top:-1px;left:-1px;border-top:1.5px solid var(--gold);border-left:1.5px solid var(--gold);}
+.card::after,.player-card::after,.match-entry::after,.strategy-area::after,.modal::after{bottom:-1px;right:-1px;border-bottom:1.5px solid var(--gold);border-right:1.5px solid var(--gold);}
+.btn-gold,.gen-btn{box-shadow:0 0 18px -7px var(--gold);}
+#page-now .page-header{position:relative;overflow:hidden;}
+#page-now .page-header::after{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:.4;animation:hudscan 5s linear infinite;pointer-events:none;}
+@keyframes hudscan{0%{top:0;}100%{top:100%;}}
+@media(prefers-reduced-motion:reduce){#page-now .page-header::after{animation:none;opacity:.2;}}
 </style>
 </head>
 <body>
 <nav class="nav">
-  <div onclick="showPage('home')" style="cursor:pointer;display:flex;flex-direction:column;line-height:1;gap:2px;flex-shrink:0"><div style="font-family:Rajdhani,sans-serif;font-size:26px;font-weight:700;color:var(--gold);letter-spacing:.15em">DREAMHACK SKYRUP</div><div style="font-family:Rajdhani,sans-serif;font-size:10px;font-weight:500;color:var(--text-dim);letter-spacing:.2em;text-transform:uppercase">The Playbook</div></div>
+  <div onclick="showPage('now')" style="cursor:pointer;display:flex;flex-direction:column;line-height:1;gap:2px;flex-shrink:0"><div style="font-family:Rajdhani,sans-serif;font-size:26px;font-weight:700;color:var(--gold);letter-spacing:.15em">DREAMHACK SKYRUP</div><div style="font-family:Rajdhani,sans-serif;font-size:10px;font-weight:500;color:var(--text-dim);letter-spacing:.2em;text-transform:uppercase">The Playbook</div></div>
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="showPage('now')">Nu</button>
     <button class="nav-tab" onclick="showPage('match')">Strats</button>
@@ -273,8 +284,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
   <div class="page-header">
     <h2>Säsong</h2>
     <span style="color:var(--text-dim);font-size:13px">Statistik, arketyper &amp; matchhistorik — klicka på en match för detaljer &amp; itemtips</span>
-    <button onclick="openLanModal()" style="margin-left:auto;padding:6px 14px;background:rgba(44,224,224,.15);border:1px solid var(--gold-dim);color:var(--gold);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s">⚔️ Inför lanet</button>
-    <button onclick="clearAllMemory()" style="margin-left:auto;padding:6px 14px;background:none;border:1px solid #c0392b44;color:var(--red);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='#c0392b44'">Rensa minne</button>
+    <button onclick="openLanModal()" style="margin-left:auto;padding:6px 14px;background:rgba(44,224,224,.15);border:1px solid var(--gold-dim);color:var(--gold);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s">⚙️ Admin</button>
   </div>
   <div id="stats-content"></div>
   <div class="section-title" style="margin-top:28px">Matchhistorik</div>
@@ -354,9 +364,10 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 <!-- LAN START MODAL -->
 <div id="lan-modal-overlay" class="modal-overlay">
   <div class="modal" style="width:440px">
-    <h3>Infor lanet</h3>
-    <p style="color:var(--text-dim);font-size:13px;margin-bottom:20px;line-height:1.6">Valj vad du vill nullstalla. Spelarna behalles.</p>
-    <button onclick="importDraftPools()" style="width:100%;padding:12px 14px;margin-bottom:20px;background:rgba(76,175,80,.1);border:1px solid #4caf5066;color:#4caf50;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;border-radius:4px;transition:all .15s">📥 Importera hjältepooler från /pool</button>
+    <h3>Admin</h3>
+    <p style="color:var(--text-dim);font-size:13px;margin-bottom:20px;line-height:1.6">Import, snabbåtgärder och nollställning inför lanet. Spelarna behålles.</p>
+    <button onclick="importDraftPools()" style="width:100%;padding:12px 14px;margin-bottom:12px;background:rgba(76,175,80,.1);border:1px solid #4caf5066;color:#4caf50;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;border-radius:4px;transition:all .15s">📥 Importera hjältepooler från /pool</button>
+    <button onclick="clearAllMemory()" style="width:100%;padding:12px 14px;margin-bottom:20px;background:none;border:1px solid #c0392b44;color:var(--red);font-family:Rajdhani,sans-serif;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;border-radius:4px;transition:all .15s" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='#c0392b44'">🧹 Rensa minne (exkludera alla matcher)</button>
     <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">
       <label style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer">
         <input type="checkbox" id="lan-clear-pools" style="width:16px;height:16px;accent-color:var(--gold)">
