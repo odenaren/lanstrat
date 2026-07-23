@@ -313,7 +313,7 @@ tr.stat-click:hover{background:rgba(44,224,224,.06);}
 <!-- MATCH DETAIL -->
 <div id="page-detail" class="page">
   <div class="page-header">
-    <button class="btn btn-ghost" onclick="showPage('season')">← Säsong</button>
+    <button class="btn btn-ghost" onclick="detailBack()">← Säsong</button>
     <h2 id="detail-title">Match</h2>
     <span id="detail-date" style="color:var(--text-dim);font-size:13px"></span>
   </div>
@@ -649,6 +649,17 @@ function showPage(id) {
   if(id==='match') loadPlayers().then(()=>renderMatchPage());
   if(id==='season'){ loadStats(); loadHistory(); }
 }
+
+// Webblasarens bakatknapp: detaljvyn pushar en history-entry (se openDetail) sa
+// ett bakat-klick gar till Sasong istallet for att lamna appen. detailBack() gor
+// samma sak fran ←-knappen sa knapp och bakatknapp beter sig likadant.
+function detailBack(){
+  if(history.state && history.state.view==='detail') history.back();
+  else showPage('season');
+}
+window.addEventListener('popstate', function(){
+  if(document.getElementById('page-detail').classList.contains('active')) showPage('season');
+});
 
 // ===================== HOME =====================
 function renderHome() {
@@ -2609,8 +2620,12 @@ async function openDetail(id) {
   } else {
     document.getElementById('items-card').style.display='none';
   }
+  var detailWasActive = document.getElementById('page-detail').classList.contains('active');
   document.querySelectorAll('.page').forEach(function(pg){ pg.classList.remove('active'); });
   document.getElementById('page-detail').classList.add('active');
+  // Pusha en history-entry sa webblasarens bakatknapp gar till Sasong. Hoppa over vid
+  // re-render av redan oppen detaljvy (t.ex. status-polling) sa vi inte staplar dubbletter.
+  if(!detailWasActive) history.pushState({view:'detail', id:id}, '');
   // Detaljvyn nas fran Sasong (bakatknappen gar dit) — lat Sasong-fliken lysa istallet for den tidigare aktiva
   document.querySelectorAll('.nav-tab').forEach(function(t){ t.classList.remove('active'); if(t.textContent.trim().toLowerCase()==='säsong') t.classList.add('active'); });
 
