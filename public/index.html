@@ -2025,6 +2025,25 @@ async function loadStats() {
     if(effResult(m)==='loss') styleCount[s].l++;
   });
 
+  // Utmaningsrekord — aggregeras BARA fran parsade snapshots (challengeResultsParsed) sa siffrorna ar palitliga
+  var chStats = {}, chLvl3Feats = [], chParsedMatches = 0;
+  matches.forEach(function(m){
+    if(!m.challengeResultsParsed || !Array.isArray(m.challengeResults)) return;
+    chParsedMatches++;
+    m.challengeResults.forEach(function(r){
+      if(!r.matched) return;
+      var pl = normalizePlayer(r.alias);
+      if(!chStats[pl]) chStats[pl] = {attempts:0, cleared:0, lvl3:0};
+      chStats[pl].attempts++;
+      if(r.level >= 1) chStats[pl].cleared++;
+      if(r.level >= 3) {
+        chStats[pl].lvl3++;
+        var chDef = (m.challenges||[]).find(function(c){ return c.alias === r.alias; });
+        chLvl3Feats.push({ pl:pl, text:(chDef?chDef.text:''), gameNumber:m.gameNumber });
+      }
+    });
+  });
+
   var html = '';
   // Summary cards
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px">';
@@ -2074,6 +2093,35 @@ async function loadStats() {
     html += '</div>';
   }
   html += '</div>';
+
+  // Utmaningsrekord (bara parsade snapshots — ingen poangstege, bara rekord/ara)
+  if(chParsedMatches > 0 && Object.keys(chStats).length) {
+    var chPls = Object.keys(chStats);
+    var topCleared = chPls.slice().sort(function(a,b){ return chStats[b].cleared - chStats[a].cleared; })[0];
+    var topLvl3 = chPls.slice().sort(function(a,b){ return chStats[b].lvl3 - chStats[a].lvl3; })[0];
+    html += '<div class="card" style="margin-bottom:20px"><div class="section-title">Utmaningsrekord 🎯</div>'
+      + '<p style="color:var(--text-dim);font-size:12px;margin:0 0 14px">Från '+chParsedMatches+' parsade '+(chParsedMatches===1?'match':'matcher')+'. Nivå 3 = den nästan omöjliga bragden.</p>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px">';
+    if(chStats[topCleared].cleared > 0)
+      html += '<div style="background:rgba(46,204,113,.08);border:1px solid #2ecc7155;border-radius:6px;padding:12px 14px"><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em">🏆 Flest klarade</div><div style="font-family:Rajdhani,sans-serif;font-size:20px;font-weight:700;color:#2ecc71">'+topCleared+'</div><div style="font-size:12px;color:var(--text-dim)">'+chStats[topCleared].cleared+' utmaningar</div></div>';
+    if(chStats[topLvl3].lvl3 > 0)
+      html += '<div style="background:rgba(241,196,15,.08);border:1px solid #f1c40f55;border-radius:6px;padding:12px 14px"><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em">🔥 Flest nivå 3</div><div style="font-family:Rajdhani,sans-serif;font-size:20px;font-weight:700;color:#f1c40f">'+topLvl3+'</div><div style="font-size:12px;color:var(--text-dim)">'+chStats[topLvl3].lvl3+' nästan omöjliga</div></div>';
+    html += '</div>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;text-align:left"><th style="padding:6px 8px">Spelare</th><th style="padding:6px 8px">Klarade</th><th style="padding:6px 8px">Nivå 3</th><th style="padding:6px 8px">Försök</th></tr></thead><tbody>';
+    chPls.sort(function(a,b){ return (chStats[b].cleared - chStats[a].cleared) || (chStats[b].lvl3 - chStats[a].lvl3); }).forEach(function(pl){
+      var cs = chStats[pl];
+      html += '<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px;font-weight:600">'+pl+'</td><td style="padding:6px 8px;color:#2ecc71;font-weight:700">'+cs.cleared+'</td><td style="padding:6px 8px;color:'+(cs.lvl3?'#f1c40f':'var(--text-dim)')+';font-weight:700">'+cs.lvl3+'</td><td style="padding:6px 8px;color:var(--text-dim)">'+cs.attempts+'</td></tr>';
+    });
+    html += '</tbody></table>';
+    if(chLvl3Feats.length) {
+      html += '<div style="margin-top:16px"><div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:#f1c40f;margin-bottom:8px">🔥 Nivå 3-bragder</div>';
+      chLvl3Feats.forEach(function(f){
+        html += '<div style="font-size:13px;padding:2px 0"><strong style="color:var(--gold)">'+f.pl+'</strong> — '+f.text+' <span style="color:var(--text-dim);font-size:12px">(match '+(f.gameNumber||'?')+')</span></div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+  }
 
   // Per player
   html += '<div class="card" style="margin-bottom:20px"><div class="section-title">Per spelare</div>'
