@@ -26,6 +26,13 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .nav-tab{padding:6px 16px;background:none;border:1px solid transparent;color:var(--text-dim);font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:600;letter-spacing:.08em;cursor:pointer;text-transform:uppercase;transition:all .15s;border-radius:3px;}
 .nav-tab:hover{color:var(--text);border-color:var(--border);}
 .nav-tab.active{color:var(--gold);border-color:var(--gold-dim);background:rgba(44,224,224,.08);}
+/* Mobil: navigationen far inte plats pa smal skarm -> lat den radbryta + krymp logga/flikar */
+@media(max-width:680px){
+  .nav{flex-wrap:wrap;height:auto;min-height:56px;padding:8px 16px;gap:6px 14px;}
+  .nav-brand>div:first-child{font-size:18px !important;letter-spacing:.05em !important;}
+  .nav-tabs{margin-left:auto;gap:2px;}
+  .nav-tab{padding:5px 11px;font-size:13px;letter-spacing:.04em;}
+}
 /* PAGES */
 .page{display:none;padding:28px 24px;max-width:1400px;margin:0 auto;}
 .page.active{display:block;}
@@ -42,7 +49,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .home-header h1{font-size:48px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.15em;}
 .home-header p{color:var(--text-dim);margin-top:8px;}
 .player-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-top:24px;}
-.player-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px;transition:all .15s;}
+.player-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px;transition:all .15s;display:flex;flex-direction:column;}
 .player-card:hover{border-color:var(--gold-dim);}
 .player-card-name{font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.06em;}
 .player-card-count{color:var(--text-dim);font-size:13px;margin-top:4px;}
@@ -156,7 +163,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .tag{display:inline-block;padding:2px 10px;border-radius:3px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;}
 .tag-gold{background:rgba(44,224,224,.15);border:1px solid var(--gold-dim);color:var(--gold);}
 /* CHALLENGE POOL - HOME */
-.challenge-pool-section{margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
+.challenge-pool-section{margin-top:auto;padding-top:12px;border-top:1px solid var(--border);}
 .challenge-pool-label{font-family:Rajdhani,sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#9b59b6;margin-bottom:8px;}
 .challenge-pool-heroes{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;}
 .challenge-hero-chip{display:flex;align-items:center;gap:4px;padding:3px 6px;background:rgba(155,89,182,.12);border:1px solid #8e44ad55;border-radius:3px;font-size:11px;color:#b980e0;}
@@ -164,13 +171,13 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .challenge-gen-btn{width:100%;padding:7px;background:none;border:1px dashed #8e44ad88;color:#9b59b6;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;border-radius:4px;transition:all .15s;}
 .challenge-gen-btn:hover{background:rgba(155,89,182,.12);border-color:#9b59b6;}
 .challenge-gen-btn:disabled{opacity:.4;cursor:not-allowed;}
-.pub-strat-btn{margin-top:8px;border-color:#e67e2288;color:#e67e22;}
-.pub-strat-btn:hover{background:rgba(230,126,34,.12);border-color:#e67e22;}
+.pub-strat-btn{margin-top:8px;border-color:var(--border);color:var(--text-dim);}
+.pub-strat-btn:hover{background:rgba(230,126,34,.12);border-color:#e67e22;color:#e67e22;}
 .pub-strat-btn.ready{border-style:solid;border-color:#2ecc71;color:#2ecc71;}
 .gsi-config-link{font-size:12px;color:var(--text-dim);text-decoration:underline;margin-top:6px;display:inline-block;}
 .gsi-config-link:hover{color:var(--gold);}
-.overlay-start-link{display:block;width:100%;box-sizing:border-box;margin-top:8px;padding:7px;background:none;border:1px dashed #2a9d8f88;color:#4ecdc4;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;text-align:center;text-decoration:none;cursor:pointer;border-radius:4px;transition:all .15s;}
-.overlay-start-link:hover{background:rgba(78,205,196,.12);border-color:#4ecdc4;}
+.overlay-start-link{display:block;width:100%;box-sizing:border-box;margin-top:8px;padding:7px;background:none;border:1px dashed var(--border);color:var(--text-dim);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;text-align:center;text-decoration:none;cursor:pointer;border-radius:4px;transition:all .15s;}
+.overlay-start-link:hover{background:rgba(78,205,196,.12);border-color:#4ecdc4;color:#4ecdc4;}
 /* CHALLENGE POOL - MATCH PAGE */
 .cp-toggle{display:flex;gap:2px;flex-shrink:0;}
 .cp-btn{padding:2px 5px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;cursor:pointer;border:1px solid #8e44ad44;background:none;color:#6a3d8a;transition:all .12s;white-space:nowrap;}
@@ -205,7 +212,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 </head>
 <body>
 <nav class="nav">
-  <div onclick="showPage('now')" style="cursor:pointer;display:flex;flex-direction:column;line-height:1;gap:2px;flex-shrink:0"><div style="font-family:Rajdhani,sans-serif;font-size:26px;font-weight:700;color:var(--gold);letter-spacing:.15em">DREAMHACK SKYRUP</div><div style="font-family:Rajdhani,sans-serif;font-size:10px;font-weight:500;color:var(--text-dim);letter-spacing:.2em;text-transform:uppercase">The Playbook</div></div>
+  <div class="nav-brand" onclick="showPage('now')" style="cursor:pointer;display:flex;flex-direction:column;line-height:1;gap:2px;flex-shrink:0"><div style="font-family:Rajdhani,sans-serif;font-size:26px;font-weight:700;color:var(--gold);letter-spacing:.15em">DREAMHACK SKYRUP</div><div style="font-family:Rajdhani,sans-serif;font-size:10px;font-weight:500;color:var(--text-dim);letter-spacing:.2em;text-transform:uppercase">The Playbook</div></div>
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="showPage('now')">Nu</button>
     <button class="nav-tab" onclick="showPage('match')">Strats</button>
@@ -380,7 +387,7 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
       <label style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer">
         <input type="checkbox" id="lan-clear-pools" style="width:16px;height:16px;accent-color:var(--gold)">
         <div>
-          <div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Rensa hjaltepooler</div>
+          <div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Rensa hjältepooler</div>
           <div style="font-size:12px;color:var(--text-dim);margin-top:2px">Alla spelares hero pools och utmaningspooler rensas</div>
         </div>
       </label>
@@ -394,8 +401,8 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
       <label style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;cursor:pointer">
         <input type="checkbox" id="lan-clear-memory" style="width:16px;height:16px;accent-color:var(--gold)">
         <div>
-          <div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Rensa hjalttminne</div>
-          <div style="font-size:12px;color:var(--text-dim);margin-top:2px">AI slutar undvika nyligen spelade hjaltar</div>
+          <div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Rensa hjälteminne</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-top:2px">AI slutar undvika nyligen spelade hjältar</div>
         </div>
       </label>
     </div>
@@ -2317,7 +2324,7 @@ function renderEnemyPicker() {
   var btn = document.getElementById('get-items-btn');
   if(btn) {
     btn.disabled = currentEnemies.size === 0;
-    btn.textContent = currentEnemies.size > 0 ? 'Hamta itemtips mot '+currentEnemies.size+' hjaltar' : 'Valj motstandarhjaltar';
+    btn.textContent = currentEnemies.size > 0 ? 'Hämta itemtips mot '+currentEnemies.size+' hjältar' : 'Välj motståndarhjältar';
   }
 }
 
@@ -2507,7 +2514,7 @@ async function openDetail(id) {
   draftContainer.style.cssText = 'margin-bottom:20px';
   var draftLabel = document.createElement('div');
   draftLabel.style.cssText = 'font-family:Rajdhani,sans-serif;font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px';
-  draftLabel.textContent = 'Klicka hjalte for att markera som bannlyst';
+  draftLabel.textContent = 'Klicka hjälte för att markera som bannlyst';
   var draftRow = document.createElement('div');
   draftRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px';
   draftContainer.appendChild(draftLabel);
@@ -2599,6 +2606,8 @@ async function openDetail(id) {
   }
   document.querySelectorAll('.page').forEach(function(pg){ pg.classList.remove('active'); });
   document.getElementById('page-detail').classList.add('active');
+  // Detaljvyn nas fran Sasong (bakatknappen gar dit) — lat Sasong-fliken lysa istallet for den tidigare aktiva
+  document.querySelectorAll('.nav-tab').forEach(function(t){ t.classList.remove('active'); if(t.textContent.trim().toLowerCase()==='säsong') t.classList.add('active'); });
 
   // OpenDota-statistik for lankade matcher — visas aven olankad, med ett satt att lanka
   var odCard = document.getElementById('opendota-stats-card');
