@@ -1249,6 +1249,32 @@ function evalChallenge(ch, odRow) {
   return { actual, passed: level >= 1, level, maxLevel: levels.length };
 }
 
+// Utvardera alla utmaningar mot en OpenDota-match och skriv snapshotten pa matchen.
+// Steam-ID-matchning (samma robusta metod som klientens statistik) — immun mot hjaltbyten.
+// Persisteras sa Sasong-vyns utmaningsstatistik kan aggregera utan att rakna om per vy.
+function applyChallengeResults(match, odMatch, players) {
+  if (!Array.isArray(match.challenges) || !match.challenges.length) return;
+  const odByAccount = {};
+  (odMatch.players || []).forEach(p => { if (p.account_id != null) odByAccount[p.account_id] = p; });
+  const rowByAlias = {};
+  players.forEach(p => { if (p.steamId != null && odByAccount[Number(p.steamId)]) rowByAlias[p.name] = odByAccount[Number(p.steamId)]; });
+  match.challengeResults = match.challenges.map(ch => {
+    const row = rowByAlias[ch.alias];
+    if (!row) return { alias: ch.alias, metric: ch.metric, matched: false };
+    const r = evalChallenge(ch, row);
+    return { alias: ch.alias, metric: ch.metric, matched: true, actual: (isFinite(r.actual) ? r.actual : null), level: r.level, maxLevel: r.maxLevel, passed: r.passed };
+  });
+  match.challengeResultsParsed = !!odMatch.version; // oparsad match -> parsade-only-metrics gar inte att mata an
+  match.challengeResultsAt = new Date().toISOString();
+}
+
+// Be OpenDota parsa matchen (fire-and-forget) sa parsade-only-falt (wards, stuns, timeline, item-kop) blir tillgangliga.
+function requestOpenDotaParse(openDotaMatchId) {
+  fetch('https://api.opendota.com/api/request/' + openDotaMatchId, { method: 'POST' })
+    .then(() => console.log('[OD] Parse-begaran skickad for match ' + openDotaMatchId))
+    .catch(e => console.error('[OD] Parse-begaran misslyckades for ' + openDotaMatchId + ':', e.message));
+}
+
 async function generateChallengesForMatch(matchId) {
   const matches = await readMatches();
   const match = matches.find(m => m.id === matchId);
@@ -1566,8 +1592,33 @@ app.put('/api/matches/:id/link-opendota', async (req, res) => {
     match.openDotaMatchId = openDotaMatchId;
     match.matchResult = scoreResult.ourResult;
     match.matchConfidence = scoreResult.confidence;
+    // Utvardera + persistera utmaningsutfallet direkt (best-effort med den data vi har)
+    applyChallengeResults(match, odMatch, players);
     await writeMatches(matches);
+    // Be OpenDota parsa sa parsade-only-metrics blir tillgangliga; klienten uppdaterar snapshotten nar parsningen ar klar
+    requestOpenDotaParse(openDotaMatchId);
     res.json(match);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Rakna om + persistera utmaningsutfallet mot farsk OpenDota-data (anropas av klienten nar en
+// tidigare oparsad match nu blivit parsad, sa den sparade snapshotten kommer ikapp). Idempotent.
+app.post('/api/matches/:id/refresh-challenges', async (req, res) => {
+  try {
+    const matches = await readMatches();
+    const match = matches.find(m => m.id === req.params.id);
+    if (!match) return res.status(404).json({ error: 'Not found' });
+    if (!match.openDotaMatchId) return res.status(400).json({ error: 'Matchen ar inte lankad' });
+    if (!Array.isArray(match.challenges) || !match.challenges.length) return res.json({ updated: false, reason: 'inga utmaningar' });
+    const odRes = await fetch('https://api.opendota.com/api/matches/' + match.openDotaMatchId);
+    if (!odRes.ok) return res.status(400).json({ error: 'OpenDota HTTP ' + odRes.status });
+    const odMatch = await odRes.json();
+    const players = await readPlayers();
+    applyChallengeResults(match, odMatch, players);
+    await writeMatches(matches);
+    // Fortfarande oparsad? Nudga en parse-begaran (tacker pub-matcher som lankas via GSI utan att ga via link-opendota)
+    if (!odMatch.version) requestOpenDotaParse(match.openDotaMatchId);
+    res.json({ updated: true, parsed: !!match.challengeResultsParsed, results: match.challengeResults });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
