@@ -188,14 +188,21 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 <nav class="nav">
   <div onclick="showPage('home')" style="cursor:pointer;display:flex;flex-direction:column;line-height:1;gap:2px;flex-shrink:0"><div style="font-family:Rajdhani,sans-serif;font-size:26px;font-weight:700;color:var(--gold);letter-spacing:.15em">DREAMHACK SKYRUP</div><div style="font-family:Rajdhani,sans-serif;font-size:10px;font-weight:500;color:var(--text-dim);letter-spacing:.2em;text-transform:uppercase">The Playbook</div></div>
   <div class="nav-tabs">
-    <button class="nav-tab active" onclick="showPage('home')">Hero Pool</button>
+    <button class="nav-tab active" onclick="showPage('now')">Nu</button>
     <button class="nav-tab" onclick="showPage('match')">Strats</button>
     <button class="nav-tab" onclick="showPage('season')">Säsong</button>
+    <button class="nav-tab" onclick="showPage('home')">Trupp</button>
   </div>
 </nav>
 
-<!-- HOME -->
-<div id="page-home" class="page active">
+<!-- NU (landning: aktuell match) -->
+<div id="page-now" class="page active">
+  <div class="page-header"><h2>Nu</h2><span style="color:var(--text-dim);font-size:13px">Aktuella matchen — draft, status och genvägar</span></div>
+  <div id="now-content"></div>
+</div>
+
+<!-- HOME (Trupp) -->
+<div id="page-home" class="page">
   <div class="home-header"><h1>Hero Pool Manager</h1><p>Varje spelare sparar sina hjältar — AI draftar strategin</p>
     <a class="gsi-config-link" href="/api/gsi-config" download title="Flytta filen till Steam/steamapps/common/dota 2 beta/game/dota/cfg/gamestate_integration/ (skapa mappen om den saknas)">📡 Ladda ner GSI-inställning — läggs i Steam/dota 2 beta/game/dota/cfg/gamestate_integration/ (samma fil till alla)</a>
     <br>
@@ -604,9 +611,10 @@ function showPage(id) {
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   document.querySelectorAll('.nav-tab').forEach(t=>{
-    const map={home:'hero pool',match:'strats',season:'säsong'};
+    const map={now:'nu',home:'trupp',match:'strats',season:'säsong'};
     if(t.textContent.trim().toLowerCase()===map[id]) t.classList.add('active');
   });
+  if(id==='now') loadNow();
   if(id==='home') loadPlayers();
   if(id==='match') loadPlayers().then(()=>renderMatchPage());
   if(id==='season'){ loadStats(); loadHistory(); }
@@ -1650,6 +1658,142 @@ function startPolling() {
 }
 
 // ===================== HISTORY =====================
+// ===================== NU (landning: aktuell match) =====================
+async function loadNow() {
+  var el = document.getElementById('now-content');
+  if(!el) return;
+  el.textContent = '';
+  var loading = document.createElement('div');
+  loading.style.cssText = 'color:var(--text-dim);padding:40px;text-align:center';
+  loading.textContent = 'Laddar…';
+  el.appendChild(loading);
+
+  var matches = [], status = {};
+  try { matches = await apiFetch('/matches'); } catch(e){}
+  try { status = await apiFetch('/status'); } catch(e){}
+
+  // Kvallens/aktuella match: serverStatus.latestMatchId annars senaste skapade
+  var cur = null;
+  if(status && status.latestMatchId) cur = matches.find(function(m){ return m.id === status.latestMatchId; });
+  if(!cur && matches.length) cur = matches.slice().sort(function(a,b){ return new Date(b.createdAt) - new Date(a.createdAt); })[0];
+
+  el.textContent = '';
+
+  if(!cur) {
+    var empty = document.createElement('div');
+    empty.className = 'card';
+    empty.style.cssText = 'text-align:center;padding:48px 20px;color:var(--text-dim)';
+    empty.textContent = 'Ingen match än. ';
+    var mk = document.createElement('button');
+    mk.className = 'btn btn-gold';
+    mk.style.marginLeft = '10px';
+    mk.textContent = 'Skapa en strat';
+    mk.onclick = function(){ showPage('match'); };
+    empty.appendChild(mk);
+    el.appendChild(empty);
+    return;
+  }
+
+  var draft = cur.currentDraft || cur.draft || {};
+  var briefing = cur.briefing || '';
+  var result = cur.matchResult || cur.result || null;
+  var gameNo = cur.gameNumber || '';
+
+  var card = document.createElement('div');
+  card.className = 'card';
+
+  // Header: namn + spelnummer + resultatbadge
+  var head = document.createElement('div');
+  head.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px';
+  var htitle = document.createElement('div');
+  var h2 = document.createElement('h2');
+  h2.style.cssText = 'font-family:Rajdhani,sans-serif;font-size:26px;color:var(--gold);text-transform:uppercase;letter-spacing:.06em';
+  h2.textContent = cur.name || 'Aktuell match';
+  var sub = document.createElement('div');
+  sub.style.cssText = 'color:var(--text-dim);font-size:13px;margin-top:3px';
+  var subTxt = gameNo ? ('Spel ' + gameNo) : 'Aktuell match';
+  if(cur.mode === 'pub') subTxt += ' · Pub';
+  sub.textContent = subTxt;
+  htitle.appendChild(h2); htitle.appendChild(sub);
+  var statusBadge = document.createElement('span');
+  var badgeBase = 'font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:4px 12px;border-radius:4px;';
+  if(result === 'win'){ statusBadge.textContent = 'Vinst'; statusBadge.style.cssText = badgeBase + 'background:rgba(51,230,166,.14);color:var(--green);border:1px solid #33e6a655'; }
+  else if(result === 'loss'){ statusBadge.textContent = 'Förlust'; statusBadge.style.cssText = badgeBase + 'background:rgba(255,92,114,.13);color:var(--red);border:1px solid #ff5c7255'; }
+  else { statusBadge.textContent = 'Pågår'; statusBadge.style.cssText = badgeBase + 'background:rgba(44,224,224,.12);color:var(--gold);border:1px solid var(--gold-dim)'; }
+  head.appendChild(htitle); head.appendChild(statusBadge);
+  card.appendChild(head);
+
+  // Statuschips (endast det som gar att belagga ur matchdata/serverstatus)
+  var chips = document.createElement('div');
+  chips.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px';
+  function nowChip(label, ok) {
+    var c = document.createElement('span');
+    c.style.cssText = 'font-family:var(--mono);font-size:11px;letter-spacing:.04em;padding:4px 10px;border-radius:4px;background:var(--surface2);border:1px solid ' + (ok ? 'var(--gold-dim)' : 'var(--border)') + ';color:' + (ok ? 'var(--gold)' : 'var(--text-dim)');
+    c.textContent = label;
+    chips.appendChild(c);
+  }
+  var hasStrat = !!(cur.currentStrategy || cur.strategy);
+  var nCh = (cur.challenges && cur.challenges.length) ? cur.challenges.length : 0;
+  nowChip(hasStrat ? 'Strategi klar' : 'Strategi saknas', hasStrat);
+  nowChip(nCh + ' utmaningar', nCh > 0);
+  nowChip(cur.openDotaMatchId ? 'OpenDota länkad' : 'OpenDota väntar', !!cur.openDotaMatchId);
+  nowChip(cur.studioBinId ? 'Eftersnack klar' : 'Eftersnack ej gjord', !!cur.studioBinId);
+  if(status && status.generating) nowChip('Genererar nu…', true);
+  card.appendChild(chips);
+
+  // Briefing
+  if(briefing) {
+    var bDiv = document.createElement('div');
+    bDiv.style.cssText = 'background:rgba(44,224,224,.08);border:1px solid var(--gold-dim);border-radius:6px;padding:16px 18px;margin-bottom:18px';
+    var bTitle = document.createElement('div');
+    bTitle.style.cssText = 'font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:8px';
+    bTitle.textContent = 'Kaptensbriefing';
+    var bP = document.createElement('div');
+    bP.style.cssText = 'font-size:14px;line-height:1.7;color:var(--text)';
+    bP.textContent = briefing;
+    bDiv.appendChild(bTitle); bDiv.appendChild(bP);
+    card.appendChild(bDiv);
+  }
+
+  // Draft-lista (alias -> hjalte)
+  var draftKeys = Object.keys(draft);
+  if(draftKeys.length) {
+    var dl = document.createElement('div');
+    dl.style.cssText = 'display:grid;gap:1px;background:var(--border);border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:18px';
+    draftKeys.forEach(function(alias){
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--surface)';
+      var who = document.createElement('span');
+      who.style.cssText = 'font-weight:600;font-size:14px';
+      who.textContent = alias;
+      var what = document.createElement('span');
+      what.style.cssText = 'margin-left:auto;color:var(--text-dim);font-size:13px;font-family:var(--mono)';
+      what.textContent = draft[alias];
+      row.appendChild(who); row.appendChild(what);
+      dl.appendChild(row);
+    });
+    card.appendChild(dl);
+  }
+
+  // Snabbatgarder (ateranvander befintliga funktioner)
+  var qa = document.createElement('div');
+  qa.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px';
+  function nowAct(label, primary, fn) {
+    var b = document.createElement('button');
+    b.className = primary ? 'btn btn-gold' : 'btn btn-ghost';
+    b.textContent = label;
+    b.onclick = fn;
+    qa.appendChild(b);
+  }
+  nowAct('Öppna full matchvy', true, function(){ openDetail(cur.id); });
+  nowAct('Visa på TV', false, function(){ replayOnTv(cur.id); });
+  nowAct('Ny strategi', false, function(){ showPage('match'); });
+  nowAct('Säsong', false, function(){ showPage('season'); });
+  card.appendChild(qa);
+
+  el.appendChild(card);
+}
+
 async function loadHistory() {
   const matches=await apiFetch('/matches');
   const list=document.getElementById('history-list');
@@ -3237,7 +3381,7 @@ if(poolOnlyMode) {
   if(homeSubtitle) homeSubtitle.textContent = 'Klicka pa ditt namn och bocka i hjaltarna du vill spela pa lanet';
 }
 
-ensureDefaultPlayers().then(function(){ checkUrlParams(); startPolling(); });
+ensureDefaultPlayers().then(function(){ loadNow(); checkUrlParams(); startPolling(); });
 
 document.getElementById('modal-overlay').addEventListener('click', function(e){
   if(e.target===document.getElementById('modal-overlay')) closeModal();
