@@ -870,10 +870,10 @@ app.post('/api/overlay-capture', async (req, res) => {
         // nyckelitems) sa spelaren far hela planen upp pa skarmen redan nu, i
         // stallet for forst nar item-paminnelserna borjar ticka in live.
         await pushPubRecap(pubMatch.id, pubSess);
-        // Utmaningarna genereras sist (efter att recapen hunnit visas) och
-        // pushas till varje spelares overlay nar de ar klara.
+        // Utmaningarna genereras sist (efter att recapen hunnit visas). Sjalva
+        // overlay-pushen sker klockstyrt i GAME_IN_PROGRESS-blocket — samma
+        // vag for vanlig och omvand strategi.
         generateChallengesForMatch(pubMatch.id)
-          .then(() => pushPubChallenges(pubMatch.id, pubSess))
           .catch(e => console.error('[PUB] Utmaningar:', e.message));
         return res.json({ ok: true, pub: true, matchId: pubMatch.id, own: ownResult.heroes, enemies: enemyResult.heroes });
       } finally { pubSess.generating = false; }
@@ -1096,19 +1096,6 @@ async function pushPubRecap(matchId, sess) {
     }
     body += '\n\nItempaminnelser dyker upp live nar det ar dags att kopa.';
     pushOverlay(alias, 'pub-strategi', 'Omvand strategi klar', body);
-  });
-}
-
-// Nar utmaningarna genererats klart for en omvand-strategimatch: pusha varje
-// DHS-spelares egna utmaning till deras overlay (LAN-flodet visar dem pa TV:n
-// i stallet — dar behovs ingen overlay-push).
-async function pushPubChallenges(matchId, sess) {
-  const matches = await readMatches();
-  const match = matches.find(m => m.id === matchId);
-  if (!match || !Array.isArray(match.challenges)) return;
-  Object.keys(sess.players).forEach(alias => {
-    const ch = match.challenges.find(c => c.alias === alias);
-    if (ch) pushOverlay(alias, 'challenge-update', 'Din utmaning', ch.text);
   });
 }
 
@@ -1841,6 +1828,7 @@ let gsiSeenUnavailable = new Set(); // kumulativt sedan draften borjade, atersta
 let gsiLastItemCheck = {}; // alias -> timestamp, throttlar JSONBin-lasningar under matchen
 let gsiItemCache = { matchId: null, timingsByAlias: {} };
 let gsiRemindedItems = new Set(); // matchId|alias|itemnamn
+let gsiRemindedChallenges = new Set(); // matchId|alias|start resp. matchId|alias|15min
 let gsiTeamBySteamId = {}; // steamid64 -> 'radiant'|'dire', satt av varje GSI-payload; /api/overlay-capture behover veta vilken sida som ar fienden
 let gsiCaptureState = { matchId: null, attempts: 0, lastReq: 0, done: false }; // capture-request-flodet (All Pick), max 3 forsok per match
 let gsiBanCaptureState = { matchId: null, lastReq: 0 }; // ban-logg-OCR-flodet (All Pick), fragar hela HERO_SELECTION-fasen
@@ -2080,6 +2068,7 @@ app.post('/api/gsi', async (req, res) => {
           if (gsiItemCache.matchId !== serverStatus.latestMatchId) {
             gsiItemCache = { matchId: serverStatus.latestMatchId, timingsByAlias: {} };
             gsiRemindedItems = new Set();
+            gsiRemindedChallenges = new Set();
           }
           if (!(alias in gsiItemCache.timingsByAlias)) {
             const matches = await readMatches();
@@ -2105,6 +2094,32 @@ app.post('/api/gsi', async (req, res) => {
               pushOverlay(alias, 'item-reminder', 'Itemtips', 'Dags att kopa ' + t.item + ' (senast minut ' + t.minute + ')');
               console.log('[GSI] Itemparminnelse:', alias, '->', t.item);
             });
+          }
+
+          // ── Utmaningspaminnelser (samma for vanlig OCH omvand strategi):
+          // pusha spelarens egna utmaning en gang vid matchstart och en nudge
+          // vid in-game-minut 15. Klockstyrt via GSI sa "start" = faktisk
+          // matchstart och "15" = faktisk matchminut, oberoende av fladet. ──
+          const clockMin = ((body.map && body.map.clock_time) || 0) / 60;
+          const startKey = serverStatus.latestMatchId + '|' + alias + '|start';
+          const midKey = serverStatus.latestMatchId + '|' + alias + '|15min';
+          const needStart = !gsiRemindedChallenges.has(startKey);
+          const needMid = clockMin >= 15 && !gsiRemindedChallenges.has(midKey);
+          if (needStart || needMid) {
+            const chMatches = await readMatches();
+            const chMatch = chMatches.find(m => m.id === serverStatus.latestMatchId);
+            const ch = (chMatch && Array.isArray(chMatch.challenges)) ? chMatch.challenges.find(c => c.alias === alias) : null;
+            if (ch) {
+              if (needStart) {
+                pushOverlay(alias, 'challenge-update', 'Din utmaning', ch.text);
+                gsiRemindedChallenges.add(startKey);
+                console.log('[GSI] Utmaning (start):', alias, '->', ch.text);
+              } else if (needMid) {
+                pushOverlay(alias, 'challenge-reminder', 'Utmaning kvar', ch.text);
+                gsiRemindedChallenges.add(midKey);
+                console.log('[GSI] Utmaning (min 15):', alias, '->', ch.text);
+              }
+            }
           }
         }
       }
