@@ -1770,6 +1770,10 @@ function ownedItemKeys(gsiItems) {
   });
   return owned;
 }
+// Paminnelsen ska komma i FORVAG, inte pa sjalva deadline-minuten — spelaren
+// behover marginal for att hinna spara guld och kopa itemet innan "senast minut
+// X". Fyrar darfor ITEM_REMINDER_LEAD_MIN minuter fore den utsatta minuten.
+const ITEM_REMINDER_LEAD_MIN = 4;
 function dueReminders(timings, ownedKeys, clockSeconds, nameMap, remindedSet, matchId, alias) {
   const clockMinutes = clockSeconds / 60;
   const due = [];
@@ -1779,7 +1783,7 @@ function dueReminders(timings, ownedKeys, clockSeconds, nameMap, remindedSet, ma
     const dedupKey = matchId + '|' + alias + '|' + t.item;
     if (remindedSet.has(dedupKey)) return;
     if (ownedKeys.has(key)) return; // redan kopt
-    if (clockMinutes < t.minute) return; // inte dags an
+    if (clockMinutes < t.minute - ITEM_REMINDER_LEAD_MIN) return; // inte dags an (fyrar 4 min fore deadline)
     due.push(t);
     remindedSet.add(dedupKey);
   });
