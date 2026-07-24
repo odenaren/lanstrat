@@ -114,6 +114,13 @@ h1,h2,h3,.rf{font-family:'Rajdhani',sans-serif;letter-spacing:.05em;}
 .strategy-area{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:24px;min-height:400px;}
 .strategy-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;color:var(--text-dim);text-align:center;gap:12px;}
 .strategy-placeholder .icon{font-size:48px;opacity:.3;}
+.strat-mode{display:inline-flex;margin-bottom:18px;border:1px solid var(--border);border-radius:5px;overflow:hidden;background:var(--surface);}
+.strat-mode-btn{font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:9px 18px;background:none;border:none;color:var(--text-dim);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:8px;}
+.strat-mode-btn+.strat-mode-btn{border-left:1px solid var(--border);}
+.strat-mode-btn.active{background:rgba(44,224,224,.1);color:var(--gold);text-shadow:0 0 14px rgba(44,224,224,.35);}
+.strat-mode-btn span{font-family:'Inter',sans-serif;font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-dim);}
+@media(max-width:520px){.strat-mode-btn span{display:none;}}
+.strat-rev-lead{color:var(--text-dim);font-size:12.5px;line-height:1.55;margin:2px 0 14px;}
 .strategy-raw{font-size:14px;color:var(--text);line-height:1.7;white-space:pre-wrap;}
 .strategy-raw h2,.strategy-raw h3{color:var(--gold);font-family:'Rajdhani',sans-serif;letter-spacing:.06em;text-transform:uppercase;margin:18px 0 8px;}
 .strategy-raw strong{color:var(--gold-light);}
@@ -279,8 +286,13 @@ tr.stat-click:hover{background:rgba(44,224,224,.06);}
 
 <!-- MATCH -->
 <div id="page-match" class="page">
-  <div class="page-header"><h2>Matchstrategi</h2><p style="color:var(--text-dim);font-size:14px">Välj vilka som spelar — AI tar fram en draft-strategi</p></div>
-  <div class="match-layout">
+  <div class="page-header"><h2>Matchstrategi</h2><p style="color:var(--text-dim);font-size:14px">Ett ställe för att göra en plan — välj riktning</p></div>
+  <div class="strat-mode">
+    <button id="stratmode-fwd" class="strat-mode-btn active" onclick="setStratMode('fwd')">▶ Framåt <span>du väljer laget</span></button>
+    <button id="stratmode-rev" class="strat-mode-btn" onclick="setStratMode('rev')">↩ Omvänd <span>draften läses live</span></button>
+  </div>
+  <!-- FRAMAT -->
+  <div id="strat-fwd" class="match-layout">
     <div class="card">
       <h3>Spelare i matchen</h3>
       <div id="player-select-list" class="player-select-list"></div>
@@ -295,6 +307,16 @@ tr.stat-click:hover{background:rgba(44,224,224,.06);}
     <div class="strategy-area" id="strategy-area">
       <div class="strategy-placeholder"><div class="icon">⚔️</div><p>Välj spelare och klicka<br><strong style="color:var(--gold)">Generera strategi</strong></p></div>
     </div>
+  </div>
+  <!-- OMVAND -->
+  <div id="strat-rev" class="match-layout" style="display:none">
+    <div class="card">
+      <h3>Armera för omvänd strategi</h3>
+      <p class="strat-rev-lead">Draften är redan låst (pub/ranked). Klicka spelarna som köar — deras overlay läser draften live och en spelplan genereras omvänt för den. Kan göras när som helst: i lobbyn, i kön eller mitt i draften. Kräver GSI-cfg + overlay igång.</p>
+      <div id="pub-arm-list" class="player-select-list"></div>
+      <a class="overlay-start-link" href="dhsoverlay://start" title="Startar (eller vacker) overlay-appen pa den har datorn. Kravs bara att du kort start.bat en gang tidigare.">▶ Starta overlay</a>
+    </div>
+    <div class="strategy-area" id="pub-status-area"></div>
   </div>
 </div>
 
@@ -714,19 +736,6 @@ function renderHome() {
     cpBtn.onclick = (function(idx){ return function(){ generateChallengePool(idx); }; })(i);
     cpSection.appendChild(cpBtn);
     card.appendChild(cpSection);
-    var pubBtn = document.createElement('button');
-    pubBtn.className = 'challenge-gen-btn pub-strat-btn';
-    pubBtn.id = 'pub-btn-' + i;
-    pubBtn.textContent = '↩ Omvänd strategi';
-    pubBtn.title = 'Armera infor en match dar draften redan ar last (t.ex. ranked/casual): nar matchen startar lases draften av automatiskt och en spelplan genereras omvant for den. Kraver GSI-cfg + overlay igang.';
-    pubBtn.onclick = (function(alias){ return function(){ togglePubArm(alias); }; })(p.name);
-    card.appendChild(pubBtn);
-    var overlayStartLink = document.createElement('a');
-    overlayStartLink.className = 'overlay-start-link';
-    overlayStartLink.href = 'dhsoverlay://start';
-    overlayStartLink.title = 'Startar (eller vacker) overlay-appen pa den har datorn. Kravs bara att du kort start.bat en gang tidigare.';
-    overlayStartLink.textContent = '▶ Starta overlay';
-    card.appendChild(overlayStartLink);
     grid.appendChild(card);
   });
   const add = document.createElement('div');
@@ -734,7 +743,6 @@ function renderHome() {
   add.innerHTML = `<div class="plus">+</div><span>Lägg till spelare</span>`;
   add.onclick = ()=>document.getElementById('modal-overlay').classList.add('open');
   grid.appendChild(add);
-  refreshPubStatus();
 }
 
 // ===================== PUB-STRATEGI =====================
@@ -761,7 +769,7 @@ async function togglePubArm(alias) {
 }
 async function refreshPubStatus() {
   try { pubStatusCache = await apiFetch('/pub/status'); } catch (err) { return; }
-  updatePubButtons();
+  renderReverseMode();
   var anyActive = Object.keys(pubStatusCache).some(function(a){
     var s = pubStatusCache[a].state;
     return s === 'armed' || s === 'match';
@@ -769,18 +777,97 @@ async function refreshPubStatus() {
   if (anyActive && !pubStatusTimer) pubStatusTimer = setInterval(refreshPubStatus, 5000);
   if (!anyActive && pubStatusTimer) { clearInterval(pubStatusTimer); pubStatusTimer = null; }
 }
-function updatePubButtons() {
-  players.forEach(function(p, i) {
-    var btn = document.getElementById('pub-btn-' + i);
-    if (!btn) return;
-    var st = pubStatusCache[p.name];
-    btn.classList.remove('ready');
-    if (!st) { btn.textContent = '↩ Omvänd strategi'; return; }
-    if (st.state === 'armed') btn.textContent = '⏳ Väntar på match — klicka för att avbryta';
-    else if (st.state === 'match') btn.textContent = '🎮 Match hittad — läser draften…';
-    else if (st.state === 'failed') btn.textContent = '⚠️ Kunde inte läsa draften — klicka för nytt försök';
-    else if (st.state === 'ready') { btn.textContent = '✅ Strategi klar — öppna'; btn.classList.add('ready'); }
+// Omvant lage pa Strats-fliken: en rad per spelare (klick armerar/avvapnar via
+// togglePubArm) + en statuspanel. Bada malas ur pubStatusCache. No-op om Strats
+// inte ar monterad, sa pollingen kan fyra fritt aven pa andra sidor.
+function pubStateInfo(st) {
+  var s = st && st.state;
+  if (s === 'armed')  return { active:true,  mark:'⚡', chip:'⏳ Väntar på match — klicka för att avbryta', color:'#e67e22' };
+  if (s === 'match')  return { active:true,  mark:'⚡', chip:'🎮 Match hittad — läser draften…',           color:'var(--gold)' };
+  if (s === 'failed') return { active:true,  mark:'⚠', chip:'⚠️ Kunde inte läsa draften — klicka igen',    color:'var(--red)' };
+  if (s === 'ready')  return { active:true,  mark:'✅', chip:'✅ Strategi klar — öppna',                    color:'var(--green)' };
+  return                     { active:false, mark:'',  chip:'Klicka för att armera',                        color:'var(--text-dim)' };
+}
+function renderReverseMode() {
+  var list = document.getElementById('pub-arm-list');
+  if (!list) return;
+  list.innerHTML = '';
+  players.forEach(function(p) {
+    var info = pubStateInfo(pubStatusCache[p.name]);
+    var row = document.createElement('div');
+    row.className = 'player-toggle' + (info.active ? ' active' : '');
+    var box = document.createElement('div');
+    box.className = 'checkbox';
+    box.textContent = info.mark;
+    var meta = document.createElement('div');
+    meta.style.cssText = 'flex:1;min-width:0';
+    var nm = document.createElement('div');
+    nm.className = 'player-toggle-name';
+    nm.textContent = p.name;
+    var chip = document.createElement('div');
+    chip.className = 'player-toggle-heroes';
+    chip.style.color = info.color;
+    chip.textContent = info.chip;
+    meta.appendChild(nm);
+    meta.appendChild(chip);
+    row.appendChild(box);
+    row.appendChild(meta);
+    row.onclick = (function(alias){ return function(){ togglePubArm(alias); }; })(p.name);
+    list.appendChild(row);
   });
+  renderPubStatusPane();
+}
+function renderPubStatusPane() {
+  var area = document.getElementById('pub-status-area');
+  if (!area) return;
+  area.innerHTML = '';
+  var title = document.createElement('h3');
+  title.style.cssText = 'font-family:Rajdhani,sans-serif;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px';
+  title.textContent = 'Armerings-status';
+  area.appendChild(title);
+  var active = players.filter(function(p){ return pubStateInfo(pubStatusCache[p.name]).active; });
+  if (!active.length) {
+    var ph = document.createElement('div');
+    ph.className = 'strategy-placeholder';
+    ph.innerHTML = '<div class="icon">↩</div><p>Ingen armerad än.<br>Markera vilka som köar till vänster —<br>status visas här när matchen startar.</p>';
+    area.appendChild(ph);
+    return;
+  }
+  active.forEach(function(p) {
+    var info = pubStateInfo(pubStatusCache[p.name]);
+    var it = document.createElement('div');
+    it.style.cssText = 'display:flex;align-items:center;gap:12px;padding:13px 14px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);margin-bottom:9px';
+    var dot = document.createElement('span');
+    dot.style.cssText = 'width:9px;height:9px;border-radius:50%;flex-shrink:0;background:' + info.color + ';box-shadow:0 0 10px ' + info.color;
+    var nm = document.createElement('span');
+    nm.style.cssText = 'font-family:Rajdhani,sans-serif;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.04em';
+    nm.textContent = p.name;
+    var stt = document.createElement('span');
+    stt.style.cssText = 'margin-left:auto;font-family:var(--mono);font-size:12px;text-align:right;color:' + info.color;
+    stt.textContent = info.chip;
+    it.appendChild(dot);
+    it.appendChild(nm);
+    it.appendChild(stt);
+    var cur = pubStatusCache[p.name];
+    if (cur && cur.state === 'ready') {
+      it.style.cursor = 'pointer';
+      it.onclick = (function(alias){ return function(){ togglePubArm(alias); }; })(p.name);
+    }
+    area.appendChild(it);
+  });
+}
+// Strats-flikens lage-val: Framat (valj laget) vs Omvand (armera, draften last).
+var stratMode = 'fwd';
+function setStratMode(m) { stratMode = m; applyStratMode(); }
+function applyStratMode() {
+  var fwd = stratMode !== 'rev';
+  var ef = document.getElementById('strat-fwd'), er = document.getElementById('strat-rev');
+  var bf = document.getElementById('stratmode-fwd'), br = document.getElementById('stratmode-rev');
+  if (ef) ef.style.display = fwd ? '' : 'none';
+  if (er) er.style.display = fwd ? 'none' : '';
+  if (bf) bf.classList.toggle('active', fwd);
+  if (br) br.classList.toggle('active', !fwd);
+  if (!fwd) refreshPubStatus();
 }
 function getTopRoles(ids) {
   const rc={};
@@ -1133,6 +1220,7 @@ function renderMatchPage() {
   const valid=n>=3&&n<=5;
   btn.disabled=!valid;
   btn.textContent=valid?`Generera strategi (${n} spelare)`:n<3?'Välj minst 3 spelare':'Max 5 spelare';
+  applyStratMode();
 }
 
 function togglePlayerPool(e, i) {
