@@ -804,10 +804,48 @@ app.post('/api/status/generating', (req, res) => {
 // Generiskt innehall, en kanal per spelaralias — vad som helst kan pusha en notis hit
 // (draftandringar, itemtiming osv), widgeten bryr sig bara om {id, kind, title, body}
 // och vet inte vad "kind" betyder.
-const overlayStates = {}; // alias -> {id, kind, title, body, ts}
+// alias -> { current: msg|null, servedAt: ts, queue: [msg] }. En KO per spelare
+// sa att tata pushar (t.ex. itemtips + utmaningsnudge samma GSI-tick) visas
+// efter varandra i stallet for att skriva over varandra i overlayn.
+const overlayStates = {};
+const OVERLAY_EMPTY = { id: null, kind: null, title: '', body: '', ts: 0 };
+// Osynliga, tidskritiska notiser (screenshot-begaran) — dessa gar fore kon och
+// levereras direkt utan att blockeras av synliga notiser.
+const OVERLAY_ACTION_KINDS = new Set(['capture-request', 'capture-ban-request']);
+// Hur lange varje synlig notis ligger kvar som "current" innan nasta i kon tar
+// over. Nagot kortare an klientens showMs (12s, se overlay/index.html) sa notiser
+// avloser varandra utan glapp.
+const OVERLAY_DISPLAY_MS = 11000;
+
 function pushOverlay(alias, kind, title, body) {
-  overlayStates[alias] = { id: Date.now().toString() + '-' + Math.random().toString(36).slice(2, 6), kind: kind, title: title, body: body, ts: Date.now() };
+  const msg = { id: Date.now().toString() + '-' + Math.random().toString(36).slice(2, 6), kind: kind, title: title, body: body, ts: Date.now(), delivered: false };
+  const s = overlayStates[alias] || (overlayStates[alias] = { current: null, servedAt: 0, queue: [] });
+  if (OVERLAY_ACTION_KINDS.has(kind)) {
+    s.current = msg; // preempterar synlig notis — capture maste ske direkt
+  } else {
+    s.queue.push(msg);
+  }
+  return msg;
 }
+
+// Ger nasta notis for ett alias och avancerar kon. En synlig notis raknas som
+// fardigvisad nar den legat OVERLAY_DISPLAY_MS; en action-notis nar den
+// levererats en gang. Klienten pollar var 2:a sekund och dedupar pa id, sa den
+// hinner fanga varje notis under dess fonster utan nagon klientandring.
+function serveOverlay(alias) {
+  const s = overlayStates[alias];
+  if (!s) return OVERLAY_EMPTY;
+  const now = Date.now();
+  const c = s.current;
+  const finished = !c || (OVERLAY_ACTION_KINDS.has(c.kind) ? c.delivered : (now - s.servedAt >= OVERLAY_DISPLAY_MS));
+  if (finished && s.queue.length) {
+    s.current = s.queue.shift();
+    s.servedAt = now;
+  }
+  if (s.current) s.current.delivered = true;
+  return s.current || OVERLAY_EMPTY;
+}
+
 // Widgeten kanner sjalv av spelarens Steam-konto (se overlay/main.js) och slar upp
 // ratt alias har, sa INGEN per-spelare-config behovs langre — en och samma
 // config.js/overlay-mapp funkar for alla 9 spelare.
@@ -815,16 +853,15 @@ app.get('/api/overlay/by-steamid/:accountId', async (req, res) => {
   const accountId = Number(req.params.accountId);
   const players = await readPlayers();
   const p = players.find(pl => Number(pl.steamId) === accountId);
-  if (!p) return res.json({ id: null, kind: null, title: '', body: '', ts: 0 });
-  res.json(overlayStates[p.name] || { id: null, kind: null, title: '', body: '', ts: 0 });
+  if (!p) return res.json(OVERLAY_EMPTY);
+  res.json(serveOverlay(p.name));
 });
 
 app.get('/api/overlay/:alias', (req, res) => {
-  res.json(overlayStates[req.params.alias] || { id: null, kind: null, title: '', body: '', ts: 0 });
+  res.json(serveOverlay(req.params.alias));
 });
 app.post('/api/overlay/:alias', (req, res) => {
-  pushOverlay(req.params.alias, req.body.kind || 'test', req.body.title || '', req.body.body || '');
-  res.json(overlayStates[req.params.alias]);
+  res.json(pushOverlay(req.params.alias, req.body.kind || 'test', req.body.title || '', req.body.body || ''));
 });
 
 // Tar emot en topbar-screenshot fran overlay-widgeten (svar pa capture-request,
