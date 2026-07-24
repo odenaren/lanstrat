@@ -1752,7 +1752,10 @@ function parsePlayerItemTimings(itemsText, alias) {
     const firstLine = section.split('\n')[0].trim();
     if (firstLine.toLowerCase() === alias.toLowerCase()) {
       const timings = [];
-      const re = /\*\*([^*]+)\*\*[^\n(]*\(senast minut (\d+)\)/gi;
+      // [^\n]*? (icke-girigt, valfri text pa raden) i stallet for [^\n(]* sa att
+      // en motivering som sjalv innehaller parenteser inte tyst faller bort ur
+      // parsningen — anta aldrig att AI-texten alltid ar perfekt formaterad.
+      const re = /\*\*([^*]+)\*\*[^\n]*?\(senast minut (\d+)\)/gi;
       let m;
       while ((m = re.exec(section))) {
         timings.push({ item: m[1].trim(), minute: parseInt(m[2], 10) });
@@ -2081,7 +2084,15 @@ app.post('/api/gsi', async (req, res) => {
           if (!(alias in gsiItemCache.timingsByAlias)) {
             const matches = await readMatches();
             const match = matches.find(m => m.id === serverStatus.latestMatchId);
-            if (match && match.items) gsiItemCache.timingsByAlias[alias] = parsePlayerItemTimings(match.items, alias);
+            if (match && match.items) {
+              gsiItemCache.timingsByAlias[alias] = parsePlayerItemTimings(match.items, alias);
+              // Synliggor tyst bortfall: itemtips finns men ingen parsebar
+              // "## alias"-sektion med (senast minut X) → spelaren far annars
+              // inga paminnelser utan spar i loggen.
+              if (!gsiItemCache.timingsByAlias[alias].length) {
+                console.log('[GSI] Inga item-timings att paminna om for', alias, 'i match', match.id, '— itemtipsen saknar en parsebar sektion for aliaset');
+              }
+            }
           }
 
           const timings = gsiItemCache.timingsByAlias[alias];
