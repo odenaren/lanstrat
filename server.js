@@ -866,8 +866,15 @@ app.post('/api/overlay-capture', async (req, res) => {
         }
         const pubMatch = await createPubMatch(pubSess, ownResult.heroes, enemyResult.heroes);
         await generateItemTipsForMatch(pubMatch.id, enemyResult.heroes);
-        Object.keys(pubSess.players).forEach(a =>
-          pushOverlay(a, 'pub-strategi', 'Pub-strategi klar', pubMatch.name + ' — kolla Playbook. Itempaminnelser kommer live under matchen.'));
+        // Recap direkt i overlayn (strateginamn + briefing + spelarens egna
+        // nyckelitems) sa spelaren far hela planen upp pa skarmen redan nu, i
+        // stallet for forst nar item-paminnelserna borjar ticka in live.
+        await pushPubRecap(pubMatch.id, pubSess);
+        // Utmaningarna genereras sist (efter att recapen hunnit visas) och
+        // pushas till varje spelares overlay nar de ar klara.
+        generateChallengesForMatch(pubMatch.id)
+          .then(() => pushPubChallenges(pubMatch.id, pubSess))
+          .catch(e => console.error('[PUB] Utmaningar:', e.message));
         return res.json({ ok: true, pub: true, matchId: pubMatch.id, own: ownResult.heroes, enemies: enemyResult.heroes });
       } finally { pubSess.generating = false; }
     }
@@ -970,7 +977,15 @@ app.post('/api/pub/arm/:alias', async (req, res) => {
     const players = await readPlayers();
     if (!players.find(p => p.name === req.params.alias)) return res.status(404).json({ error: 'Okand spelare' });
     pubArmed[req.params.alias] = { armedAt: Date.now(), playbookMatchId: null };
-    // Nytt forsok efter misslyckad avlasning: nollstall en fastnad session
+    // Koppla loss spelaren fran en REDAN KLAR session fran en tidigare match.
+    // Annars plockar /api/pub/status upp den gamla matchens playbookMatchId via
+    // pubFindSessionByAlias-fallbacken och rapporterar "ready" direkt vid ny
+    // armering — knappen visade da forra matchens strategi i stallet for att
+    // vanta pa den nya (bugg 2026-07-24, live-test). En PAGAENDE (ej klar)
+    // session nollstalls i stallet for nytt avlasningsforsok.
+    Object.values(pubSessions).forEach(s => {
+      if (s.players[req.params.alias] && s.playbookMatchId) delete s.players[req.params.alias];
+    });
     const sess = pubFindSessionByAlias(req.params.alias);
     if (sess && !sess.playbookMatchId) { sess.captureAttempts = 0; sess.failed = false; }
     res.json({ ok: true });
@@ -1057,9 +1072,44 @@ async function createPubMatch(sess, ownHeroes, enemyHeroes) {
   Object.keys(sess.players).forEach(a => { if (pubArmed[a]) pubArmed[a].playbookMatchId = match.id; });
   serverStatus.latestMatchId = match.id; // sa itemtiming-paminnelserna (GAME_IN_PROGRESS-blocket i /api/gsi) hittar matchen
 
-  generateChallengesForMatch(match.id).catch(e => console.error('[PUB] Utmaningar:', e.message));
+  // Utmaningarna genereras av anroparen (overlay-capture) EFTER item-tipsen och
+  // recapen, sa att recapen hinner visas i overlayn innan utmaningen pushas dit.
   console.log('[PUB] Match skapad:', match.id, name, '(OpenDota ' + sess.dotaMatchId + ')');
   return match;
+}
+
+// Skickar en kompakt recap till varje DHS-spelares overlay nar en omvand
+// strategi ar klar: strateginamn, briefing och spelarens egna nyckelitems med
+// senaste koptid. Ersatter den gamla "kolla Playbook"-notisen sa spelaren far
+// hela planen direkt i overlayn i stallet for forst nar item-paminnelserna
+// borjar ticka in live under matchen.
+async function pushPubRecap(matchId, sess) {
+  const matches = await readMatches();
+  const match = matches.find(m => m.id === matchId);
+  if (!match) return;
+  Object.keys(sess.players).forEach(alias => {
+    let body = match.name || 'Omvand strategi';
+    if (match.briefing) body += '\n\n' + match.briefing;
+    const timings = match.items ? parsePlayerItemTimings(match.items, alias) : [];
+    if (timings.length) {
+      body += '\n\nDina nyckelitems: ' + timings.map(t => t.item + ' (min ' + t.minute + ')').join(', ');
+    }
+    body += '\n\nItempaminnelser dyker upp live nar det ar dags att kopa.';
+    pushOverlay(alias, 'pub-strategi', 'Omvand strategi klar', body);
+  });
+}
+
+// Nar utmaningarna genererats klart for en omvand-strategimatch: pusha varje
+// DHS-spelares egna utmaning till deras overlay (LAN-flodet visar dem pa TV:n
+// i stallet — dar behovs ingen overlay-push).
+async function pushPubChallenges(matchId, sess) {
+  const matches = await readMatches();
+  const match = matches.find(m => m.id === matchId);
+  if (!match || !Array.isArray(match.challenges)) return;
+  Object.keys(sess.players).forEach(alias => {
+    const ch = match.challenges.find(c => c.alias === alias);
+    if (ch) pushOverlay(alias, 'challenge-update', 'Din utmaning', ch.text);
+  });
 }
 
 // Nedladdningsbar overlay/config.js — EN och samma fil till alla 9 spelare.
