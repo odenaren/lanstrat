@@ -57,7 +57,9 @@ function buildAccountToAlias(players) {
   const accountToAlias = {};
   const missing = [];
   for (const p of players) {
-    if (p.steamId) accountToAlias[String(p.steamId)] = p.name;
+    // Flera Steam-konton per spelare (steamIds-array); aldre kort har skalaren steamId.
+    const ids = p.steamIds || (p.steamId != null && p.steamId !== '' ? [p.steamId] : []);
+    if (ids.length) ids.forEach(id => { accountToAlias[String(id)] = p.name; });
     else missing.push(p.name);
   }
   return { accountToAlias, missing };

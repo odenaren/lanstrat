@@ -657,6 +657,20 @@ function normalizeSteamId(raw) {
   return String(num >= STEAM64_BASE ? num - STEAM64_BASE : num);
 }
 
+// Flera Steam-konton per spelare: nya kort lagrar dem i steamIds (array), aldre
+// har skalaren steamId. Las alltid via denna sa bada formaten funkar.
+function playerAccountIds(p) {
+  var ids = Array.isArray(p.steamIds) ? p.steamIds : (p.steamId != null && p.steamId !== '' ? [p.steamId] : []);
+  return ids.map(Number).filter(function(n){ return isFinite(n); });
+}
+// account_id -> lista med alias som har det inskrivet. Ett id pa >1 profil ar en
+// dubbett (troligen delat konto) och markeras i UI:t.
+function steamIdOwners() {
+  var m = {};
+  players.forEach(function(p){ playerAccountIds(p).forEach(function(id){ (m[id] = m[id] || []).push(p.name); }); });
+  return m;
+}
+
 // ===================== NAV =====================
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -692,6 +706,19 @@ function renderHome() {
     const roles = getTopRoles(p.heroes||[]);
     const card = document.createElement('div');
     card.className = 'player-card';
+    var _owners = steamIdOwners();
+    var _myIds = playerAccountIds(p);
+    var steamHtml = '<div style="margin-top:8px;font-size:11px;font-family:monospace">';
+    _myIds.forEach(function(id){
+      var others = (_owners[id]||[]).filter(function(n){ return n !== p.name; });
+      var warn = others.length ? '<span title="Redan inskrivet för: ' + others.join(', ') + '" style="color:var(--gold);cursor:help">⚠</span> ' : '';
+      steamHtml += '<div style="display:flex;align-items:center;gap:6px;color:var(--text-dim);margin-bottom:2px">'
+        + warn + '<span>🎮 ' + id + '</span>'
+        + '<button onclick="removeSteamId(' + i + ',\'' + id + '\')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12px;padding:0" title="Ta bort konto">✕</button>'
+        + '</div>';
+    });
+    steamHtml += '<div onclick="startSteamIdAdd(' + i + ')" style="color:var(--gold-dim);cursor:pointer">+ ' + (_myIds.length ? 'Lägg till konto' : 'Lägg till Steam-ID') + '</div>';
+    steamHtml += '</div>';
     card.innerHTML = `
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
         <div class="player-card-name" id="pname-${i}" ondblclick="startRename(${i})">${p.name}</div>
@@ -702,7 +729,7 @@ function renderHome() {
       </div>
       <div class="player-card-count"><span>${count}</span> hjältar valda</div>
       <div class="player-card-roles">${roles.map(r=>`<span class="role-pill ${r.toLowerCase()}">${r}</span>`).join('')}</div>
-      <div id="steamid-${i}" onclick="startSteamIdEdit(${i})" style="font-size:11px;color:${p.steamId?'var(--text-dim)':'var(--gold-dim)'};margin-top:8px;cursor:pointer;font-family:monospace">${p.steamId?'🎮 '+p.steamId:'+ Lägg till Steam-ID'}</div>
+      ${steamHtml}
       <button class="player-card-btn" onclick="openPicker(${i})">${poolOnlyMode?"Valj mina hjaltar":"Redigera pool"}</button>`;
     var cpSection = document.createElement('div');
     cpSection.className = 'challenge-pool-section';
@@ -894,29 +921,26 @@ function startRename(i) {
   input.onblur = doRename;
   input.onkeydown = e => { if(e.key==='Enter') { input.blur(); } if(e.key==='Escape') loadPlayers(); };
 }
-function startSteamIdEdit(i) {
-  const el = document.getElementById('steamid-'+i);
-  if(!el || el.tagName === 'INPUT') return;
+async function startSteamIdAdd(i) {
   const name = players[i].name;
-  const oldVal = players[i].steamId || '';
-  const input = document.createElement('input');
-  input.value = oldVal;
-  input.placeholder = 'SteamID64, OpenDota-ID eller profiles/-länk';
-  input.style.cssText = 'background:var(--surface2);border:1px solid var(--gold-dim);color:var(--text);padding:3px 6px;border-radius:3px;font-size:11px;font-family:monospace;width:100%;outline:none;margin-top:8px;';
-  el.replaceWith(input);
-  input.focus(); input.select();
-  async function doSave() {
-    const raw = input.value.trim();
-    const normalized = raw ? normalizeSteamId(raw) : '';
-    if(normalized === null) { alert('Kunde inte tolka Steam-ID:t.'); renderHome(); return; }
-    if(normalized === oldVal) { renderHome(); return; }
-    try {
-      await apiFetch('/players/'+encodeURIComponent(name)+'/steamid', {method:'PUT', body:JSON.stringify({steamId:normalized})});
-      await loadPlayers();
-    } catch(err) { alert('Kunde inte spara Steam-ID: '+err.message); renderHome(); }
-  }
-  input.onblur = doSave;
-  input.onkeydown = e => { if(e.key==='Enter') { input.blur(); } if(e.key==='Escape') renderHome(); };
+  const raw = prompt('Steam-ID att lägga till (SteamID64, OpenDota-ID eller steamcommunity.com/profiles/-länk):');
+  if(raw === null) return;
+  if(!raw.trim()) return;
+  const normalized = normalizeSteamId(raw.trim());
+  if(normalized === null) { alert('Kunde inte tolka Steam-ID:t. Ange SteamID64, OpenDota-ID, eller en steamcommunity.com/profiles/-länk.'); return; }
+  try {
+    const resp = await apiFetch('/players/'+encodeURIComponent(name)+'/steamids', {method:'POST', body:JSON.stringify({steamId:normalized})});
+    if(resp && resp.duplicateOf) alert('⚠ Kontot ' + normalized + ' är redan inskrivet för ' + resp.duplicateOf + '. Det lades till ändå — dubbletten markeras på båda korten.');
+    await loadPlayers();
+  } catch(err) { alert('Kunde inte spara Steam-ID: '+err.message); }
+}
+async function removeSteamId(i, id) {
+  const name = players[i].name;
+  if(!confirm('Ta bort kontot ' + id + ' från ' + name + '?')) return;
+  try {
+    await apiFetch('/players/'+encodeURIComponent(name)+'/steamids/'+encodeURIComponent(id), {method:'DELETE'});
+    await loadPlayers();
+  } catch(err) { alert('Kunde inte ta bort: '+err.message); }
 }
 
 async function ensureDefaultPlayers() {
@@ -2842,13 +2866,13 @@ function ourSideIsRadiant(m, od) { return (m.matchResult === 'win') === !!od.rad
 // vad som hande under draften.
 function mapOurRows(m, od) {
   var draft = m.currentDraft || m.draft || {};
-  var steamByAlias = {};
-  players.forEach(function(p){ if(p.steamId) steamByAlias[p.name] = Number(p.steamId); });
+  var idsByAlias = {};
+  players.forEach(function(p){ idsByAlias[p.name] = playerAccountIds(p); });
   var rows = [];
   (m.players||[]).forEach(function(p){
-    var accountId = steamByAlias[p.name];
-    var row = accountId != null
-      ? (od.players||[]).find(function(op){ return Number(op.account_id) === accountId; })
+    var ids = idsByAlias[p.name] || [];
+    var row = ids.length
+      ? (od.players||[]).find(function(op){ return ids.indexOf(Number(op.account_id)) !== -1; })
       : null;
     rows.push({ alias: p.name, od: row || null, draftHero: draft[p.name] || '?' });
   });

@@ -163,7 +163,7 @@ app.post('/api/players', async (req, res) => {
   try {
     const players = await readPlayers();
     if (players.find(p => p.name === name)) return res.status(409).json({ error: 'Player exists' });
-    players.push({ name, heroes: [], steamId: steamId || null });
+    players.push({ name, heroes: [], steamIds: steamId ? [String(steamId)] : [] });
     await writePlayers(players);
     res.json(players);
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -213,14 +213,38 @@ app.put('/api/players/:name/challenge-pool', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.put('/api/players/:name/steamid', async (req, res) => {
+// Lagg till ett Steam-konto pa en spelare (flera konton per person stods).
+// Markerar (blockerar INTE) om kontot redan finns pa nagon annans profil —
+// delade konton ar ett kant randfall som medvetet lamnas oatgardat, se TODO.
+app.post('/api/players/:name/steamids', async (req, res) => {
+  try {
+    const steamId = String(req.body.steamId || '').trim();
+    if (!steamId) return res.status(400).json({ error: 'steamId kravs' });
+    const players = await readPlayers();
+    const p = players.find(p => p.name === req.params.name);
+    if (!p) return res.status(404).json({ error: 'Not found' });
+    const acc = Number(steamId);
+    const dupOwner = players.find(pl => pl.name !== p.name && playerAccountIds(pl).includes(acc));
+    const ids = playerSteamIds(p);
+    if (!ids.map(Number).includes(acc)) ids.push(steamId);
+    p.steamIds = ids;
+    delete p.steamId; // migrera bort skalaren nar arrayen tar over
+    await writePlayers(players);
+    res.json({ player: p, duplicateOf: dupOwner ? dupOwner.name : null });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Ta bort ett Steam-konto fran en spelare.
+app.delete('/api/players/:name/steamids/:steamId', async (req, res) => {
   try {
     const players = await readPlayers();
     const p = players.find(p => p.name === req.params.name);
     if (!p) return res.status(404).json({ error: 'Not found' });
-    p.steamId = req.body.steamId || null;
+    const target = Number(req.params.steamId);
+    p.steamIds = playerSteamIds(p).filter(id => Number(id) !== target);
+    delete p.steamId;
     await writePlayers(players);
-    res.json(p);
+    res.json({ player: p });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -389,11 +413,21 @@ function steam64ToAccountId(steamid64) {
   try { return Number(BigInt(String(steamid64)) - STEAM64_OFFSET); }
   catch (e) { return null; }
 }
+// Ett spelarkort kan ha flera Steam-konton. Nya/redigerade kort lagrar dem i
+// steamIds (array av strangar); aldre kort har bara skalaren steamId. Las alltid
+// via dessa helpers sa bada formaten fungerar utan bin-migrering.
+function playerSteamIds(p) {
+  if (Array.isArray(p.steamIds)) return p.steamIds;
+  return (p.steamId != null && p.steamId !== '') ? [String(p.steamId)] : [];
+}
+function playerAccountIds(p) {
+  return playerSteamIds(p).map(Number).filter(n => Number.isFinite(n));
+}
 async function findAliasBySteamId64(steamid64) {
   const accountId = steam64ToAccountId(steamid64);
   if (accountId === null) return null;
   const players = await readPlayers();
-  const p = players.find(pl => Number(pl.steamId) === accountId);
+  const p = players.find(pl => playerAccountIds(pl).includes(accountId));
   return p ? p.name : null;
 }
 
@@ -852,7 +886,7 @@ function serveOverlay(alias) {
 app.get('/api/overlay/by-steamid/:accountId', async (req, res) => {
   const accountId = Number(req.params.accountId);
   const players = await readPlayers();
-  const p = players.find(pl => Number(pl.steamId) === accountId);
+  const p = players.find(pl => playerAccountIds(pl).includes(accountId));
   if (!p) return res.json(OVERLAY_EMPTY);
   res.json(serveOverlay(p.name));
 });
@@ -874,7 +908,7 @@ app.post('/api/overlay-capture', async (req, res) => {
     const image = req.body.image; // base64-PNG, bara skarmens topp-remsa
     if (!accountId || !image) return res.status(400).json({ error: 'accountId + image kravs' });
     const players = await readPlayers();
-    const p = players.find(pl => Number(pl.steamId) === accountId);
+    const p = players.find(pl => playerAccountIds(pl).includes(accountId));
     if (!p) return res.status(404).json({ error: 'okant steam-konto' });
     const steamid64 = (BigInt(accountId) + STEAM64_OFFSET).toString();
     const myTeam = gsiTeamBySteamId[steamid64];
@@ -976,7 +1010,7 @@ app.post('/api/overlay-ban-capture', async (req, res) => {
     const image = req.body.image; // base64-PNG, bara ban-logg-panelen
     if (!accountId || !image) return res.status(400).json({ error: 'accountId + image kravs' });
     const players = await readPlayers();
-    const p = players.find(pl => Number(pl.steamId) === accountId);
+    const p = players.find(pl => playerAccountIds(pl).includes(accountId));
     if (!p) return res.status(404).json({ error: 'okant steam-konto' });
     const detected = await readBannedHeroes(Buffer.from(image, 'base64'));
     const newlyUnavailable = detected.filter(h => !gsiSeenUnavailable.has(h));
@@ -1000,7 +1034,7 @@ app.post('/api/overlay-console-event', async (req, res) => {
     const matchId = String(req.body.matchId || '');
     if (!accountId || !/^\d+$/.test(matchId)) return res.status(400).json({ error: 'accountId + matchId kravs' });
     const players = await readPlayers();
-    const p = players.find(pl => Number(pl.steamId) === accountId);
+    const p = players.find(pl => playerAccountIds(pl).includes(accountId));
     if (!p) return res.status(404).json({ error: 'okant steam-konto' });
     // logAccountId ar id:t Dota sjalv skrev i loggraden — ska normalt matcha Steam-kontot
     if (req.body.logAccountId && String(req.body.logAccountId) !== String(accountId)) {
@@ -1355,7 +1389,7 @@ function applyChallengeResults(match, odMatch, players) {
   const odByAccount = {};
   (odMatch.players || []).forEach(p => { if (p.account_id != null) odByAccount[p.account_id] = p; });
   const rowByAlias = {};
-  players.forEach(p => { if (p.steamId != null && odByAccount[Number(p.steamId)]) rowByAlias[p.name] = odByAccount[Number(p.steamId)]; });
+  players.forEach(p => { const row = playerAccountIds(p).map(id => odByAccount[id]).find(Boolean); if (row) rowByAlias[p.name] = row; });
   match.challengeResults = match.challenges.map(ch => {
     const row = rowByAlias[ch.alias];
     if (!row) return { alias: ch.alias, metric: ch.metric, matched: false };
@@ -1604,13 +1638,13 @@ function scoreOpenDotaMatch(odMatch, accountToAlias, heroIds) {
 async function findOpenDotaCandidates(match) {
   const players = await readPlayers();
   const accountToAlias = {};
-  players.forEach(p => { if (p.steamId) accountToAlias[Number(p.steamId)] = p.name; });
+  players.forEach(p => playerAccountIds(p).forEach(id => { accountToAlias[id] = p.name; }));
 
   const draft = match.currentDraft || match.draft || {};
   const rosterAliases = (match.players || []).map(p => p.name).filter(Boolean);
   const rosterSteamIds = players
-    .filter(p => rosterAliases.includes(p.name) && p.steamId)
-    .map(p => Number(p.steamId));
+    .filter(p => rosterAliases.includes(p.name))
+    .flatMap(p => playerAccountIds(p));
   if (!rosterSteamIds.length) return { candidates: [], reason: 'Ingen spelare i matchen har Steam-ID satt pa Hero Pool-sidan.' };
 
   const heroNameToId = await heroNameToIdMap();
@@ -1676,7 +1710,7 @@ app.put('/api/matches/:id/link-opendota', async (req, res) => {
 
     const players = await readPlayers();
     const accountToAlias = {};
-    players.forEach(p => { if (p.steamId) accountToAlias[Number(p.steamId)] = p.name; });
+    players.forEach(p => playerAccountIds(p).forEach(id => { accountToAlias[id] = p.name; }));
     const draft = match.currentDraft || match.draft || {};
     const heroNameToId = await heroNameToIdMap();
     const heroIds = {};
