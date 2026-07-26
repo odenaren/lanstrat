@@ -241,7 +241,7 @@ async function identifyTopbarHeroes(pngBuffer, side) {
 function evaluateSlots(slots) {
   const names = slots.map(s => s.hero);
   const distinct = new Set(names).size === 5;
-  const confident = slots.every(s => s.score >= MIN_SCORE && s.margin >= MIN_MARGIN);
+  const confident = slots.every(slotConfident);
   return {
     ok: distinct && confident,
     heroes: names,
@@ -252,15 +252,36 @@ function evaluateSlots(slots) {
   };
 }
 
-// Slar ihop tva slot-avlasningar (fran olika frames) genom att per position
-// behalla den med hogst score — sa en slot som en frame laste osakert kan
-// ersattas av en senare frame dar samma slot lastes sakert. En slots margin/
-// runnerUp kommer alltid fran samma frame som dess score, sa varden forblir
-// konsistenta.
+// En slot ar saker nar vinnaren nar MIN_SCORE och ligger MIN_MARGIN fore tvaan.
+function slotConfident(s) {
+  return s.score >= MIN_SCORE && s.margin >= MIN_MARGIN;
+}
+
+// De hjaltar som lastes SAKERT, utan dubbletter — underlag for delträff nar
+// bara nagra av fem slots ar sakra.
+function confidentHeroes(slots) {
+  const seen = new Set();
+  const out = [];
+  for (const s of slots) {
+    if (slotConfident(s) && !seen.has(s.hero)) { seen.add(s.hero); out.push(s.hero); }
+  }
+  return out;
+}
+
+// Slar ihop tva slot-avlasningar (fran olika frames): en saker slot slar alltid
+// en osaker (sa en redan saker avlasning aldrig tappas), annars vinner hogst
+// score. Antalet sakra slots kan darmed bara vaxa over frames. margin/runnerUp
+// foljer alltid med samma frame som scoren, sa varden forblir konsistenta.
 function mergeBestSlots(a, b) {
   if (!a) return b;
   if (!b) return a;
-  return a.map((s, i) => (b[i] && b[i].score > s.score) ? b[i] : s);
+  return a.map((s, i) => {
+    const t = b[i];
+    if (!t) return s;
+    const cs = slotConfident(s), ct = slotConfident(t);
+    if (cs !== ct) return ct ? t : s;
+    return t.score > s.score ? t : s;
+  });
 }
 
-module.exports = { identifyTopbarHeroes, loadTemplates, STRIP_H, evaluateSlots, mergeBestSlots };
+module.exports = { identifyTopbarHeroes, loadTemplates, STRIP_H, evaluateSlots, confidentHeroes, mergeBestSlots };
