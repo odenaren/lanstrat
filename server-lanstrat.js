@@ -2,7 +2,19 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
-const { identifyTopbarHeroes } = require('./topbar-match');
+const { identifyTopbarHeroes, MIN_SCORE, MIN_MARGIN } = require('./topbar-match');
+
+// Formaterar en avlast slot-lista (fran identifyTopbarHeroes) till en lasbar
+// rad for fel-notisen i overlayn — sa spelaren ser VAD matcharen gissade och
+// vilken slot som var for osaker (⚠), i stallet for bara "kunde inte lasa".
+// Osaker = under samma trosklar som identifyTopbarHeroes anvander for ok:false.
+function formatCaptureGuess(slots) {
+  if (!slots || !slots.length) return '';
+  return slots.map(function (s) {
+    var weak = s.score < MIN_SCORE || s.margin < MIN_MARGIN;
+    return s.hero + (weak ? ' ⚠' : '');
+  }).join(', ');
+}
 const { readBannedHeroes } = require('./ban-log-match');
 
 const app = express();
@@ -897,7 +909,13 @@ app.post('/api/overlay-capture', async (req, res) => {
         if (!ownResult.ok || !enemyResult.ok) {
           if (pubSess.captureAttempts >= 5) {
             pubSess.failed = true;
-            pushOverlay(p.name, 'pub-strategi', 'Pub-strategi', 'Kunde inte lasa av hjaltarna fran skarmen — ingen strategi genererad.');
+            var ownGuess = formatCaptureGuess(ownResult.slots);
+            var enemyGuess = formatCaptureGuess(enemyResult.slots);
+            var pubBody = 'Kunde inte lasa av hjaltarna fran skarmen — ingen strategi genererad.';
+            if (ownGuess) pubBody += '\n\nVart lag: ' + ownGuess;
+            if (enemyGuess) pubBody += '\nMotstandare: ' + enemyGuess;
+            if (ownGuess || enemyGuess) pubBody += '\n(⚠ = osaker)';
+            pushOverlay(p.name, 'pub-strategi', 'Pub-strategi', pubBody);
           }
           return res.json({ ok: false, reason: ownResult.reason || enemyResult.reason, own: ownResult.slots, enemy: enemyResult.slots });
         }
@@ -925,7 +943,10 @@ app.post('/api/overlay-capture', async (req, res) => {
     // aven "lyckade" avlasningar kan granskas i efterhand.
     console.log('[capture-slots]', JSON.stringify(result.slots));
     if (!result.ok) {
-      pushOverlay(p.name, 'itemtips', 'Itemtips', 'Kunde inte lasa av fiendehjaltarna fran skarmen — fyll i dem manuellt i Playbook.');
+      var guess = formatCaptureGuess(result.slots);
+      var body = 'Kunde inte lasa av fiendehjaltarna fran skarmen — fyll i dem manuellt i Playbook.';
+      if (guess) body += '\n\nLaste: ' + guess + ' (⚠ = osaker)';
+      pushOverlay(p.name, 'itemtips', 'Itemtips', body);
       return res.json({ ok: false, reason: result.reason, heroes: result.heroes, slots: result.slots });
     }
     const generated = await generateItemTipsForMatch(serverStatus.latestMatchId, result.heroes);

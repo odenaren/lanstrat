@@ -245,4 +245,4 @@ async function identifyTopbarHeroes(pngBuffer, side) {
   };
 }
 
-module.exports = { identifyTopbarHeroes, loadTemplates, STRIP_H };
+module.exports = { identifyTopbarHeroes, loadTemplates, STRIP_H, MIN_SCORE, MIN_MARGIN };
