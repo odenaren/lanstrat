@@ -232,6 +232,13 @@ async function identifyTopbarHeroes(pngBuffer, side) {
     });
   }
 
+  return evaluateSlots(slots);
+}
+
+// Utvarderar en fardig slot-avlasning (5 st { hero, score, margin, runnerUp })
+// mot trosklarna. Utbruten sa server.js kan koras pa en SAMMANSLAGEN avlasning
+// (bast-per-slot over flera frames), inte bara pa en enskild frame.
+function evaluateSlots(slots) {
   const names = slots.map(s => s.hero);
   const distinct = new Set(names).size === 5;
   const confident = slots.every(s => s.score >= MIN_SCORE && s.margin >= MIN_MARGIN);
@@ -245,4 +252,15 @@ async function identifyTopbarHeroes(pngBuffer, side) {
   };
 }
 
-module.exports = { identifyTopbarHeroes, loadTemplates, STRIP_H };
+// Slar ihop tva slot-avlasningar (fran olika frames) genom att per position
+// behalla den med hogst score — sa en slot som en frame laste osakert kan
+// ersattas av en senare frame dar samma slot lastes sakert. En slots margin/
+// runnerUp kommer alltid fran samma frame som dess score, sa varden forblir
+// konsistenta.
+function mergeBestSlots(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  return a.map((s, i) => (b[i] && b[i].score > s.score) ? b[i] : s);
+}
+
+module.exports = { identifyTopbarHeroes, loadTemplates, STRIP_H, evaluateSlots, mergeBestSlots };
