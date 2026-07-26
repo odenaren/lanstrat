@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
-const { identifyTopbarHeroes } = require('./topbar-match');
+const { identifyTopbarHeroes, evaluateSlots, mergeBestSlots } = require('./topbar-match');
 const { readBannedHeroes } = require('./ban-log-match');
 
 const app = express();
@@ -924,20 +924,34 @@ app.post('/api/overlay-capture', async (req, res) => {
     // tvaa-kandidat i finpasset). Loggas alltid, inte bara vid ok:false, sa
     // aven "lyckade" avlasningar kan granskas i efterhand.
     console.log('[capture-slots]', JSON.stringify(result.slots));
-    if (!result.ok) {
-      pushOverlay(p.name, 'itemtips', 'Itemtips', 'Kunde inte lasa av fiendehjaltarna fran skarmen — fyll i dem manuellt i Playbook.');
-      return res.json({ ok: false, reason: result.reason, heroes: result.heroes, slots: result.slots });
+
+    // Bast-per-slot over flera frames: en enskild frame kan lasa 4/5 sakert och
+    // sloumpa pa den femte (t.ex. Visage/Puck 2026-07-20) — nasta frame kan lasa
+    // just den sloten sakert. Vi slar ihop per position (hogst score vinner) och
+    // utvarderar den SAMMANSLAGNA avlasningen, sa vi inte langre kraver att alla
+    // fem lyckas i samma frame. Ackumulatorn nollstalls per match.
+    if (gsiCaptureAccum.matchId !== serverStatus.latestMatchId) {
+      gsiCaptureAccum = { matchId: serverStatus.latestMatchId, slots: null };
     }
-    const generated = await generateItemTipsForMatch(serverStatus.latestMatchId, result.heroes);
+    gsiCaptureAccum.slots = mergeBestSlots(gsiCaptureAccum.slots, result.slots);
+    const merged = evaluateSlots(gsiCaptureAccum.slots);
+    if (merged.ok && !result.ok) console.log('[capture] sammanslaget ok via bast-per-slot:', JSON.stringify(merged.heroes));
+    const eff = merged.ok ? merged : result;
+
+    if (!eff.ok) {
+      pushOverlay(p.name, 'itemtips', 'Itemtips', 'Kunde inte lasa av fiendehjaltarna fran skarmen — fyll i dem manuellt i Playbook.');
+      return res.json({ ok: false, reason: eff.reason, heroes: eff.heroes, slots: eff.slots });
+    }
+    const generated = await generateItemTipsForMatch(serverStatus.latestMatchId, eff.heroes);
     // Push ALLTID nagot har — annars ser spelaren tyst ingenting alls om
     // generateItemTipsForMatch av nagon anledning inte genererade (redan gjort,
     // ingen matchad match, saknad strategitext) trots att fienderna las av korrekt.
     if (generated) {
-      pushOverlay(p.name, 'itemtips', 'Itemtips klara', 'Fiender: ' + result.heroes.join(', ') + '. Paminnelser kommer live under matchen.');
+      pushOverlay(p.name, 'itemtips', 'Itemtips klara', 'Fiender: ' + eff.heroes.join(', ') + '. Paminnelser kommer live under matchen.');
     } else {
-      pushOverlay(p.name, 'itemtips', 'Fiender identifierade', 'Fiender: ' + result.heroes.join(', ') + '. Kunde inte generera itemtips automatiskt just nu — kolla matchen i Playbook.');
+      pushOverlay(p.name, 'itemtips', 'Fiender identifierade', 'Fiender: ' + eff.heroes.join(', ') + '. Kunde inte generera itemtips automatiskt just nu — kolla matchen i Playbook.');
     }
-    res.json({ ok: true, heroes: result.heroes, generated, slots: result.slots });
+    res.json({ ok: true, heroes: eff.heroes, generated, slots: eff.slots });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1867,7 +1881,9 @@ let gsiItemCache = { matchId: null, timingsByAlias: {} };
 let gsiRemindedItems = new Set(); // matchId|alias|itemnamn
 let gsiRemindedChallenges = new Set(); // matchId|alias|start resp. matchId|alias|15min
 let gsiTeamBySteamId = {}; // steamid64 -> 'radiant'|'dire', satt av varje GSI-payload; /api/overlay-capture behover veta vilken sida som ar fienden
-let gsiCaptureState = { matchId: null, attempts: 0, lastReq: 0, done: false }; // capture-request-flodet (All Pick), max 3 forsok per match
+let gsiCaptureState = { matchId: null, attempts: 0, lastReq: 0, done: false }; // capture-request-flodet (All Pick), max GSI_CAPTURE_MAX_ATTEMPTS forsok per match
+let gsiCaptureAccum = { matchId: null, slots: null }; // bast-per-slot ackumulerat over flera capture-frames (All Pick topbar-OCR)
+const GSI_CAPTURE_MAX_ATTEMPTS = 8; // hojt fran 3 (2026-07-26): en osaker slot fladdrade och gav upp for tidigt — fler frames + bast-per-slot-ihopslagning ger avlasningen fler chanser
 let gsiBanCaptureState = { matchId: null, lastReq: 0 }; // ban-logg-OCR-flodet (All Pick), fragar hela HERO_SELECTION-fasen
 
 // Ersatt bannlysta/tagna hjaltar for de spelare som paverkas. Delad av bade
@@ -2077,7 +2093,7 @@ app.post('/api/gsi', async (req, res) => {
       if (gsiCaptureState.matchId !== serverStatus.latestMatchId) {
         gsiCaptureState = { matchId: serverStatus.latestMatchId, attempts: 0, lastReq: 0, done: false };
       }
-      if (!gsiCaptureState.done && gsiCaptureState.attempts < 3 && Date.now() - gsiCaptureState.lastReq > 20000) {
+      if (!gsiCaptureState.done && gsiCaptureState.attempts < GSI_CAPTURE_MAX_ATTEMPTS && Date.now() - gsiCaptureState.lastReq > 20000) {
         gsiCaptureState.lastReq = Date.now(); // satt direkt sa tata payloads inte dubblar requesten
         const capMatches = await readMatches();
         const capMatch = capMatches.find(m => m.id === serverStatus.latestMatchId);
