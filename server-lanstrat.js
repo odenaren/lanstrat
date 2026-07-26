@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
-const { identifyTopbarHeroes, evaluateSlots, mergeBestSlots } = require('./topbar-match');
+const { identifyTopbarHeroes, evaluateSlots, confidentHeroes, mergeBestSlots } = require('./topbar-match');
 const { readBannedHeroes } = require('./ban-log-match');
 
 const app = express();
@@ -935,23 +935,33 @@ app.post('/api/overlay-capture', async (req, res) => {
     }
     gsiCaptureAccum.slots = mergeBestSlots(gsiCaptureAccum.slots, result.slots);
     const merged = evaluateSlots(gsiCaptureAccum.slots);
-    if (merged.ok && !result.ok) console.log('[capture] sammanslaget ok via bast-per-slot:', JSON.stringify(merged.heroes));
-    const eff = merged.ok ? merged : result;
+    const confident = confidentHeroes(gsiCaptureAccum.slots);
 
-    if (!eff.ok) {
-      pushOverlay(p.name, 'itemtips', 'Itemtips', 'Kunde inte lasa av fiendehjaltarna fran skarmen — fyll i dem manuellt i Playbook.');
-      return res.json({ ok: false, reason: eff.reason, heroes: eff.heroes, slots: eff.slots });
+    // Vilka hjaltar bygger vi itemtips mot? Hela femman om alla lastes sakert,
+    // annars delträff: >=3 sakra hjaltar racker (beslut 2026-07-26 — hellre tips
+    // mot de sakra an inget alls). <=2 sakra ger for tunt underlag → be om
+    // manuell ifyllnad istallet. Bast-per-slot-ackumulatorn gor att antalet
+    // "sakra" bara vaxer over frames, sa ingen saker slot tappas pa vagen.
+    const heroesToUse = merged.ok ? merged.heroes : (confident.length >= 3 ? confident : null);
+    if (merged.ok && !result.ok) console.log('[capture] full avlasning via bast-per-slot:', JSON.stringify(merged.heroes));
+    else if (heroesToUse && !merged.ok) console.log('[capture] deltraff ' + confident.length + '/5, genererar mot:', JSON.stringify(confident));
+
+    if (!heroesToUse) {
+      pushOverlay(p.name, 'itemtips', 'Itemtips', 'Kunde bara lasa av ' + confident.length + '/5 fiendehjaltar sakert — fyll i dem manuellt i Playbook.');
+      return res.json({ ok: false, reason: merged.reason, confident, heroes: merged.heroes, slots: merged.slots });
     }
-    const generated = await generateItemTipsForMatch(serverStatus.latestMatchId, eff.heroes);
+    const partial = !merged.ok; // deltraff → nagra slots kunde inte lasas sakert
+    const generated = await generateItemTipsForMatch(serverStatus.latestMatchId, heroesToUse);
     // Push ALLTID nagot har — annars ser spelaren tyst ingenting alls om
     // generateItemTipsForMatch av nagon anledning inte genererade (redan gjort,
     // ingen matchad match, saknad strategitext) trots att fienderna las av korrekt.
     if (generated) {
-      pushOverlay(p.name, 'itemtips', 'Itemtips klara', 'Fiender: ' + eff.heroes.join(', ') + '. Paminnelser kommer live under matchen.');
+      const note = partial ? ' (' + heroesToUse.length + '/5 avlasta — komplettera resten i Playbook vid behov)' : '';
+      pushOverlay(p.name, 'itemtips', 'Itemtips klara', 'Fiender: ' + heroesToUse.join(', ') + note + '. Paminnelser kommer live under matchen.');
     } else {
-      pushOverlay(p.name, 'itemtips', 'Fiender identifierade', 'Fiender: ' + eff.heroes.join(', ') + '. Kunde inte generera itemtips automatiskt just nu — kolla matchen i Playbook.');
+      pushOverlay(p.name, 'itemtips', 'Fiender identifierade', 'Fiender: ' + heroesToUse.join(', ') + '. Kunde inte generera itemtips automatiskt just nu — kolla matchen i Playbook.');
     }
-    res.json({ ok: true, heroes: eff.heroes, generated, slots: eff.slots });
+    res.json({ ok: true, partial, heroes: heroesToUse, generated, slots: merged.slots });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
