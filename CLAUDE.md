@@ -50,6 +50,26 @@ node --check /tmp/check.js
 
 Har filen flera `<script>`-block: extrahera varje block med `re.findall(r'<script>(.*?)</script>', content, re.S)` och kör `node --check` per block.
 
+**Snabbare väg — kör allt på en gång:**
+
+```bash
+node .claude/skills/radslag/check-syntax.js
+```
+
+Kör `node --check` på alla `.js` i roten och `overlay/` samt på varje inline `<script>`-block i HTML-filerna (med radnummer som pekar rätt i HTML-filen), letar nya nästlade template literals och verifierar att `server.js` och `server-lanstrat.js` är byte-identiska. Exit 0 = grönt.
+
+De två nästlade template literals som redan finns i `public/index.html` (rad ~633 och ~1626) fungerar och är baselinade i `nested-baseline.json` — checken faller bara på **nya**. Städas de bort: kör med `--update-baseline`.
+
+---
+
+## /radslag — AI-rådet
+
+För frågor och önskemål som förtjänar mer än ett snabbt svar finns slash-kommandot `/radslag <fråga>` (`.claude/skills/radslag/SKILL.md`).
+
+Tre spelarpersonas (`spelare-ny` Herald, `spelare-archon`, `spelare-divine`) bedömer upplevelsen, fyra tekniska specialister (`arkitekt`, `frontend`, `dhs-domanexpert`, `ai-prompt`) designar lösningen, och `skeptiker` attackerar den innan något byggs. Resonemanget körs på Opus; själva kodskrivandet görs av `byggare` (Sonnet) utifrån en kirurgisk spec.
+
+Personas och specialister har varken skrivverktyg eller `Agent`-verktyg — bara `byggare` kan ändra en fil, och den committar aldrig.
+
 ---
 
 ## Teknisk stack

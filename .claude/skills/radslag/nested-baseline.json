@@ -1,0 +1,7 @@
+{
+  "_comment": "Kanda nastlade template literals (CLAUDE.md regel 4). check-syntax.js faller bara nar antalet i en fil overstiger detta. Uppdatera med --update-baseline.",
+  "updated": "2026-07-27",
+  "files": {
+    "public/index.html": 2
+  }
+}
