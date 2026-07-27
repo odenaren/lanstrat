@@ -959,31 +959,50 @@ app.post('/api/overlay-capture', async (req, res) => {
     // aven "lyckade" avlasningar kan granskas i efterhand.
     console.log('[capture-slots]', JSON.stringify(result.slots));
 
-    // Bast-per-slot over flera frames: en enskild frame kan lasa 4/5 sakert och
-    // sloumpa pa den femte (t.ex. Visage/Puck 2026-07-20) — nasta frame kan lasa
+    // Bast-per-slot over flera frames OCH flera spelare: en enskild frame (skarm)
+    // kan lasa 4/5 sakert och sloumpa pa den femte (t.ex. Visage/Puck 2026-07-20)
+    // — en annan frame, ofta fran en ANNAN spelares skarm/upplosning, kan lasa
     // just den sloten sakert. Vi slar ihop per position (hogst score vinner) och
-    // utvarderar den SAMMANSLAGNA avlasningen, sa vi inte langre kraver att alla
-    // fem lyckas i samma frame. Ackumulatorn nollstalls per match.
+    // utvarderar den SAMMANSLAGNA avlasningen. Nyckel: matchId + fiendesida, sa en
+    // spelare pa fel lag aldrig matar in vart eget lag i samma hink.
     if (gsiCaptureAccum.matchId !== serverStatus.latestMatchId) {
-      gsiCaptureAccum = { matchId: serverStatus.latestMatchId, slots: null };
+      gsiCaptureAccum = { matchId: serverStatus.latestMatchId, bySide: {} };
     }
-    gsiCaptureAccum.slots = mergeBestSlots(gsiCaptureAccum.slots, result.slots);
-    const merged = evaluateSlots(gsiCaptureAccum.slots);
-    const confident = confidentHeroes(gsiCaptureAccum.slots);
+    const bucket = gsiCaptureAccum.bySide[enemySide] || (gsiCaptureAccum.bySide[enemySide] = { slots: null, since: 0 });
+    // Merge ar synkron (ingen await mellan las och skriv) sa samtidiga POST:ar
+    // fran flera spelare inte kan tappa varandras bidrag.
+    bucket.slots = mergeBestSlots(bucket.slots, result.slots);
+    const merged = evaluateSlots(bucket.slots);
+    const confident = confidentHeroes(bucket.slots);
 
     // Vilka hjaltar bygger vi itemtips mot? Hela femman om alla lastes sakert,
     // annars delträff: >=3 sakra hjaltar racker (beslut 2026-07-26 — hellre tips
     // mot de sakra an inget alls). <=2 sakra ger for tunt underlag → be om
-    // manuell ifyllnad istallet. Bast-per-slot-ackumulatorn gor att antalet
-    // "sakra" bara vaxer over frames, sa ingen saker slot tappas pa vagen.
+    // manuell ifyllnad istallet.
     const heroesToUse = merged.ok ? merged.heroes : (confident.length >= 3 ? confident : null);
     if (merged.ok && !result.ok) console.log('[capture] full avlasning via bast-per-slot:', JSON.stringify(merged.heroes));
-    else if (heroesToUse && !merged.ok) console.log('[capture] deltraff ' + confident.length + '/5, genererar mot:', JSON.stringify(confident));
 
     if (!heroesToUse) {
       pushOverlay(p.name, 'itemtips', 'Itemtips', 'Kunde bara lasa av ' + confident.length + '/5 fiendehjaltar sakert — fyll i dem manuellt i Playbook.');
       return res.json({ ok: false, reason: merged.reason, confident, heroes: merged.heroes, slots: merged.slots });
     }
+
+    // Insamlingsfonster: en full 5/5-avlasning genererar direkt (inget att vinna
+    // pa att vanta). En delträff (3-4/5) vantar GSI_CAPTURE_COLLECT_MS sa fler
+    // spelares skarmar hinner fylla i de saknade sloten innan vi laser matchen
+    // (generateItemTipsForMatch satter match.items → oaterkalleligt for matchen).
+    if (!merged.ok) {
+      if (!bucket.since) {
+        bucket.since = Date.now();
+        console.log('[capture] deltraff ' + confident.length + '/5 (' + enemySide + ') — vantar in fler skarmar ' + (GSI_CAPTURE_COLLECT_MS / 1000) + 's');
+        return res.json({ ok: true, collecting: true, confident, slots: merged.slots });
+      }
+      if (Date.now() - bucket.since < GSI_CAPTURE_COLLECT_MS) {
+        return res.json({ ok: true, collecting: true, confident, slots: merged.slots });
+      }
+      console.log('[capture] deltraff ' + confident.length + '/5 (' + enemySide + '), fonster ute — genererar mot:', JSON.stringify(confident));
+    }
+
     const partial = !merged.ok; // deltraff → nagra slots kunde inte lasas sakert
     const generated = await generateItemTipsForMatch(serverStatus.latestMatchId, heroesToUse);
     // Push ALLTID nagot har — annars ser spelaren tyst ingenting alls om
@@ -1925,9 +1944,17 @@ let gsiItemCache = { matchId: null, timingsByAlias: {} };
 let gsiRemindedItems = new Set(); // matchId|alias|itemnamn
 let gsiRemindedChallenges = new Set(); // matchId|alias|start resp. matchId|alias|15min
 let gsiTeamBySteamId = {}; // steamid64 -> 'radiant'|'dire', satt av varje GSI-payload; /api/overlay-capture behover veta vilken sida som ar fienden
-let gsiCaptureState = { matchId: null, attempts: 0, lastReq: 0, done: false }; // capture-request-flodet (All Pick), max GSI_CAPTURE_MAX_ATTEMPTS forsok per match
-let gsiCaptureAccum = { matchId: null, slots: null }; // bast-per-slot ackumulerat over flera capture-frames (All Pick topbar-OCR)
-const GSI_CAPTURE_MAX_ATTEMPTS = 8; // hojt fran 3 (2026-07-26): en osaker slot fladdrade och gav upp for tidigt — fler frames + bast-per-slot-ihopslagning ger avlasningen fler chanser
+// capture-request-flodet (All Pick). done galler hela matchen; per spelare
+// (byAlias) egen throttle+attempts sa ALLA vara spelare i matchen tillfragas
+// parallellt, inte bara en (2026-07-27) — olika skarmar/upplosningar tacker
+// varandras osakra slots via bast-per-slot-mergen.
+let gsiCaptureState = { matchId: null, done: false, byAlias: {} };
+// Bast-per-slot ackumulerat over flera capture-frames, per fiendesida
+// (bySide[side] = { slots, since }). Sida-nyckeln hindrar att en spelare pa fel
+// lag (blandad scrim) matar in VART lag som "fiender" i samma hink.
+let gsiCaptureAccum = { matchId: null, bySide: {} };
+const GSI_CAPTURE_MAX_ATTEMPTS = 8; // per spelare; hojt fran 3 (2026-07-26): en osaker slot fladdrade och gav upp for tidigt
+const GSI_CAPTURE_COLLECT_MS = 8000; // deltraff (3-4/5) vantar sa har lange pa fler skarmar innan den genererar; full 5/5 genererar direkt
 let gsiBanCaptureState = { matchId: null, lastReq: 0 }; // ban-logg-OCR-flodet (All Pick), fragar hela HERO_SELECTION-fasen
 
 // Ersatt bannlysta/tagna hjaltar for de spelare som paverkas. Delad av bade
@@ -2135,18 +2162,24 @@ app.post('/api/gsi', async (req, res) => {
     if ((state === 'DOTA_GAMERULES_STATE_PRE_GAME' || state === 'DOTA_GAMERULES_STATE_GAME_IN_PROGRESS')
         && serverStatus.latestMatchId && body.player.steamid) {
       if (gsiCaptureState.matchId !== serverStatus.latestMatchId) {
-        gsiCaptureState = { matchId: serverStatus.latestMatchId, attempts: 0, lastReq: 0, done: false };
+        gsiCaptureState = { matchId: serverStatus.latestMatchId, done: false, byAlias: {} };
       }
-      if (!gsiCaptureState.done && gsiCaptureState.attempts < GSI_CAPTURE_MAX_ATTEMPTS && Date.now() - gsiCaptureState.lastReq > 20000) {
-        gsiCaptureState.lastReq = Date.now(); // satt direkt sa tata payloads inte dubblar requesten
+      if (!gsiCaptureState.done) {
         const capMatches = await readMatches();
         const capMatch = capMatches.find(m => m.id === serverStatus.latestMatchId);
         if (capMatch && !capMatch.items && !(capMatch.enemies || []).length) {
+          // Fraga VARJE spelare i matchen (egen throttle+attempts per alias), inte
+          // bara en — flera skarmar/upplosningar tacker varandras osakra slots via
+          // bast-per-slot-mergen i /api/overlay-capture.
           const capAlias = await findAliasBySteamId64(body.player.steamid);
           if (capAlias) {
-            gsiCaptureState.attempts++;
-            pushOverlay(capAlias, 'capture-request', '', '');
-            console.log('[GSI] Capture-request till overlay (forsok ' + gsiCaptureState.attempts + ')');
+            const st = gsiCaptureState.byAlias[capAlias] || (gsiCaptureState.byAlias[capAlias] = { lastReq: 0, attempts: 0 });
+            if (st.attempts < GSI_CAPTURE_MAX_ATTEMPTS && Date.now() - st.lastReq > 20000) {
+              st.lastReq = Date.now(); // satt direkt sa tata payloads inte dubblar requesten
+              st.attempts++;
+              pushOverlay(capAlias, 'capture-request', '', '');
+              console.log('[GSI] Capture-request till ' + capAlias + ' (forsok ' + st.attempts + ')');
+            }
           }
         } else {
           gsiCaptureState.done = true; // fiender/items finns redan (manuellt eller via capture) — sluta fraga
