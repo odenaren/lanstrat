@@ -251,7 +251,7 @@ tr.stat-click:hover{background:rgba(44,224,224,.06);}
 <!-- PICKER -->
 <div id="page-picker" class="page">
   <div class="picker-header">
-    <button class="btn btn-ghost" onclick="showPage('home')">← Tillbaka</button>
+    <button class="btn btn-ghost" onclick="currentPlayer=null;clearTimeout(saveTimeout);showPage('home')">← Tillbaka</button>
     <h2 id="picker-player-name">Spelare</h2>
   </div>
   <div class="picker-controls">
@@ -636,6 +636,8 @@ let currentEnemies = new Set();
 let currentDraft = {};
 let currentBanned = new Set();
 let currentMatchData = null;
+
+function escCh(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 async function apiFetch(path, options={}) {
   const res = await fetch(API+path, {headers:{'Content-Type':'application/json'},...options});
@@ -1171,7 +1173,7 @@ async function savePool() {
   } catch(err){ document.getElementById('save-status').textContent='⚠ Fel vid sparning'; }
 }
 function selectAll(){ HERO_LIST.filter(h=>visibleHero(h)).forEach(h=>currentSelected.add(h.id)); renderHeroGrid(); markUnsaved(); }
-function selectNone(){ HERO_LIST.filter(h=>visibleHero(h)).forEach(h=>currentSelected.delete(h.id)); renderHeroGrid(); markUnsaved(); }
+function selectNone(){ if(!confirm('Rensa alla valda hjältar i den här vyn?'))return; HERO_LIST.filter(h=>visibleHero(h)).forEach(h=>currentSelected.delete(h.id)); renderHeroGrid(); markUnsaved(); }
 function invertSelection(){ HERO_LIST.filter(h=>visibleHero(h)).forEach(h=>{if(currentSelected.has(h.id))currentSelected.delete(h.id);else currentSelected.add(h.id);}); renderHeroGrid(); markUnsaved(); }
 function visibleHero(h){
   const s=document.getElementById('hero-search').value.toLowerCase();
@@ -2113,7 +2115,12 @@ async function loadStats() {
   var el = document.getElementById('stats-content');
   el.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:48px">Laddar…</div>';
   var matches = [];
-  try { matches = await apiFetch('/matches'); } catch(e) {}
+  var loadFailed = false;
+  try { matches = await apiFetch('/matches'); } catch(e) { loadFailed = true; }
+  if(loadFailed) {
+    el.innerHTML = '<div style="color:#e74c3c;text-align:center;padding:48px">Kunde inte hämta matcher — försök ladda om sidan.</div>';
+    return;
+  }
   if(!matches.length) {
     el.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:48px">Inga matcher att analysera ännu</div>';
     return;
@@ -2296,7 +2303,7 @@ async function analyzeArchetypes() {
   if(btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
   var matches = [];
   try { matches = await apiFetch('/matches'); } catch(e) {}
-  var todo = matches.filter(function(m){ return !m.archetype && (m.currentStrategy || m.strategy); });
+  var todo = matches.filter(function(m){ return !m.archetype && m.mode !== 'pub' && (m.currentStrategy || m.strategy); });
   var archList = Object.keys(ARCHETYPE_LABELS).map(function(id){
     return id + ': ' + ARCHETYPE_LABELS[id].name + ' — ' + ARCHETYPE_LABELS[id].desc;
   }).join('\n');
@@ -2639,7 +2646,7 @@ async function openDetail(id) {
   }
 
   // Notes and briefing html
-  var notesHtml = m.captainNotes ? '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:12px 14px;margin-bottom:16px"><div style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-dim);margin-bottom:5px">Kaptenens instruktioner</div><div style="font-size:13px;color:var(--text)">'+m.captainNotes+'</div></div>' : '';
+  var notesHtml = m.captainNotes ? '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:12px 14px;margin-bottom:16px"><div style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-dim);margin-bottom:5px">Kaptenens instruktioner</div><div style="font-size:13px;color:var(--text)">'+escCh(m.captainNotes)+'</div></div>' : '';
   var briefingHtml = m.briefing ? '<div style="background:rgba(44,224,224,.08);border:1px solid var(--gold-dim);border-radius:6px;padding:18px 20px;margin-bottom:20px"><div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;text-transform:uppercase;color:var(--gold);margin-bottom:10px">Kaptensbriefing</div><div style="font-size:15px;line-height:1.8;color:var(--text)">'+m.briefing.split('\n').join('<br>')+'</div></div>' : '';
 
   // Build draft portraits
@@ -3021,7 +3028,6 @@ async function loadOpenDotaStats(m) {
 
   // --- 1.5 Utmaningsutfall: verifierade mot matchdatan ---
   if((m.challenges||[]).length) {
-    function escCh(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
     html += '<div style="background:rgba(155,89,182,.07);border:1px solid #8e44ad66;border-radius:6px;padding:16px 18px;margin-bottom:20px">'
       + '<div style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;color:#9b59b6;margin-bottom:10px">🎯 Utmaningsutfall</div>';
     m.challenges.forEach(function(ch){
