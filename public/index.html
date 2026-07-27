@@ -1362,7 +1362,7 @@ async function generateStrategy() {
 
   const poolSummary=active.map(p=>{
     const playerIdx = players.indexOf(p);
-    const ignored = ignoreAllPools || ignorePlayerPools.has(active.indexOf(p));
+    const ignored = ignoreAllPools || ignorePlayerPools.has(playerIdx);
     if(ignored) return p.name+': Välj fritt — ignorera denna spelares pool och välj bästa möjliga hjälte för laget';
     const mainNames=(p.heroes||[]).map(id=>{ const h=HERO_LIST.find(x=>x.id===id); return h?h.name+' ('+h.roles.join('/')+')':null; }).filter(Boolean);
     const cpNames = p.challengePool || [];
@@ -2200,7 +2200,7 @@ async function loadStats() {
   html += '<div class="card" style="margin-bottom:20px"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div class="section-title" style="margin-bottom:0;border-bottom:none;padding-bottom:0">Arketyper — nu avslöjade 🎭</div>'
     + (unknownCount ? '<button id="analyze-arch-btn" onclick="analyzeArchetypes()" style="padding:6px 14px;background:rgba(44,224,224,.15);border:1px solid var(--gold-dim);color:var(--gold);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px">🔍 Analysera '+unknownCount+' äldre matcher</button>' : '')
     + '</div>'
-    + '<p style="color:var(--text-dim);font-size:12px;margin:10px 0 14px">Varje strategi byggdes i hemlighet på en av 13 arketyper. Så här fördelade de sig:'
+    + '<p style="color:var(--text-dim);font-size:12px;margin:10px 0 14px">Varje strategi byggdes i hemlighet på en av 21 arketyper. Så här fördelade de sig:'
     + (guessedCount ? '<br>🔍 = '+guessedCount+' arketyper är AI-gissade i efterhand från strategitexten, inte sparade fakta.' : '')
     + '</p>';
   Object.keys(archCount).sort(function(a,b){return archCount[b].count-archCount[a].count;}).forEach(function(a){
@@ -2305,7 +2305,7 @@ async function analyzeArchetypes() {
     var m = todo[i];
     if(btn) btn.textContent = 'Analyserar ' + (i+1) + ' / ' + todo.length + '…';
     var stratText = (m.currentStrategy || m.strategy || '').slice(0, 4000);
-    var prompt = 'Du ar en Dota 2-expert. Nedan finns en genererad draft-strategi. Den skrevs ursprungligen utifran EN av foljande 13 arketyper. Las texten och avgor vilken arketyp den bygger pa.'
+    var prompt = 'Du ar en Dota 2-expert. Nedan finns en genererad draft-strategi. Den skrevs ursprungligen utifran EN av foljande 21 arketyper. Las texten och avgor vilken arketyp den bygger pa.'
       + '\n\nARKETYPER:\n' + archList
       + '\n\nSTRATEGINAMN: ' + (m.name || '(namnlos)')
       + '\nBRIEFING: ' + (m.briefing || '')

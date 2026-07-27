@@ -717,10 +717,6 @@ var _isPlaying = false;
 
 var _lastMatchId = null;
 
-async function runReveal(matchId, gameNumber) {
-  if(_isPlaying) return;
-  _isPlaying = true;
-
 var BG_TARGET_VOLUME = 0.35;
 var _bgFadeInterval = null;
 
@@ -744,6 +740,10 @@ function fadeAudio(el, from, to, durationMs, onDone) {
     }
   }, stepMs);
 }
+
+async function runReveal(matchId, gameNumber) {
+  if(_isPlaying) return;
+  _isPlaying = true;
 
   // Bakgrundsmusik: från början på Game 1, annars slumpad startpunkt med marginal
   if(_audioUnlocked) {
@@ -1423,7 +1423,7 @@ setInterval(async function() {
     // Studiosändning kan triggas oavsett generating-status
     if(status.studioToken && status.studioToken !== _lastStudioToken && !_isPlaying) {
       _lastStudioToken = status.studioToken;
-      runStudio(status.studioMatchId);
+      runStudio(status.studioMatchId).catch(function(e){ console.error('TV:', e); _isPlaying = false; show('idle'); });
       return;
     }
 
@@ -1434,7 +1434,7 @@ setInterval(async function() {
       var mResp = await fetch('/api/matches/' + status.latestMatchId);
       var mData = await mResp.json();
       var gameNumber = mData.gameNumber || 1;
-      runReveal(status.latestMatchId, gameNumber);
+      runReveal(status.latestMatchId, gameNumber).catch(function(e){ console.error('TV:', e); _isPlaying = false; show('idle'); });
       return;
     }
 
@@ -1450,7 +1450,7 @@ setInterval(async function() {
         var mResp2 = await fetch('/api/matches/' + matchId);
         var mData2 = await mResp2.json();
         var gameNumber2 = mData2.gameNumber || 1;
-        runReveal(matchId, gameNumber2);
+        runReveal(matchId, gameNumber2).catch(function(e){ console.error('TV:', e); _isPlaying = false; show('idle'); });
       }
     }
   } catch(e) {}

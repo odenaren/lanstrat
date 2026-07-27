@@ -1004,12 +1004,12 @@ app.post('/api/overlay-capture', async (req, res) => {
     }
 
     const partial = !merged.ok; // deltraff → nagra slots kunde inte lasas sakert
-    const generated = await generateItemTipsForMatch(serverStatus.latestMatchId, heroesToUse);
+    const generated = await generateItemTipsForMatch(serverStatus.latestMatchId, heroesToUse, partial);
     // Push ALLTID nagot har — annars ser spelaren tyst ingenting alls om
     // generateItemTipsForMatch av nagon anledning inte genererade (redan gjort,
     // ingen matchad match, saknad strategitext) trots att fienderna las av korrekt.
     if (generated) {
-      const note = partial ? ' (' + heroesToUse.length + '/5 avlasta — komplettera resten i Playbook vid behov)' : '';
+      const note = partial ? ' (' + heroesToUse.length + '/5 avlasta — tipsen raknar bara med dessa)' : '';
       pushOverlay(p.name, 'itemtips', 'Itemtips klara', 'Fiender: ' + heroesToUse.join(', ') + note + '. Paminnelser kommer live under matchen.');
     } else {
       pushOverlay(p.name, 'itemtips', 'Fiender identifierade', 'Fiender: ' + heroesToUse.join(', ') + '. Kunde inte generera itemtips automatiskt just nu — kolla matchen i Playbook.');
@@ -1898,7 +1898,7 @@ function dueReminders(timings, ownedKeys, clockSeconds, nameMap, remindedSet, ma
 // Delas av CM-flodet (STRATEGY_TIME med draft-data) och All Pick-flodet
 // (/api/overlay-capture, dar fienderna lases fran en topbar-screenshot).
 let gsiItemsGenerating = false; // enkel lasning mot dubbelgenerering vid samtidiga anrop
-async function generateItemTipsForMatch(matchId, enemyHeroes) {
+async function generateItemTipsForMatch(matchId, enemyHeroes, partial = false) {
   if (!matchId || gsiItemsGenerating) return false;
   gsiItemsGenerating = true;
   try {
@@ -1917,7 +1917,9 @@ async function generateItemTipsForMatch(matchId, enemyHeroes) {
 
     const prompt = 'Du ar en Dota 2 item-expert. Vi har precis genererat en draft-strategi och ska nu mota dessa motstandare.\n\n'
       + 'VAR DRAFT-STRATEGI:\n' + (match.currentStrategy || match.strategy || '') + '\n\n'
-      + 'MOTSTANDARNA SPELAR:\n' + enemyHeroes.join(', ') + '\n\n'
+      + 'MOTSTANDARNA SPELAR:\n' + enemyHeroes.join(', ') + '\n'
+      + (partial ? 'OBS: Bara ' + enemyHeroes.length + ' av 5 fiendehjaltar kunde lasas av. Resten ar OKANDA. Dra ALDRIG slutsatser om vad fiendelaget SAKNAR (skriv aldrig t.ex. "de har ingen silence" eller "ingen magisk burst") — ge bara tips som haller aven om de okanda hjaltarna visar sig vara vad som helst.\n' : '')
+      + '\n'
       + 'Ge konkreta itemtips per spelare i vart lag. Fokusera pa 3-5 nyckelitems per spelare som ar extra viktiga MOT just dessa motstandare.\n\n'
       + 'FORMAT: For varje spelare, skriv en rubrik pa egen rad exakt som "## [SPELARNAMN]" (spelarens alias rakt av, inget annat pa den raden), sedan hjaltens namn pa egen rad, sedan varje item pa egen rad som "**Itemnamn** - kort motivering (senast minut X)" dar X ar en ungefarlig match-minut senast nar itemet bor vara kopt. Avsluta varje spelare med en "Prioritet:"-rad. Ingen markdown-tabell, inga | tecken. Anvand svenska. Var specifik.';
 
