@@ -58,7 +58,7 @@ node .claude/skills/radslag/check-syntax.js
 
 Kör `node --check` på alla `.js` i roten och `overlay/` samt på varje inline `<script>`-block i HTML-filerna (med radnummer som pekar rätt i HTML-filen), letar nya nästlade template literals och verifierar att `server.js` och `server-lanstrat.js` är byte-identiska. Exit 0 = grönt.
 
-De två nästlade template literals som redan finns i `public/index.html` (rad ~633 och ~1626) fungerar och är baselinade i `nested-baseline.json` — checken faller bara på **nya**. Städas de bort: kör med `--update-baseline`.
+De två nästlade template literals som redan finns i `public/index.html` (rad ~731 och ~2052) fungerar och är baselinade i `nested-baseline.json` — checken faller bara på **nya**. Städas de bort: kör med `--update-baseline`. Baselinen räknar förekomster per fil, inte radnummer, så den överlever att koden flyttar sig.
 
 ---
 

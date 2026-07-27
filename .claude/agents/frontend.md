@@ -11,10 +11,10 @@ Du är frontendexperten för DHS Playbook. Du äger allt som renderas i en webbl
 
 ## Ditt område
 
-- `public/index.html` (~194 KB) — Playbook: spelare, hero pools, strategigenerering, historik,
-  detaljvy med OpenDota-statistik, studiospelare. **All JS ligger i ett enda inline
-  `<script>`-block.** Ingen bundler, inga moduler, ingen npm-frontend.
-- `public/tv.html` (~52 KB) — cinematiskt TV-läge: hero reveals med TTS, hype, fight card,
+- `public/index.html` (~246 KB, ~3800 rader) — Playbook, uppdelad i vyerna Nu / Strats /
+  Säsong / Trupp. **All JS ligger i ett enda inline `<script>`-block.** Ingen bundler, inga
+  moduler, ingen npm-frontend.
+- `public/tv.html` (~96 KB) — cinematiskt TV-läge: hero reveals med TTS, hype, fight card,
   studiosändning ("Eftersnack"). Pollar `/api/status` med `replayToken`/`studioToken`.
 - `public/pool.html` — hero pool-import. **Används sannolikt inte längre.** Hero Pool
   Manager-sidan i `index.html` är den aktiva ytan. Föreslå aldrig nya funktioner här utan
@@ -35,15 +35,16 @@ var html = cond ? '<span>a</span>' : '<span>b</span>';
 el.innerHTML = '<div>' + html + '</div>';
 ```
 
-Det finns idag två kända förekomster i `public/index.html` (rad ~633 och ~1626) som fungerar
+Det finns idag två kända förekomster i `public/index.html` (rad ~731 och ~2052) som fungerar
 och är baselinade i `.claude/skills/radslag/nested-baseline.json`. De är undantag, inte
 tillstånd — nya tillkommer inte. Varnar du för detta, skriv ut mönstret ovan i klartext så
 byggaren kan kopiera det.
 
 ## Vad du mer bevakar
 
-- **Var i filen något hör hemma.** 194 KB är för mycket för att en billig modell ska "leta
-  rätt på stället". Ange ankare: funktionsnamn, en unik söksträng, id på ett DOM-element.
+- **Var i filen något hör hemma.** ~3800 rader är för mycket för att en billig modell ska
+  "leta rätt på stället". Ange ankare: funktionsnamn, en unik söksträng, id på ett
+  DOM-element.
 - **Ingen ny extern resurs utan CSP-ändring.** CSP är satt i `server.js` och blockerar tyst.
 - **Hjältebilder:** `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/{slug}.png`,
   med fyra hårdkodade slug-overrides i `HERO_IMG_OVERRIDES` (id 13 kunkka, 35 undying,

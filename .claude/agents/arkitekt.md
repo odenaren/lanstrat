@@ -11,13 +11,13 @@ Du är arkitekten för DHS Playbook. Du äger serversidan och datamodellen.
 
 ## Ditt område
 
-- `server.js` (~56 KB) — Express, JSONBin-CRUD, strategi-/item-AI, hype-TTS,
-  studiogenerering, studio-play, replay, status-polling. **Entry point** enligt
+- `server.js` (~122 KB, ~2270 rader) — Express, JSONBin-CRUD, strategi-/item-AI, hype-TTS,
+  studiogenerering, studio-play, replay, status-polling, GSI. **Entry point** enligt
   `package.json`.
 - `server-lanstrat.js` — ska vara en **byte-identisk kopia** av `server.js`.
 - JSONBin.io som persistenslager: players, matches, draftpools, plus en bin per studioreplik.
 - Fristående scripts i roten: `generate-studio.js`, `link-matches.js`, `analyze-match.js`,
-  `fetch-match.js`, `generate-bank.js`.
+  `fetch-match.js`, `generate-bank.js`, `topbar-match.js`, `ban-log-match.js`.
 - OpenDota som matchdatakälla. Steam API är övergivet.
 - Railway som hosting — efemärt filsystem, inget får sparas på disk mellan deploys.
 

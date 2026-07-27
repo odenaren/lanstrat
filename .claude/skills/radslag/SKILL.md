@@ -34,7 +34,7 @@ Skriv sedan `<scratchpad>/radslag/<slug>/brief.md`:
 - **Öppna frågor** — det du inte vet.
 
 > Briefen är pipelinens viktigaste kostnadsmekanism. Utan den greppar sju opus-agenter var
-> för sig igenom en 194 KB-fil. Lägg tid här.
+> för sig igenom en 3800 raders fil. Lägg tid här.
 
 Ge varje agent hela briefen inklistrad i prompten. Förutsätt aldrig att de kan läsa något du
 inte gett dem.
