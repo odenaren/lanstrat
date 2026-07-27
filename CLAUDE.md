@@ -9,7 +9,7 @@ Webbapp för Dota 2-draft, strategigenerering och TV-produktion för ett årligt
 ## ARBETSREGLER — läs detta först
 
 1. **Minsta möjliga ändring.** Rör så få filer och rader som möjligt. Skriv aldrig om fungerande kod "för att städa". Över-patchning är projektets största återkommande frustration.
-2. **Verifiera innan du bygger.** Anta aldrig hur ett API, en endpoint eller en datastruktur beter sig — kontrollera i koden, testa mot API:t, eller fråga. Gissa aldrig sannolikhets- eller urvalslogik: simulera med ett litet testscript innan implementation.
+2. **Verifiera innan du bygger.** Anta aldrig hur ett API, en endpoint eller en datastruktur beter sig — kontrollera i koden, testa mot API:t, eller fråga. Gissa aldrig sannolikhets- eller urvalslogik: simulera med ett litet testscript innan implementation. **Jämför aldrig aggregerad historisk data (matcher, utmaningar, statistik) mot dagens kodbeteende utan att först kolla i git-loggen när relevanta funktioner introducerades/ändrades** — annars blandas flera olika kodversioners beteende ihop som om det vore ett och samma system (hänt 2026-07-27: en slutsats om utmaningsdiversitet byggde på 13 av 14 matcher genererade med ett äldre, sedan ersatt utmaningssystem).
 3. **Syntaxkontroll efter VARJE ändring** (se kommandon nedan). Detta är obligatoriskt före commit.
 4. **Inga nestade backticks i JavaScript.** Template literals inuti template literals kraschar hela sidan TYST. Använd alltid strängkonkatenering eller DOM-element för HTML-strängar:
    ```javascript
