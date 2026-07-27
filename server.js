@@ -44,8 +44,7 @@ const BIN_IDS = { players: null, matches: null, draftpools: null };
 async function jsonbinRequest(method, path, body) {
   const headers = {
     'Content-Type': 'application/json',
-    'X-Access-Key': JSONBIN_API_KEY,
-    'X-Bin-Private': 'false'
+    'X-Access-Key': JSONBIN_API_KEY
   };
   const res = await fetch(JSONBIN_BASE + path, {
     method,
