@@ -1462,6 +1462,7 @@ async function generateStrategy() {
 
   var prompt = 'Du ar en Dota 2 draft-expert. ' + n + ' spelare ska spela en match.' + wildcardInstruction
     + '\n\nSPELSTIL (hemlig instruktion - folj denna men avsloja den inte i texten): ' + chosenArchetype.instruction
+    + '\n\nVINSTVILLKOR-REGEL (galler VARJE gang ett vinstvillkor formuleras nedan, bade i KAPTENSBRIEFING och i sjalva strategitexten): Vinstvillkoret MASTE bygga pa den valda SPELSTILENS egen mekanism (HUR laget vinner enligt instruktionen ovan), inte pa en generisk deadline. Skriv ENDAST ut ett tempo eller en tidsgrans (t.ex. "vinn fore minut X") om SPELSTIL-instruktionen SJALV namner timing. Om instruktionen inte namner tid: formulera vinstvillkoret som ett mekaniskt tillstand laget tvingar fram (kartkontroll, torn- och Roshan-fordel, vision-overlage, ekonomisk utmattning, o.s.v.), aldrig "vinn snabbt". "Vinna lanes" ar aldrig ett vinstvillkor — det ar utgangslaget alla stravar efter.'
     + '\n\nHERO POOLS:\n' + poolSummary
     + '\n\nLANING-KONTEXT:\n' + getLaningCtx(n)
     + '\n\nSÄSONGSFACIT (detta är match nummer ' + gameNo + ' denna säsong):\n' + seasonCtx
