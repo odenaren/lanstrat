@@ -1464,6 +1464,7 @@ async function generateStrategy() {
     + '\n\nLANING-KONTEXT:\n' + getLaningCtx(n)
     + '\n\nSÄSONGSFACIT (detta är match nummer ' + gameNo + ' denna säsong):\n' + seasonCtx
     + (prevNames.length ? '\n\nTIDIGARE STRATEGINAMN (studera monstren och VARIERA: anvand INTE samma teman, metaforer eller nyckelord som dominerar listan): ' + prevNames.join(', ') : '')
+    + '\n\nOm SASONGSFACIT ovan ger en personlig detalj (svit, revansch) som anvandes som huvudkrok i en NYLIGEN genererad strategi for samma spelare, aterAnvand INTE exakt samma formulering — variera hur det uttrycks eller lyft fram nagot annat om inget nytt facit finns.'
     + '\n\nPRESENTATIONSSTIL: ' + chosenStyle.instruction
     + '\n\nVIKTIG REGEL: Undvik nyligen spelade hjaltar per spelare (listas ovan). Prioritera variation.'
     + (heroesToday.length ? '\n\nHJALTAR SOM REDAN SPELATS IDAG (oavsett spelare): ' + heroesToday.join(', ') + '. Valj i forsta hand hjaltar som INTE finns i listan, dar poolerna tillater det.' : '')
@@ -2474,7 +2475,7 @@ async function removeEnemy(name) {
 async function generateItems() {
   var m = await apiFetch('/matches/'+currentMatchId);
   var enemyList = [...currentEnemies].join(', ');
-  var prompt = 'Du ar en Dota 2 item-expert. Vi har precis genererat en draft-strategi och ska nu mota dessa motstandare.\n\nVAR DRAFT-STRATEGI:\n'+(m.currentStrategy||m.strategy||'')+'\n\nMOTSTANDARRNA SPELAR:\n'+enemyList+'\n\nGe konkreta itemtips per spelare i vart lag. Fokusera pa 3-5 nyckelitems per spelare som ar extra viktiga MOT just dessa motstandare.\n\nFORMAT: For varje spelare, skriv en rubrik pa egen rad exakt som "## [SPELARNAMN]" (spelarens alias rakt av, inget annat pa den raden), sedan hjaltens namn pa egen rad, sedan varje item pa egen rad som "**Itemnamn** - kort motivering (senast minut X)" dar X ar en ungefarlig match-minut senast nar itemet bor vara kopt. Avsluta varje spelare med en "Prioritet:"-rad. Ingen markdown-tabell, inga | tecken. Anvand svenska. Var specifik.';
+  var prompt = 'Du ar en Dota 2 item-expert. Vi har precis genererat en draft-strategi och ska nu mota dessa motstandare.\n\nVAR DRAFT-STRATEGI:\n'+(m.currentStrategy||m.strategy||'')+'\n\nMOTSTANDARNA SPELAR:\n'+enemyList+'\n\nGe konkreta itemtips per spelare i vart lag. Fokusera pa 3-5 nyckelitems per spelare som ar extra viktiga MOT just dessa motstandare.\n\nFORMAT: For varje spelare, skriv en rubrik pa egen rad exakt som "## [SPELARNAMN]" (spelarens alias rakt av, inget annat pa den raden), sedan hjaltens namn pa egen rad, sedan varje item pa egen rad som "**Itemnamn** - kort motivering (senast minut X)" dar X ar en ungefarlig match-minut senast nar itemet bor vara kopt. Avsluta varje spelare med en "Prioritet:"-rad. Ingen markdown-tabell, inga | tecken. Anvand svenska. Var specifik.';
   var btn = document.getElementById('get-items-btn');
   if(btn) { btn.disabled = true; btn.textContent = 'Hamtar itemtips...'; }
   try {
@@ -2698,7 +2699,11 @@ async function openDetail(id) {
   }
 
   var detailEl = document.getElementById('detail-strategy');
-  detailEl.innerHTML = notesHtml+briefingHtml+mdToHtml(m.currentStrategy||m.strategy||'');
+  var stratTextForCheck = (m.currentStrategy||m.strategy||'').trim();
+  var stratHtml = stratTextForCheck.length < 400
+    ? '<div style="background:rgba(231,76,60,.1);border:1px solid #e74c3c66;border-radius:4px;padding:14px 16px;color:var(--text-dim);font-size:13px;font-style:italic">⚠ Strategitexten saknas eller är ofullständig för denna match (känt fel i äldre generering — briefing och utmaningar ovan är fortfarande korrekta).</div>'
+    : mdToHtml(m.currentStrategy||m.strategy||'');
+  detailEl.innerHTML = notesHtml+briefingHtml+stratHtml;
   detailEl.insertBefore(draftContainer, detailEl.firstChild);
 
   // Personliga utmaningar — listas har tills matchen ar lankad (utfallen visas

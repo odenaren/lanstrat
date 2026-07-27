@@ -1441,6 +1441,8 @@ async function generateChallengesForMatch(matchId) {
     + '\n- Niva 1: redan ganska svar (klart over genomsnittet for rollen, aldrig gratis).'
     + '\n- Niva 2: svar.'
     + '\n- Niva 3: nastan omojlig — en exceptionell insats som bara hander valdigt sallan (t.ex. for en do-sallan-utmaning: niva 3 = 0 deaths).'
+    + '\n\nKALIBRERING (viktigt): trosklarna maste vara realistiska for DENNA SPECIFIKA matchplan, inte en generisk 40-45-minutersmatch. Om STRATEGI nedan har ett vinstvillkor som sager matchen ska vara avgjord tidigt (t.ex. fore minut 25-30), sank alla kumulativa mal (last hits, assists, kills, wards, skada) i motsvarande grad — anta ALDRIG en lang match om planen sager annat. Matcha ocksa farm-/CS-/skademal mot hjaltens FAKTISKA roll i strategin: en utility- eller nuke-hjalte (t.ex. en gank-/roam-mid) ska inte fa samma CS-krav som en ren farm-carry.'
+    + '\n\nAVSLOJA ALDRIG lagets hemliga strategi, arketyp eller spelstil i utmaningstexten — texten visas for spelaren FORE matchen. Handla bara om spelarens egen prestation (t.ex. "Farma hart och sakert" ar okej, "Kor deathball-planen" ar INTE okej).'
     + '\n\nDu kan valja EN av FYRA utmaningstyper per spelare — VARIERA typerna mellan spelarna, gor det inte enformigt:'
     + '\n1) VANLIG metric — {"metric":"nyckel","op":">="/"<=","levels":[n1,n2,n3]}. Menyer: ' + JSON.stringify(CHALLENGE_METRICS)
     + '\n2) DECIMAL-metric (samma form, decimaltal tillatna): ' + JSON.stringify(CHALLENGE_FLOAT_METRICS)
@@ -1487,6 +1489,8 @@ async function regenerateChallengeForAlias(matchId, alias, newHero) {
       + 'Matbar via OpenDota-statistik, realistisk for rollen.\n\n'
       + 'Utmaningen har TRE nivaer — en brant, ICKE-LINJAR svarighetstrappa (hoppen mellan nivaerna ska OKA): '
       + 'niva 1 = redan ganska svar (aldrig gratis), niva 2 = svar, niva 3 = nastan omojlig (en exceptionell insats som sallan hander, t.ex. 0 deaths).\n\n'
+      + 'KALIBRERING (viktigt): trosklarna maste vara realistiska for DENNA SPECIFIKA matchplan, inte en generisk 40-45-minutersmatch. Om STRATEGI nedan har ett vinstvillkor som sager matchen ska vara avgjord tidigt, sank alla kumulativa mal i motsvarande grad. Matcha farm-/CS-/skademal mot hjaltens FAKTISKA roll — en utility-/nuke-hjalte ska inte fa samma CS-krav som en ren farm-carry.\n\n'
+      + 'AVSLOJA ALDRIG lagets hemliga strategi, arketyp eller spelstil i utmaningstexten — texten visas for spelaren FORE matchen.\n\n'
       + 'Valj EN av FYRA typer som passar den nya hjalten:'
       + '\n1) VANLIG metric — {"metric":"nyckel","op":">="/"<=","levels":[n1,n2,n3]}. Menyer: ' + JSON.stringify(CHALLENGE_METRICS)
       + '\n2) DECIMAL-metric: ' + JSON.stringify(CHALLENGE_FLOAT_METRICS)
