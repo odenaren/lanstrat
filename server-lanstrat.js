@@ -368,6 +368,26 @@ async function studioHeroes() {
   return heroes;
 }
 
+// Appens EGNA interna hjalte-id:n (fran HERO_LIST i public/index.html, det som sparas i
+// player.heroes nar nagon valjer i hjaltepoolen) matchar INTE OpenDotas riktiga hjalte-id:n
+// (studioHeroes() ovan) — verifierat 2026-07-27: appens id:1 = Axe, OpenDotas riktiga id 1
+// = Anti-Mage. Denna funktion laser HEROES-arrayen direkt ur index.html sa server.js far
+// ratt id-rymd nar den ska tolka en spelares sparade pool (player.heroes).
+let _appHeroIdCache = null;
+function appHeroIdToName() {
+  if (_appHeroIdCache) return _appHeroIdCache;
+  const html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+  const start = html.indexOf('const HEROES = [');
+  const end = html.indexOf('\n];', start) + 3;
+  const block = html.slice(start, end);
+  const map = {};
+  const re = /\{id:(\d+),name:"([^"]+)"/g;
+  let m;
+  while ((m = re.exec(block))) map[m[1]] = m[2];
+  _appHeroIdCache = map;
+  return map;
+}
+
 let _heroNameToIdCache = null;
 async function heroNameToIdMap() {
   if (_heroNameToIdCache) return _heroNameToIdCache;
@@ -1975,12 +1995,12 @@ async function applyNewlyUnavailableHeroes(newlyUnavailable) {
   const affected = Object.keys(plannedDraft).filter(alias => newlyUnavailable.includes(plannedDraft[alias]));
   if (!match || affected.length === 0) return;
 
-  const idToName = await studioHeroes();
+  const appIdToName = appHeroIdToName();
   const takenThisBatch = new Set(); // undvik att foresla samma ersattare till tva spelare i samma omgang
   const pools = {};
   affected.forEach(alias => {
     const p = (match.players || []).find(pl => pl.name === alias);
-    pools[alias] = ((p && p.heroes) || []).map(id => idToName[id]).filter(Boolean)
+    pools[alias] = ((p && p.heroes) || []).map(id => appIdToName[id]).filter(Boolean)
       .filter(h => !gsiSeenUnavailable.has(h));
   });
 
