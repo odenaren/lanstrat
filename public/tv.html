@@ -99,6 +99,8 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
 #studio-screen .scan{position:absolute;inset:0;z-index:4;pointer-events:none;opacity:.4;background:repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px);mix-blend-mode:overlay;}
 #studio-screen .cone{position:absolute;z-index:1;top:-8%;width:34%;height:78%;pointer-events:none;background:linear-gradient(180deg, rgba(232,196,106,.20), rgba(232,196,106,.03) 55%, transparent);filter:blur(14px);opacity:0;transition:left .5s cubic-bezier(.4,0,.2,1),opacity .5s,background .5s;transform:perspective(400px) rotateX(6deg);border-radius:0 0 50% 50%;}
 #studio-screen .studio-stage{position:absolute;inset:0;z-index:5;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);padding:3cqw 3.6cqw;gap:2cqh;}
+#studio-screen #st-spot{position:absolute;inset:auto 3.6cqw 3cqh auto;z-index:6;width:30cqw;display:none;pointer-events:none;}
+#studio-screen #st-spot.on{display:block;}
 #studio-screen .topbar{display:flex;align-items:center;gap:2cqw;min-width:0;}
 #studio-screen .onair{display:flex;align-items:center;gap:.7cqw;font-weight:700;letter-spacing:.18em;text-transform:uppercase;font-size:1.5cqw;color:#fff;}
 #studio-screen .rec{width:1.1cqw;height:1.1cqw;border-radius:50%;background:var(--onair);box-shadow:0 0 10px var(--onair);animation:stRec 1.4s steps(1) infinite;}
@@ -282,7 +284,6 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
             <div class="seat" data-speaker="analyst1" style="--sc:var(--strat)"><div class="portrait">&#128200;</div><div class="seat-name">Analytiker<span class="seat-role">Strategi</span></div><div class="bars"><i></i><i></i><i></i><i></i><i></i></div></div>
             <div class="seat" data-speaker="analyst2" style="--sc:var(--num)"><div class="portrait">&#128202;</div><div class="seat-name">Analytiker<span class="seat-role">Siffror</span></div><div class="bars"><i></i><i></i><i></i><i></i><i></i></div></div>
           </div>
-          <div class="spot" id="st-spot"></div>
         </div>
         <div class="body graphic" id="st-graphic">
           <div class="strip">
@@ -301,6 +302,7 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
         </div>
         <div class="ticker"><span class="lead">Eftersnack</span><div class="crawl" id="st-crawl"></div></div>
       </div>
+      <div class="spot" id="st-spot"></div>
     </div>
     <div class="vignette"></div>
     <div class="scan"></div>
@@ -1116,9 +1118,9 @@ async function runStudio(strategyMatchId) {
     var playlist = [];
     if(netAdv) playlist.push({type:'networth'});
     pickedFights.forEach(function(f){ playlist.push({type:'teamfight', fight:f}); });
-    if(lbRows.length) playlist.push({type:'table'});
     var clearedCh = challenges.filter(function(c){return c.level>=1;});
     if(clearedCh.length) playlist.push({type:'challenge'});
+    if(lbRows.length) playlist.push({type:'table'});
 
     // ---- header / scoreboard / ticker / rundown ----
     document.getElementById('st-title').textContent = m.name || ('Spel #' + (m.gameNumber || ''));
@@ -1185,6 +1187,7 @@ async function runStudio(strategyMatchId) {
           + '</div></div>';
       });
       spotEl.innerHTML = html;
+      spotEl.classList.add('on');
       requestAnimationFrame(function(){ spotEl.querySelectorAll('.fill').forEach(function(f){ f.style.width=(f.dataset.pct*100)+'%'; }); });
     }
 
@@ -1326,21 +1329,17 @@ async function runStudio(strategyMatchId) {
       return function(){ if(raf1) cancelAnimationFrame(raf1); if(raf2) cancelAnimationFrame(raf2); if(nwRAF) cancelAnimationFrame(nwRAF); clearInterval(tcTimer); window.removeEventListener('resize', onResize); };
     }
 
-    // ---- director: rotate panel / graphics while the panel talks ----
-    function startDirector(){
-      if(!playlist.length){ return function(){}; }
-      var gi=-1, mode='panel', timers=[];
-      function step(){
-        if(mode==='panel'){ gi=(gi+1)%playlist.length; showGraphic(playlist[gi]); mode='graphic'; timers.push(setTimeout(step, 7000)); }
-        else { showPanel(); mode='panel'; timers.push(setTimeout(step, 8000)); }
-      }
-      timers.push(setTimeout(step, 6500));
-      return function(){ timers.forEach(clearTimeout); };
+    // ---- director: switch graphics in step with what's actually being said ----
+    var segTotal = (manifest.segments||[]).length || 1;
+    var curGfxIdx = -1;
+    function directorTick(i){
+      if(!playlist.length) return;
+      var g = Math.min(playlist.length-1, Math.floor(i*playlist.length/segTotal));
+      if(g !== curGfxIdx){ curGfxIdx = g; showGraphic(playlist[g]); }
     }
 
     defaultSpot(); showPanel();
     stopAmbient = startAmbient();
-    stopDirector = startDirector();
 
     // ===== AUDIO ENGINE (preserved) =====
     var STUDIO_OVERLAP_MS = 180;
@@ -1364,7 +1363,9 @@ async function runStudio(strategyMatchId) {
       var seg = manifest.segments[i];
       setActiveSpeaker(seg.speaker);
       setRundown(i);
+      directorTick(i);
       if(seg.mentions && seg.mentions.length) { try { renderMentions(seg.mentions); } catch(e) {} }
+      else { spotEl.classList.remove('on'); }
       var a = getSegAudio(i);
       var nextAudio = getSegAudio(i + 1);
       (function(a, nextAudio){
