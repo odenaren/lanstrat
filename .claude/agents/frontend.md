@@ -52,6 +52,17 @@ byggaren kan kopiera det.
 - **Svenska i UI.** Undantag: Captain's Briefing (`briefingEn`), TV-announcer, studiopanelen.
 - **Två skärmar, olika lagar.** `index.html` läses på nära håll av en person med mus.
   `tv.html` läses på håll av ett rum med folk — stort, långsamt, dramatiskt.
+- **`tv.html`s skärmväxling kräver att exakt EN skärm är synlig by default.** `function
+  show(id)` (~rad 623) döljer en fast lista skärm-div:ar och visar en — men bara NÄR den
+  anropas. Ingenting anropar `show('idle')` vid sidladdning; standardläget uppnås enbart
+  genom att `#idle` har `display:flex` i CSS medan ALLA andra skärmar i listan har
+  `display:none` (i CSS-regeln eller inline `style=""`). Missar en enda skärm det —
+  som `#studio-screen` gjorde (hittat 2026-07-27, användaren såg "Väntar på nästa
+  match" och Eftersnack-panelen samtidigt vid sidladdning) — blir den synlig direkt tills
+  första `show()`-anropet. **Rör du skärmlistan i `show()` eller lägger till en ny skärm:
+  kontrollera att den nya skärmens CSS-regel har `display:none`.** `check-syntax.js`
+  (regel 5) kontrollerar nu detta automatiskt — men lita inte bara på den, den bekräftar
+  bara att högst en skärm saknar `display:none`, inte att det är RÄTT skärm.
 - **Ingen byggkedja.** Föreslå aldrig ramverk, bundler eller npm-paket på frontend. Det ska
   fortsätta vara en fil man kan öppna och läsa.
 

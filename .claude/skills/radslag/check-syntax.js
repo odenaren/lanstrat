@@ -12,6 +12,11 @@
  *    nested-baseline.json; checken faller bara pa NYA. Kor med
  *    --update-baseline nar du medvetet stadat bort eller lagt till nagon.
  * 4. server.js och server-lanstrat.js maste vara byte-identiska
+ * 5. tv.html: skarmvaxlingen (function show(id)) doljer alla skarmar och
+ *    visar en — men bara NAR den anropas. Saknar en skarm-div display:none
+ *    som CSS/inline-baseline visas den tills forsta show()-anropet, vilket
+ *    kan ge en delad/dubbel skarm vid sidladdning (hant med #studio-screen,
+ *    2026-07-27). Hogst en skarm (standardskarmen) far sakna display:none.
  *
  * Exit 0 = gront, exit 1 = rott. Inga beroenden utanfor Node.
  */
@@ -168,6 +173,46 @@ function findNestedTemplates(src) {
   return hits;
 }
 
+// ---------------------------------------------------- tv.html skarmvaxling
+
+/**
+ * Hittar function show(id) { [...].forEach(...) }-monstret och kontrollerar
+ * att alla skarm-id:n utom hogst en har display:none som standard (antingen
+ * i en #id{...}-CSS-regel eller i elementets eget inline style=""-attribut).
+ * Fler an en synlig-by-default skarm betyder att flera visas samtidigt
+ * innan show() nagonsin anropas — se regel 5 ovan.
+ */
+function checkScreenDefaults(file, html) {
+  const fnMatch = html.match(/function show\(id\)\s*\{\s*\[([^\]]*)\]\.forEach/);
+  if (!fnMatch) return; // monstret finns inte i den har filen
+
+  const ids = fnMatch[1]
+    .split(',')
+    .map((s) => s.trim().replace(/^['"]|['"]$/g, ''))
+    .filter(Boolean);
+
+  function isHiddenByDefault(id) {
+    const tagMatch = html.match(new RegExp('<[a-zA-Z][^>]*\\bid=["\']' + id + '["\'][^>]*>'));
+    if (tagMatch && /display\s*:\s*none/i.test(tagMatch[0])) return true;
+    const ruleMatch = html.match(new RegExp('#' + id + '(?![\\w-])\\s*\\{([^}]*)\\}'));
+    if (ruleMatch && /display\s*:\s*none/i.test(ruleMatch[1])) return true;
+    return false;
+  }
+
+  const visibleByDefault = ids.filter((id) => !isHiddenByDefault(id));
+
+  if (visibleByDefault.length > 1) {
+    errors.push(
+      rel(file) +
+        ': flera skarmar saknar display:none som standard (' +
+        visibleByDefault.join(', ') +
+        ') — regel 5. show(id) doljer skarmar bara NAR den anropas; utan display:none i ' +
+        'CSS eller inline-style visas de tillsammans innan forsta show()-anropet. ' +
+        'Hogst en skarm (standardskarmen) far sakna display:none.'
+    );
+  }
+}
+
 // ------------------------------------------------------------ syntaxkontroll
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'radslag-check-'));
@@ -211,6 +256,7 @@ for (const file of jsFiles()) {
 
 for (const file of htmlFiles()) {
   const html = fs.readFileSync(file, 'utf8');
+  checkScreenDefaults(file, html);
   const blocks = extractScripts(html);
   if (!blocks.length) continue;
   for (const block of blocks) {
