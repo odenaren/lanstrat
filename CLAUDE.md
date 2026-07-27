@@ -27,9 +27,9 @@ Webbapp för Dota 2-draft, strategigenerering och TV-produktion för ett årligt
 ## Git & deploy
 
 - **`dev`** — all utveckling OCH Oskars testmiljö. Deployar automatiskt till `dhs27.up.railway.app`. **Pusha ALLTID hit** — det är här Oskar testar. Skapa inte separata feature-/arbetsgrenar utan att fråga; committa och pusha direkt till `dev` så ändringen deployar och kan testas på dhs27.
-- **`main`** — stabil backup, prod (`lanstrat-production.up.railway.app`). Merga från dev först när det är verifierat i dev-miljön.
+- **`main`** — RÖRS INTE. `main` är inaktuell och kör i stort sett en helt annan kod idag. **Allt körs på `dev`.** Fråga ALDRIG om merge/deploy till `main` och föreslå det inte — det är inte aktuellt på lång tid.
 - All kod ligger i **repo-roten** (ingen undermapp).
-- Committa med korta beskrivande meddelanden på svenska eller engelska. Pusha till `dev` — aldrig direkt till `main` utan att fråga.
+- Committa med korta beskrivande meddelanden på svenska eller engelska. Pusha alltid till `dev` — aldrig `main`.
 - Railway är testmiljön; servern körs sällan lokalt. Statiska filer deployas dåligt på Railway — använd GitHub Pages/Netlify Drop för fristående statiskt.
 
 ## Syntaxkontroll (obligatorisk före commit)
