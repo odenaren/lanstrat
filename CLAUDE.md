@@ -147,7 +147,7 @@ Viktigt: `strategy` = originalet, bevaras alltid. Draftändringar efter bans **a
 - **Varför inte disk:** Railways filsystem är efemärt vid varje deploy (`public/studio/` skulle nollställas). JSONBin ligger utanför appens filsystem och överlever alltid.
 - **Varför en bin per replik, inte en delad bin per match:** verifierat mot API:t (inte antaget) — JSONBins nginx-proxy svarar 413 på requests över exakt 1MiB (1 048 576 bytes), oavsett vad "10MB Pro-bin" faktiskt syftar på (troligen lagring, inte uppladdningsstorlek). En hel matchs ljud (flera MB) får aldrig plats i ett enda POST/PUT. `STUDIO_MAX_BIN_BYTES` i server.js sätter taket till 900KB per bin (marginal under 1MiB) — överskrids det kastas ett tydligt fel istället för 413 eller tyst korruption.
 - Panelen är **neutrala broadcasters**: får aldrig säga "our team/we/us" — refererar till "the DHS squad", smeknamn etc. (regeln ligger i prompten i server.js OCH generate-studio.js — håll dem synkade)
-- Ingen bakgrundsmusik under studiosändning på TV:n
+- Bakgrundsljud under studiosändningen: `tv.html` väljer slumpmässigt en av `studio-bg-1`/`studio-bg-2` (`public/sounds/music/studio_background_*.mp3`, loopar), tonar in på `STUDIO_BG_TARGET_VOLUME` (lågt — dialogtungt innehåll, får aldrig konkurrera med rösterna)
 
 ## Personliga utmaningar
 

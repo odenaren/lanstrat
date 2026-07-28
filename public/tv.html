@@ -328,6 +328,8 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-fam
   <audio id="welcome-audio" src="/sounds/announcer/welcome.mp3" preload="auto"></audio>
   <audio id="hero-audio" src="/sounds/announcer/welcome.mp3" preload="auto"></audio>
   <audio id="bg-music" src="/sounds/music/background.mp3" preload="auto" loop></audio>
+  <audio id="studio-bg-1" src="/sounds/music/studio_background_1.mp3" preload="auto" loop></audio>
+  <audio id="studio-bg-2" src="/sounds/music/studio_background_2.mp3" preload="auto" loop></audio>
 
   <div id="control-buttons" style="position:fixed;bottom:16px;left:16px;display:flex;gap:8px;z-index:8888;opacity:.15;transition:opacity .2s;" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=.15">
     <button onclick="toggleFullscreen()" title="Helskärm" style="width:36px;height:36px;border-radius:6px;border:1px solid var(--gold-dim);background:rgba(0,0,0,.6);color:var(--gold);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;">⛶</button>
@@ -705,7 +707,7 @@ function unlockAudio() {
   _audioUnlocked = true;
 
   // Lås upp varje audio-element explicit (krävs av iOS Safari m.fl. mobilwebbläsare)
-  var audioIds = ['welcome-audio', 'hero-audio', 'bg-music'];
+  var audioIds = ['welcome-audio', 'hero-audio', 'bg-music', 'studio-bg-1', 'studio-bg-2'];
   audioIds.forEach(function(id) {
     var el = document.getElementById(id);
     if(!el) return;
@@ -728,23 +730,26 @@ var _isPlaying = false;
 var _lastMatchId = null;
 
 var BG_TARGET_VOLUME = 0.35;
-var _bgFadeInterval = null;
+var STUDIO_BG_TARGET_VOLUME = 0.13; // lagom mot rosterna - studion ar dialogtung, inte bara narration
 
+// Fade-intervallet lagras per element (el._fadeInterval) sa flera ljudspar
+// (t.ex. bg-music som tonar ut samtidigt som studio-bakgrunden tonar in) kan
+// tona oberoende av varandra utan att avbryta varandra.
 function fadeAudio(el, from, to, durationMs, onDone) {
-  if(_bgFadeInterval) clearInterval(_bgFadeInterval);
+  if(el._fadeInterval) clearInterval(el._fadeInterval);
   var steps = 30;
   var stepMs = durationMs / steps;
   var stepAmount = (to - from) / steps;
   var current = from;
   el.volume = Math.max(0, Math.min(1, current));
   var count = 0;
-  _bgFadeInterval = setInterval(function() {
+  el._fadeInterval = setInterval(function() {
     count++;
     current += stepAmount;
     el.volume = Math.max(0, Math.min(1, current));
     if(count >= steps) {
-      clearInterval(_bgFadeInterval);
-      _bgFadeInterval = null;
+      clearInterval(el._fadeInterval);
+      el._fadeInterval = null;
       el.volume = Math.max(0, Math.min(1, to));
       if(onDone) onDone();
     }
@@ -1156,6 +1161,16 @@ async function runStudio(strategyMatchId) {
     var bg = document.getElementById('bg-music');
     if(bg && !bg.paused) { try { fadeAudio(bg, bg.volume, 0, 800); setTimeout(function(){ try{ bg.pause(); }catch(e){} }, 900); } catch(e){} }
 
+    // Studio-bakgrundsljud: valj en av tva slumpmassigt, loopa, tona in
+    var studioBg = document.getElementById(Math.random() < 0.5 ? 'studio-bg-1' : 'studio-bg-2');
+    if(studioBg && _audioUnlocked) {
+      try {
+        studioBg.currentTime = 0;
+        studioBg.volume = 0;
+        studioBg.play().then(function(){ fadeAudio(studioBg, 0, STUDIO_BG_TARGET_VOLUME, 1500); }).catch(function(){});
+      } catch(e) {}
+    }
+
     // ---- element refs ----
     var spotEl=document.getElementById('st-spot'), gfxEl=document.getElementById('st-gfx');
     var panelBody=document.getElementById('st-panel'), graphicBody=document.getElementById('st-graphic'), coneEl=document.getElementById('st-cone');
@@ -1420,6 +1435,7 @@ async function runStudio(strategyMatchId) {
   } catch(e) {
     console.error('Studio:', e);
   }
+  if(studioBg && !studioBg.paused) { try { fadeAudio(studioBg, studioBg.volume, 0, 2000, function(){ try{ studioBg.pause(); }catch(e){} }); } catch(e) {} }
   if(stopDirector) stopDirector();
   if(stopAmbient) stopAmbient();
   show('idle');
