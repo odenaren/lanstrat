@@ -1363,7 +1363,14 @@ async function runStudio(strategyMatchId) {
       var seg = manifest.segments[i];
       setActiveSpeaker(seg.speaker);
       setRundown(i);
-      directorTick(i);
+      if(seg.pivotalFight && manifest.pivotalFightStart != null){
+        var pivPlaylistItem = null;
+        for(var pj=0; pj<playlist.length; pj++){ if(playlist[pj].type==='teamfight' && playlist[pj].fight.start===manifest.pivotalFightStart){ pivPlaylistItem=playlist[pj]; break; } }
+        if(pivPlaylistItem){ var pi=playlist.indexOf(pivPlaylistItem); if(pi!==curGfxIdx){ curGfxIdx=pi; showGraphic(pivPlaylistItem); } }
+        else { directorTick(i); }
+      } else {
+        directorTick(i);
+      }
       if(seg.mentions && seg.mentions.length) { try { renderMentions(seg.mentions); } catch(e) {} }
       else { spotEl.classList.remove('on'); }
       var a = getSegAudio(i);

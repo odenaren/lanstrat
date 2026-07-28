@@ -643,8 +643,29 @@ async function generateStudioForMatch(strategyMatch, force) {
     };
   });
 
-  const teamfights = (m.teamfights || []).map(tf => ({ at_minute: min(tf.start), deaths: tf.deaths }))
-    .sort((a,b) => b.deaths - a.deaths).slice(0, 4);
+  let pivotalFight = null;
+  (m.teamfights || []).forEach(tf => {
+    let dhsG = 0, enemyG = 0, dhsPlayers = [], enemyHeroes = [];
+    (tf.players || []).forEach((pl, idx) => {
+      const op = m.players[idx]; if (!op) return;
+      const isUs = (op.player_slot < 128) === weAreRadiant;
+      if (isUs) { dhsG += (pl.gold_delta||0); const nick = aliasByHero[studioNormHero(heroName(op.hero_id))]; dhsPlayers.push(nick || heroName(op.hero_id)); }
+      else { enemyG += (pl.gold_delta||0); enemyHeroes.push(heroName(op.hero_id)); }
+    });
+    if (!dhsPlayers.length || !enemyHeroes.length) return;
+    const net = dhsG - enemyG, imp = Math.abs(net) + (tf.deaths||0) * 300;
+    if (!pivotalFight || imp > pivotalFight.imp) {
+      pivotalFight = { start: tf.start, at_minute: min(tf.start), net_gold_swing: net, dhs_won: net > 0, deaths: tf.deaths||0, dhs_players: dhsPlayers, enemy_heroes: enemyHeroes, imp };
+    }
+  });
+  const teamfights = pivotalFight ? [{
+    at_minute: pivotalFight.at_minute,
+    net_gold_swing: pivotalFight.net_gold_swing,
+    dhs_won: pivotalFight.dhs_won,
+    deaths: pivotalFight.deaths,
+    dhs_players: pivotalFight.dhs_players,
+    enemy_heroes: pivotalFight.enemy_heroes
+  }] : [];
   const roshans = (m.objectives || []).filter(o => o.type === 'CHAT_MESSAGE_ROSHAN_KILL').map(o => 'min' + min(o.time));
 
   // Utmaningsutfall — verifieras mot matchdatan och ges till panelen som underlag
@@ -718,6 +739,10 @@ async function generateStudioForMatch(strategyMatch, force) {
     + 'challenge for this match, with verified results. Each challenge has three escalating levels (L1 hard, L2 harder, '
     + 'L3 nearly impossible); achieved_level says how far they got (0 = missed even L1, 3 = the near-impossible feat). '
     + 'Weave the 1-3 most interesting outcomes into the discussion — a level 3 is a huge deal, a 0 is a flop. Do NOT recite the full challenge list.'
+    + '\n\nTEAMFIGHT: biggest_teamfights in MATCH DATA contains the single most decisive teamfight of the match (net_gold_swing, dhs_won, deaths, who was involved). '
+    + 'If — and only if — the conversation naturally reaches that part of the match, have one voice describe what was at stake and who came out ahead. '
+    + 'Do not force it in, do not invent a different fight, and never state an exact game-clock time (you don\'t have one, only an approximate minute). '
+    + 'On EVERY dialogue line that is primarily about this fight, set "pivotal_fight": true; all other lines: "pivotal_fight": false.'
     + (seasonContext ? '\n\nSEASON CONTEXT — verified facts computed in code from the season\'s match history. '
       + 'Use them for storyline continuity across the season: streaks, revenge games, firsts, deja vu. Weave in the 1-2 '
       + 'that genuinely fit tonight\'s story — never recite the list, and NEVER invent season facts beyond these:\n' + seasonContext : '')
@@ -727,7 +752,7 @@ async function generateStudioForMatch(strategyMatch, force) {
     + 'Written to be SPOKEN: short sentences, ellipses for pauses, at most one CAPS-emphasized word per line. English.'
     + '\n\nSTRATEGY CONTEXT:\n' + JSON.stringify(strategyContext)
     + '\n\nMATCH DATA:\n' + JSON.stringify(summary)
-    + '\n\nReply ONLY with JSON, no markdown: {"headline":"4-8 word segment title","dialogue":[{"speaker":"host"|"analyst1"|"analyst2","text":"...","mentions":["exact nicknames of OUR players explicitly mentioned in this line, empty array if none"]}],"angles":["2-4 word label per main thread"]}';
+    + '\n\nReply ONLY with JSON, no markdown: {"headline":"4-8 word segment title","dialogue":[{"speaker":"host"|"analyst1"|"analyst2","text":"...","mentions":["exact nicknames of OUR players explicitly mentioned in this line, empty array if none"],"pivotal_fight":true|false}],"angles":["2-4 word label per main thread"]}';
 
   let recap = null;
   for (let attempt = 1; attempt <= 2 && !recap; attempt++) {
@@ -769,7 +794,7 @@ async function generateStudioForMatch(strategyMatch, force) {
     checkStudioBinSize(segmentPayload, 'Replik ' + i + ' (' + d.speaker + ')');
     const segmentBinId = await createStudioBin(segmentPayload);
 
-    segments.push({ speaker: d.speaker, text: d.text, mentions: d.mentions, file: fname, binId: segmentBinId });
+    segments.push({ speaker: d.speaker, text: d.text, mentions: d.mentions, file: fname, binId: segmentBinId, pivotalFight: !!d.pivotal_fight });
   }
 
   const manifest = {
@@ -780,7 +805,8 @@ async function generateStudioForMatch(strategyMatch, force) {
     generatedAt: new Date().toISOString(),
     segments: segments,
     angles: recap.angles || [],
-    challengeResults: challengeResults
+    challengeResults: challengeResults,
+    pivotalFightStart: pivotalFight ? pivotalFight.start : null
   };
 
   // Manifestet (text + repliks bin-id:n, inget ljud) far ocksa en egen liten bin.
