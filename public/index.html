@@ -350,11 +350,14 @@ tr.stat-click:hover{background:rgba(44,224,224,.06);}
     <span style="color:var(--text-dim);font-size:13px">Säsonger och poängvikter för Ligan — sparas direkt, ingen redeploy krävs</span>
   </div>
   <div class="card" style="max-width:720px">
-    <div class="section-title">Säsonger (JSON-array)</div>
-    <textarea id="admin-seasons" spellcheck="false" style="width:100%;min-height:120px;font-family:monospace;font-size:12px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:10px"></textarea>
-    <div class="section-title" style="margin-top:18px">Poängvikter (JSON)</div>
-    <textarea id="admin-scoring" spellcheck="false" style="width:100%;min-height:220px;font-family:monospace;font-size:12px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:10px"></textarea>
-    <div style="display:flex;gap:10px;align-items:center;margin-top:14px">
+    <div class="section-title">Säsonger</div>
+    <div id="admin-seasons-list"></div>
+    <button class="btn btn-ghost" style="margin-top:8px" onclick="addAdminSeason()">+ Lägg till säsong</button>
+
+    <div class="section-title" style="margin-top:26px">Poängvikter</div>
+    <div id="admin-scoring-fields" style="display:grid;grid-template-columns:1fr 90px;gap:10px 14px;align-items:center"></div>
+
+    <div style="display:flex;gap:10px;align-items:center;margin-top:18px">
       <button class="btn btn-gold" onclick="saveAdminConfig()">Spara</button>
       <span id="admin-status" style="font-size:12px;color:var(--text-dim)"></span>
     </div>
@@ -2138,14 +2141,94 @@ async function loadLeague() {
     el.innerHTML = '<div style="color:var(--red);padding:16px">Kunde inte hämta ligatabellen.</div>';
   }
 }
-// ===================== ADMIN (sasonger + poangvikter) =====================
+// ===================== ADMIN (sasonger + poangvikter, formularbaserat) =====================
+var _adminSeasons = [];
+var ADMIN_SCORING_FIELDS = [
+  {path:'teamWinPoints', label:'Lagvinst — poäng (delas mellan de som var med)', step:'1'},
+  {path:'challengeLevelPoints.1', label:'Utmaning nivå 1 — poäng', step:'1'},
+  {path:'challengeLevelPoints.2', label:'Utmaning nivå 2 — poäng', step:'1'},
+  {path:'challengeLevelPoints.3', label:'Utmaning nivå 3 — poäng', step:'1'},
+  {path:'universal.multiKillPoints', label:'Rampage / Ultra Kill — poäng', step:'1'},
+  {path:'universal.buybackWinPoints', label:'Buyback + vunnen match — poäng', step:'1'},
+  {path:'universal.stunSecondsThreshold', label:'Stun-tid (sek) som krävs', step:'1'},
+  {path:'universal.stunPoints', label:'→ poäng för stun-tid', step:'1'},
+  {path:'universal.killShareThreshold', label:'Andel av lagets kills (0–1) som krävs', step:'0.05'},
+  {path:'universal.killSharePoints', label:'→ poäng för kill-andel', step:'1'},
+  {path:'universal.obsPlacedThreshold', label:'Wards placerade som krävs', step:'1'},
+  {path:'universal.wardPoints', label:'→ poäng för wards', step:'1'},
+  {path:'universal.mostAssistsPoints', label:'Flest assists i matchen — poäng', step:'1'},
+  {path:'universal.longestMatchPoints', label:'Längsta matchen ikväll — poäng', step:'1'}
+];
+function getPath(obj, p) { return p.split('.').reduce(function(o,k){ return (o && o[k]!==undefined) ? o[k] : undefined; }, obj); }
+function setPath(obj, p, v) {
+  var keys = p.split('.');
+  var cur = obj;
+  for (var i=0; i<keys.length-1; i++) { if(!cur[keys[i]]) cur[keys[i]] = {}; cur = cur[keys[i]]; }
+  cur[keys[keys.length-1]] = v;
+}
+function renderAdminSeasons() {
+  var host = document.getElementById('admin-seasons-list');
+  host.innerHTML = '';
+  _adminSeasons.forEach(function(s, i) {
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap';
+    var labelInput = document.createElement('input');
+    labelInput.value = s.label || '';
+    labelInput.placeholder = 'Namn';
+    labelInput.style.cssText = 'flex:1;min-width:100px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-size:13px';
+    labelInput.oninput = function(){ _adminSeasons[i].label = labelInput.value; };
+    var fromInput = document.createElement('input');
+    fromInput.type = 'date';
+    fromInput.value = s.from || '';
+    fromInput.style.cssText = 'background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-size:13px';
+    fromInput.oninput = function(){ _adminSeasons[i].from = fromInput.value; };
+    var toInput = document.createElement('input');
+    toInput.type = 'date';
+    toInput.value = s.to || '';
+    toInput.style.cssText = 'background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-size:13px';
+    toInput.oninput = function(){ _adminSeasons[i].to = toInput.value; };
+    var delBtn = document.createElement('button');
+    delBtn.className = 'btn btn-ghost';
+    delBtn.style.cssText = 'padding:6px 10px';
+    delBtn.textContent = '✕';
+    delBtn.onclick = function(){ _adminSeasons.splice(i,1); renderAdminSeasons(); };
+    row.appendChild(labelInput);
+    row.appendChild(fromInput);
+    row.appendChild(toInput);
+    row.appendChild(delBtn);
+    host.appendChild(row);
+  });
+}
+function addAdminSeason() {
+  _adminSeasons.push({ id: 'season' + (Date.now()), from: '', to: '', label: '' });
+  renderAdminSeasons();
+}
+function renderAdminScoringFields(scoring) {
+  var host = document.getElementById('admin-scoring-fields');
+  host.innerHTML = '';
+  ADMIN_SCORING_FIELDS.forEach(function(f) {
+    var label = document.createElement('div');
+    label.textContent = f.label;
+    label.style.cssText = 'font-size:13px;color:var(--text-dim)';
+    var input = document.createElement('input');
+    input.type = 'number';
+    input.step = f.step;
+    input.id = 'admin-field-' + f.path.replace(/\./g,'-');
+    var v = getPath(scoring, f.path);
+    input.value = (v===undefined||v===null) ? '' : v;
+    input.style.cssText = 'background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-size:13px;width:100%';
+    host.appendChild(label);
+    host.appendChild(input);
+  });
+}
 async function loadAdminConfig() {
   var statusEl = document.getElementById('admin-status');
   statusEl.textContent = 'Laddar…';
   try {
     var cfg = await apiFetch('/admin/config');
-    document.getElementById('admin-seasons').value = JSON.stringify(cfg.seasons, null, 2);
-    document.getElementById('admin-scoring').value = JSON.stringify(cfg.scoring, null, 2);
+    _adminSeasons = (cfg.seasons || []).map(function(s){ return {id:s.id, from:s.from, to:s.to, label:s.label}; });
+    renderAdminSeasons();
+    renderAdminScoringFields(cfg.scoring || {});
     statusEl.textContent = '';
   } catch (e) {
     statusEl.textContent = 'Kunde inte hämta konfiguration.';
@@ -2153,12 +2236,15 @@ async function loadAdminConfig() {
 }
 async function saveAdminConfig() {
   var statusEl = document.getElementById('admin-status');
-  var seasons, scoring;
-  try {
-    seasons = JSON.parse(document.getElementById('admin-seasons').value);
-    scoring = JSON.parse(document.getElementById('admin-scoring').value);
-  } catch (e) {
-    statusEl.textContent = 'Ogiltig JSON — kontrollera formatet.';
+  var scoring = {};
+  ADMIN_SCORING_FIELDS.forEach(function(f) {
+    var input = document.getElementById('admin-field-' + f.path.replace(/\./g,'-'));
+    var num = parseFloat(input.value);
+    setPath(scoring, f.path, isNaN(num) ? 0 : num);
+  });
+  var seasons = _adminSeasons.map(function(s){ return {id: s.id || ('season'+Date.now()), from:s.from, to:s.to, label:s.label}; });
+  if (!seasons.length || seasons.some(function(s){ return !s.from || !s.to || !s.label; })) {
+    statusEl.textContent = 'Varje säsong behöver namn, från- och till-datum.';
     return;
   }
   statusEl.textContent = 'Sparar…';
