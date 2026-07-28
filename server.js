@@ -133,6 +133,25 @@ function checkStudioBinSize(payload, label) {
     throw new Error(label + ' blev ' + Math.round(bytes / 1024) + 'KB — for stort for en JSONBin-bin (max ~900KB, JSONBins proxy stoppar over 1MiB).');
   }
 }
+// Kollar ElevenLabs-kvoten INNAN TTS-genereringen startar, sa vi inte branner
+// halva batchen och kraschar pa replik N med en kryptisk 401. Failar OPPET
+// (blockerar inte) om kvot-anropet sjalvt strular — bara ett riktigt,
+// bekraftat kvotunderskott ska stoppa genereringen.
+async function checkElevenLabsQuota(elKey, estimatedChars) {
+  let remaining = null;
+  try {
+    const res = await fetch('https://api.elevenlabs.io/v1/user/subscription', { headers: { 'xi-api-key': elKey } });
+    if (res.ok) {
+      const sub = await res.json();
+      if (typeof sub.character_count === 'number' && typeof sub.character_limit === 'number') {
+        remaining = sub.character_limit - sub.character_count;
+      }
+    }
+  } catch (e) { /* natverksfel etc — fail open */ }
+  if (remaining !== null && remaining < estimatedChars) {
+    throw new Error('ElevenLabs-kvoten racker inte — ' + remaining + ' tecken kvar, behover ~' + estimatedChars + ' tecken for hela studion. Vanta pa nasta kvotcykel eller uppgradera planen.');
+  }
+}
 async function getStudioManifestCached(match) {
   const cached = studioManifestCache.get(match.id);
   if (cached && (Date.now() - cached.ts) < STUDIO_CACHE_TTL_MS) return cached.data;
@@ -769,6 +788,9 @@ async function generateStudioForMatch(strategyMatch, force) {
   }
   if (!Array.isArray(recap.dialogue) || !recap.dialogue.length) throw new Error('Tomt dialogue-fält från AI');
 
+  const estimatedChars = recap.dialogue.reduce((s, d) => s + (d.text || '').length, 0);
+  await checkElevenLabsQuota(EL_KEY, estimatedChars);
+
   const validAliases = new Set(Object.keys(draft));
   recap.dialogue.forEach(d => { d.mentions = (d.mentions || []).filter(x => validAliases.has(x)); });
 
@@ -784,7 +806,12 @@ async function generateStudioForMatch(strategyMatch, force) {
       headers: { 'xi-api-key': EL_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
-    if (!tRes.ok) throw new Error('ElevenLabs ' + tRes.status + ' på replik ' + i);
+    if (!tRes.ok) {
+      const errBody = await tRes.text().catch(() => '');
+      let detail = errBody;
+      try { const j = JSON.parse(errBody); detail = (j.detail && (j.detail.message || j.detail.status)) || errBody; } catch (e) {}
+      throw new Error('ElevenLabs ' + tRes.status + ' på replik ' + i + ': ' + detail);
+    }
     const audioBase64 = Buffer.from(await tRes.arrayBuffer()).toString('base64');
     await new Promise(r => setTimeout(r, 800));
 
