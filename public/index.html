@@ -3617,6 +3617,7 @@ async function generateStudio(btn, force) {
   var orig = btn.textContent;
   btn.disabled = true;
   btn.textContent = '⏳ Genererar… (kan ta 1-2 min)';
+  window._locallyGenerating = true;
   try {
     var res = await fetch('/api/studio-generate/' + m.id, {
       method: 'POST',
@@ -3631,6 +3632,7 @@ async function generateStudio(btn, force) {
   } finally {
     btn.disabled = false;
     btn.textContent = orig;
+    window._locallyGenerating = false;
   }
 }
 
