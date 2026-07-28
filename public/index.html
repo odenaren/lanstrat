@@ -228,7 +228,9 @@ tr.stat-click:hover{background:rgba(44,224,224,.06);}
     <button class="nav-tab active" onclick="showPage('now')">Nu</button>
     <button class="nav-tab" onclick="showPage('match')">Strats</button>
     <button class="nav-tab" onclick="showPage('season')">Säsong</button>
+    <button class="nav-tab" onclick="showPage('league')">Liga</button>
     <button class="nav-tab" onclick="showPage('home')">Trupp</button>
+    <button class="nav-tab" onclick="showPage('admin')">Admin</button>
   </div>
 </nav>
 
@@ -332,12 +334,40 @@ tr.stat-click:hover{background:rgba(44,224,224,.06);}
   <div id="history-list" class="history-grid"></div>
 </div>
 
+<!-- LIGA (sasongsledartavla for vardagsmatcher, separat fran LAN) -->
+<div id="page-league" class="page">
+  <div class="page-header">
+    <h2>Liga</h2>
+    <span style="color:var(--text-dim);font-size:13px">Säsongsledartavla för vardagsmatcher — separat från LAN-tävlingen</span>
+  </div>
+  <div id="league-content"></div>
+</div>
+
+<!-- ADMIN (sasonger + poangvikter, sparas i egen JSONBin-bin, gallar utan redeploy) -->
+<div id="page-admin" class="page">
+  <div class="page-header">
+    <h2>Admin</h2>
+    <span style="color:var(--text-dim);font-size:13px">Säsonger och poängvikter för Ligan — sparas direkt, ingen redeploy krävs</span>
+  </div>
+  <div class="card" style="max-width:720px">
+    <div class="section-title">Säsonger (JSON-array)</div>
+    <textarea id="admin-seasons" spellcheck="false" style="width:100%;min-height:120px;font-family:monospace;font-size:12px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:10px"></textarea>
+    <div class="section-title" style="margin-top:18px">Poängvikter (JSON)</div>
+    <textarea id="admin-scoring" spellcheck="false" style="width:100%;min-height:220px;font-family:monospace;font-size:12px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:10px"></textarea>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:14px">
+      <button class="btn btn-gold" onclick="saveAdminConfig()">Spara</button>
+      <span id="admin-status" style="font-size:12px;color:var(--text-dim)"></span>
+    </div>
+  </div>
+</div>
+
 <!-- MATCH DETAIL -->
 <div id="page-detail" class="page">
   <div class="page-header">
     <button class="btn btn-ghost" onclick="detailBack()">← Säsong</button>
     <h2 id="detail-title">Match</h2>
     <span id="detail-date" style="color:var(--text-dim);font-size:13px"></span>
+    <button id="league-toggle-btn" class="btn btn-ghost" style="display:none;font-size:12px;padding:5px 10px" onclick=""></button>
   </div>
   <div class="detail-layout">
     <!-- Left: strategy -->
@@ -679,13 +709,15 @@ function showPage(id) {
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   document.querySelectorAll('.nav-tab').forEach(t=>{
-    const map={now:'nu',home:'trupp',match:'strats',season:'säsong'};
+    const map={now:'nu',home:'trupp',match:'strats',season:'säsong',league:'liga',admin:'admin'};
     if(t.textContent.trim().toLowerCase()===map[id]) t.classList.add('active');
   });
   if(id==='now') loadNow();
   if(id==='home') loadPlayers();
   if(id==='match') loadPlayers().then(()=>renderMatchPage());
   if(id==='season'){ loadStats(); loadHistory(); }
+  if(id==='league') loadLeague();
+  if(id==='admin') loadAdminConfig();
 }
 
 // Webblasarens bakatknapp: detaljvyn pushar en history-entry (se openDetail) sa
@@ -2083,6 +2115,60 @@ async function loadHistory() {
     list.appendChild(el);
   });
 }
+// ===================== LIGA (sasongsledartavla) =====================
+async function loadLeague() {
+  var el = document.getElementById('league-content');
+  el.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:48px">Laddar…</div>';
+  try {
+    var data = await (await fetch('/api/leaderboard')).json();
+    var standings = data.standings || [];
+    var season = data.season || {};
+    var html = '<div class="section-title">' + (season.label || 'Säsong') + '</div>';
+    if (!standings.length) {
+      html += '<div style="color:var(--text-dim);padding:16px">Inga ligamatcher registrerade än.</div>';
+    } else {
+      html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;text-align:left"><th style="padding:6px 8px">#</th><th style="padding:6px 8px">Spelare</th><th style="padding:6px 8px">Poäng</th><th style="padding:6px 8px">Matcher</th></tr></thead><tbody>';
+      standings.forEach(function(row, i) {
+        html += '<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px">' + (i + 1) + '</td><td style="padding:6px 8px;font-weight:600">' + row.alias + '</td><td style="padding:6px 8px">' + Math.round(row.points * 10) / 10 + '</td><td style="padding:6px 8px">' + row.matches + '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = '<div style="color:var(--red);padding:16px">Kunde inte hämta ligatabellen.</div>';
+  }
+}
+// ===================== ADMIN (sasonger + poangvikter) =====================
+async function loadAdminConfig() {
+  var statusEl = document.getElementById('admin-status');
+  statusEl.textContent = 'Laddar…';
+  try {
+    var cfg = await apiFetch('/admin/config');
+    document.getElementById('admin-seasons').value = JSON.stringify(cfg.seasons, null, 2);
+    document.getElementById('admin-scoring').value = JSON.stringify(cfg.scoring, null, 2);
+    statusEl.textContent = '';
+  } catch (e) {
+    statusEl.textContent = 'Kunde inte hämta konfiguration.';
+  }
+}
+async function saveAdminConfig() {
+  var statusEl = document.getElementById('admin-status');
+  var seasons, scoring;
+  try {
+    seasons = JSON.parse(document.getElementById('admin-seasons').value);
+    scoring = JSON.parse(document.getElementById('admin-scoring').value);
+  } catch (e) {
+    statusEl.textContent = 'Ogiltig JSON — kontrollera formatet.';
+    return;
+  }
+  statusEl.textContent = 'Sparar…';
+  try {
+    await apiFetch('/admin/config', {method:'PUT', body:JSON.stringify({seasons:seasons, scoring:scoring})});
+    statusEl.textContent = 'Sparat.';
+  } catch (e) {
+    statusEl.textContent = 'Kunde inte spara: ' + e.message;
+  }
+}
 // ===================== STATS =====================
 // Spelare som bytt namn under säsongen — statistik slås ihop under nya namnet
 var PLAYER_ALIASES = { 'tobbe': 'PUGGE', 'pugge': 'PUGGE' };
@@ -2407,6 +2493,11 @@ async function setMatchResult(id, result) {
   if(currentMatchId === id && document.getElementById('page-detail').classList.contains('active')) openDetail(id);
 }
 
+async function toggleLeagueHidden(id, hidden) {
+  await apiFetch('/matches/'+id+'/hidden-from-league', {method:'PUT', body:JSON.stringify({hiddenFromLeague:hidden})});
+  if(currentMatchId === id && document.getElementById('page-detail').classList.contains('active')) openDetail(id);
+}
+
 async function deleteMatch(e, id) {
   e.stopPropagation();
   if(!confirm('Ta bort denna match?')) return;
@@ -2506,6 +2597,17 @@ async function openDetail(id) {
   var date = new Date(m.createdAt).toLocaleString('sv-SE',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
   document.getElementById('detail-title').textContent = m.name||(m.players||[]).map(function(p){return p.name;}).join(' / ');
   document.getElementById('detail-date').textContent = date + (m.mode === 'pub' ? ' · ↩ Omvänd strategi — genererad från en redan låst draft' : '');
+
+  var leagueToggleEl = document.getElementById('league-toggle-btn');
+  if(leagueToggleEl) {
+    if(m.matchMode === 'season') {
+      leagueToggleEl.style.display = '';
+      leagueToggleEl.textContent = m.hiddenFromLeague ? '↩ Räkna in i ligan igen' : '✕ Göm från ligan';
+      leagueToggleEl.onclick = (function(mid, hidden){ return function(){ toggleLeagueHidden(mid, !hidden); }; })(id, !!m.hiddenFromLeague);
+    } else {
+      leagueToggleEl.style.display = 'none';
+    }
+  }
 
   // Result buttons
   var resultEl = document.getElementById('match-result-btns');

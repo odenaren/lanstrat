@@ -39,7 +39,29 @@ app.use((req, res, next) => {
 });
 app.use(express.static(path.join(__dirname, 'public')));
 
-const BIN_IDS = { players: null, matches: null, draftpools: null };
+const BIN_IDS = { players: null, matches: null, draftpools: null, config: null };
+
+const DEFAULT_CONFIG = {
+  seasons: [
+    { id: 'season1', from: '2026-07-28', to: '2026-09-22', label: 'Sasong 1' }
+  ],
+  scoring: {
+    teamWinPoints: 10,
+    challengeLevelPoints: { '1': 3, '2': 5, '3': 8 },
+    universal: {
+      multiKillPoints: 5,
+      buybackWinPoints: 2,
+      stunSecondsThreshold: 20,
+      stunPoints: 3,
+      killShareThreshold: 0.6,
+      killSharePoints: 4,
+      obsPlacedThreshold: 8,
+      wardPoints: 3,
+      mostAssistsPoints: 2,
+      longestMatchPoints: 2
+    }
+  }
+};
 
 async function jsonbinRequest(method, path, body) {
   const headers = {
@@ -101,6 +123,13 @@ async function initBins() {
       await createBin(key, initial);
     }
   }
+  const configEnvId = process.env.JSONBIN_CONFIG_ID;
+  if (configEnvId) {
+    BIN_IDS.config = configEnvId;
+    console.log(`Using existing config bin: ${configEnvId}`);
+  } else {
+    await createBin('config', DEFAULT_CONFIG);
+  }
 }
 
 async function readPlayers() { const r = await getBin('players'); return (r && r.data) ? r.data : []; }
@@ -109,6 +138,8 @@ async function readDraftPools() { const r = await getBin('draftpools'); return (
 async function writeDraftPools(data) { await setBin('draftpools', { data }); }
 async function readMatches() { const r = await getBin('matches'); return (r && r.data) ? r.data : []; }
 async function writeMatches(data) { await setBin('matches', { data }); }
+async function readAppConfig() { const r = await getBin('config'); return (r && r.scoring) ? r : DEFAULT_CONFIG; }
+async function writeAppConfig(data) { await setBin('config', data); }
 
 // ── Studio-bins i JSONBin — overlever Railway-deploys eftersom JSONBin ligger
 // utanfor appens filsystem. OBS (verifierat mot API:t): JSONBins nginx-proxy
@@ -1237,6 +1268,7 @@ async function createPubMatch(sess, ownHeroes, enemyHeroes) {
     createdAt: new Date().toISOString(),
     gameNumber: matches.length + 1,
     mode: 'pub',
+    matchMode: 'season',
     name: name,
     briefing: briefing,
     briefingEn: '',
@@ -1596,6 +1628,241 @@ async function regenerateChallengeForAlias(matchId, alias, newHero) {
   } catch (e) { console.error('[GSI] Kunde inte omgenerera utmaning for', alias, e.message); }
 }
 
+// ── SASONGSLEDARTAVLA (vardag) ────────────────────────────
+// Separat fran LAN-tavlingen: bara matcher med matchMode==='season' rakas in.
+// Poang persisteras aldrig — allt beraknas on-the-fly vid varje /api/leaderboard-anrop
+// mot scoring-config.json, sa vikterna kan andras fritt utan migrering.
+function inSeasonWindow(match, season) {
+  const t = new Date(match.createdAt).getTime();
+  return t >= new Date(season.from).getTime() && t <= new Date(season.to + 'T23:59:59').getTime();
+}
+
+// Rollneutral generisk poanglista — korsjamfor ALDRIG mot motstandarlaget, bara
+// mot de DHS-spelare som var med i just den matchen (vi vet inget om fiendens niva).
+function evalUniversalChallenges(dhsRows, odMatch, config) {
+  const u = config.universal || {};
+  const out = [];
+  const teamKills = {};
+  (odMatch.players || []).forEach(p => {
+    const side = p.player_slot < 128;
+    teamKills[side] = (teamKills[side] || 0) + (p.kills || 0);
+  });
+
+  let topAssists = null;
+  dhsRows.forEach(({ alias, row }) => {
+    const mk = row.multi_kills || {};
+    if ((mk['4'] || 0) > 0 || (mk['5'] || 0) > 0) out.push({ alias, points: u.multiKillPoints || 0 });
+
+    const isRadiant = row.player_slot < 128;
+    if ((row.buyback_count || 0) > 0 && odMatch.radiant_win === isRadiant) {
+      out.push({ alias, points: u.buybackWinPoints || 0 });
+    }
+    if (typeof u.stunSecondsThreshold === 'number' && (row.stuns || 0) >= u.stunSecondsThreshold) {
+      out.push({ alias, points: u.stunPoints || 0 });
+    }
+    const sideKills = teamKills[isRadiant] || 0;
+    if (sideKills > 0 && typeof u.killShareThreshold === 'number') {
+      const share = ((row.kills || 0) + (row.assists || 0)) / sideKills;
+      if (share >= u.killShareThreshold) out.push({ alias, points: u.killSharePoints || 0 });
+    }
+    if (typeof u.obsPlacedThreshold === 'number' && (row.obs_placed || 0) >= u.obsPlacedThreshold) {
+      out.push({ alias, points: u.wardPoints || 0 });
+    }
+    if (!topAssists || (row.assists || 0) > topAssists.assists) {
+      topAssists = { alias, assists: row.assists || 0 };
+    }
+  });
+  if (topAssists && dhsRows.length >= 2) out.push({ alias: topAssists.alias, points: u.mostAssistsPoints || 0 });
+  return out;
+}
+
+async function computeSeasonLeaderboard(seasonId) {
+  const appConfig = await readAppConfig();
+  const seasons = appConfig.seasons && appConfig.seasons.length ? appConfig.seasons : DEFAULT_CONFIG.seasons;
+  const season = seasons.find(s => s.id === seasonId) || seasons[seasons.length - 1];
+  const config = appConfig.scoring || DEFAULT_CONFIG.scoring;
+  const players = await readPlayers();
+  const accountToAlias = {};
+  players.forEach(p => playerAccountIds(p).forEach(id => { accountToAlias[id] = p.name; }));
+
+  const matches = (await readMatches()).filter(m =>
+    m.matchMode === 'season' && !m.hiddenFromLeague && inSeasonWindow(m, season)
+  );
+
+  const scores = {};
+  function ensure(alias) {
+    const key = seasonAlias(alias);
+    if (!scores[key]) scores[key] = { alias: key, points: 0, matches: 0 };
+    return scores[key];
+  }
+  function award(alias, points) {
+    if (!points) return;
+    ensure(alias).points += points;
+  }
+
+  const odCache = {};
+  const durationsByDay = {};
+
+  for (const match of matches) {
+    const roster = (match.players || []).map(p => p.name).filter(Boolean);
+    roster.forEach(alias => { ensure(alias).matches += 1; });
+
+    if (!match.openDotaMatchId) continue;
+    let odMatch = odCache[match.openDotaMatchId];
+    if (odMatch === undefined) {
+      odMatch = null;
+      try {
+        const res = await fetch('https://api.opendota.com/api/matches/' + match.openDotaMatchId);
+        if (res.ok) odMatch = await res.json();
+      } catch (e) { console.error('[leaderboard] kunde inte hamta match', match.openDotaMatchId, e.message); }
+      odCache[match.openDotaMatchId] = odMatch;
+    }
+    if (!odMatch || !Array.isArray(odMatch.players)) continue;
+
+    const dhsRows = odMatch.players
+      .map(row => ({ row, alias: accountToAlias[row.account_id] }))
+      .filter(x => x.alias);
+    if (!dhsRows.length) continue;
+
+    if (Array.isArray(match.challengeResults)) {
+      match.challengeResults.forEach(r => {
+        if (r.matched && r.level > 0) award(r.alias, (config.challengeLevelPoints || {})[String(r.level)] || 0);
+      });
+    }
+
+    evalUniversalChallenges(dhsRows, odMatch, config).forEach(a => award(a.alias, a.points));
+
+    const radiantRows = dhsRows.filter(x => x.row.player_slot < 128);
+    const direRows = dhsRows.filter(x => x.row.player_slot >= 128);
+    const majority = radiantRows.length >= direRows.length ? radiantRows : direRows;
+    if (majority.length >= 3 && odMatch.radiant_win === (majority === radiantRows)) {
+      const share = (config.teamWinPoints || 0) / majority.length;
+      majority.forEach(x => award(x.alias, share));
+    }
+
+    if (typeof odMatch.duration === 'number') {
+      const day = String(match.createdAt).slice(0, 10);
+      if (!durationsByDay[day]) durationsByDay[day] = [];
+      durationsByDay[day].push({ duration: odMatch.duration, roster });
+    }
+  }
+
+  Object.keys(durationsByDay).forEach(day => {
+    const list = durationsByDay[day];
+    const longest = list.reduce((a, b) => (b.duration > a.duration ? b : a), list[0]);
+    longest.roster.forEach(alias => award(alias, (config.universal || {}).longestMatchPoints || 0));
+  });
+
+  return {
+    season: { id: season.id, label: season.label, from: season.from, to: season.to },
+    standings: Object.values(scores).sort((a, b) => b.points - a.points)
+  };
+}
+
+// ── AUTOMATISK NATTLIG OPENDOTA-SCAN ────────────────────────
+// Serverprocessen kor redan kontinuerligt pa Railway — ett setInterval racker,
+// ingen extern cron-infrastruktur. Fangar vardagsmatcher aven om ingen i laget
+// kommer ihag att armera/generera en strategi i appen.
+let lastAutoScanDate = null;
+async function scanForMissedMatches() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (lastAutoScanDate === today) return;
+  lastAutoScanDate = today;
+  try {
+    const players = await readPlayers();
+    const accountToAlias = {};
+    players.forEach(p => playerAccountIds(p).forEach(id => { accountToAlias[id] = p.name; }));
+    const accountIds = Object.keys(accountToAlias).map(Number);
+    if (!accountIds.length) return;
+
+    const knownOdIds = new Set((await readMatches()).filter(m => m.openDotaMatchId).map(m => String(m.openDotaMatchId)));
+    const candidateIds = new Set();
+    for (const accountId of accountIds) {
+      try {
+        const res = await fetch(`https://api.opendota.com/api/players/${accountId}/matches?date=2`);
+        if (!res.ok) continue;
+        const recent = await res.json();
+        recent.forEach(rm => { if (!knownOdIds.has(String(rm.match_id))) candidateIds.add(rm.match_id); });
+      } catch (e) { console.error('[auto-scan] kunde inte hamta matcher for', accountId, e.message); }
+    }
+    if (!candidateIds.size) return;
+
+    let added = 0;
+    for (const matchId of candidateIds) {
+      try {
+        const res = await fetch(`https://api.opendota.com/api/matches/${matchId}`);
+        if (!res.ok) continue;
+        const odMatch = await res.json();
+        const matchedAliases = new Set();
+        (odMatch.players || []).forEach(p => { const alias = accountToAlias[p.account_id]; if (alias) matchedAliases.add(alias); });
+        if (matchedAliases.size < 3) continue; // minst 3 DHS-spelare i EN OCH SAMMA match
+
+        const current = await readMatches();
+        if (current.some(m => String(m.openDotaMatchId) === String(matchId))) continue;
+        const rosterAliases = Array.from(matchedAliases);
+        const match = {
+          id: Date.now().toString() + '_' + matchId,
+          createdAt: new Date((odMatch.start_time || Date.now() / 1000) * 1000).toISOString(),
+          gameNumber: current.length + 1,
+          mode: 'auto',
+          matchMode: 'season',
+          name: 'Auto-fangad match',
+          briefing: '', briefingEn: '', captainNotes: '',
+          wildcard: false, style: 'standard', archetype: null,
+          players: players.filter(p => rosterAliases.includes(p.name)),
+          strategy: '', draft: null,
+          enemies: [], items: null,
+          openDotaMatchId: String(matchId)
+        };
+        current.unshift(match);
+        await writeMatches(current);
+        added++;
+        console.log('[auto-scan] Ny ligamatch upptackt:', matchId, '(' + rosterAliases.join(', ') + ')');
+      } catch (e) { console.error('[auto-scan] kunde inte behandla match', matchId, e.message); }
+    }
+    if (added) console.log('[auto-scan] ' + added + ' ny(a) ligamatch(er) tillagda');
+  } catch (e) { console.error('[auto-scan] fel:', e.message); }
+}
+setInterval(() => {
+  if (new Date().getHours() === 3) scanForMissedMatches().catch(e => console.error('[auto-scan]', e.message));
+}, 30 * 60 * 1000);
+
+app.get('/api/seasons', async (req, res) => {
+  try {
+    const appConfig = await readAppConfig();
+    res.json(appConfig.seasons && appConfig.seasons.length ? appConfig.seasons : DEFAULT_CONFIG.seasons);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/leaderboard', async (req, res) => {
+  try { res.json(await computeSeasonLeaderboard(req.query.season)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/config', async (req, res) => {
+  try { res.json(await readAppConfig()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/admin/config', async (req, res) => {
+  try {
+    if (!Array.isArray(req.body.seasons) || !req.body.scoring) return res.status(400).json({ error: 'seasons och scoring kravs' });
+    await writeAppConfig({ seasons: req.body.seasons, scoring: req.body.scoring });
+    res.json(await readAppConfig());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/matches/:id/hidden-from-league', async (req, res) => {
+  try {
+    const matches = await readMatches();
+    const match = matches.find(m => m.id === req.params.id);
+    if (!match) return res.status(404).json({ error: 'Not found' });
+    match.hiddenFromLeague = !!req.body.hiddenFromLeague;
+    await writeMatches(matches);
+    res.json(match);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // MATCHES
 app.get('/api/matches', async (req, res) => {
   try { res.json(await readMatches()); }
@@ -1617,6 +1884,7 @@ app.post('/api/matches', async (req, res) => {
       id: req.body.id || Date.now().toString(),
       createdAt: new Date().toISOString(),
       gameNumber: gameNumber,
+      matchMode: req.body.matchMode === 'lan' ? 'lan' : 'season',
       name: name || '',
       briefing: briefing || '',
       briefingEn: briefingEn || '',
