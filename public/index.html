@@ -2090,38 +2090,6 @@ function normalizePlayer(name) {
   var key = (name || '').trim().toLowerCase();
   return PLAYER_ALIASES[key] || name;
 }
-var ARCHETYPE_LABELS = {
-  deathball:{name:'Deathball',desc:'Alla fem pushar som en enhet, vinn före 25 min'},
-  snowball:{name:'Early Snowball',desc:'Dominera laning, konstanta kills före 15 min'},
-  gank:{name:'Gank & Dominate',desc:'Roaming supports stryper alla lanes'},
-  teamfight:{name:'Teamfight',desc:'Vänta på rätt fight med starka ultimates'},
-  pickoff:{name:'Pick-off',desc:'Jaga ensamma fiender, undvik 5v5'},
-  poke:{name:'Poke & Siege',desc:'Chip damage på avstånd, tvinga dåliga fights'},
-  lategame:{name:'Late Game Scaling',desc:'Farma lugnt, explodera vid 35+ min'},
-  splitpush:{name:'Splitpush',desc:'En pushar ensam, resten distraherar'},
-  chaos:{name:'Chaos & Disruption',desc:'Kaoset är planen — splitta, byt taktik, bryt ner strukturen'},
-  objective:{name:'Objective Control',desc:'Bara torn, Roshan och byggnader'},
-  towerdive:{name:'Tower Dive Heavy',desc:'Dyk under torn från level 3'},
-  global:{name:'Global Presence',desc:'Teleports och globala ultimates överallt'},
-  magicimmune:{name:'Magic Immune',desc:'BKB-fokus, rakt igenom spells'},
-  roshan:{name:'Roshan & Aegis Timing',desc:'Kontrollera Roshan, tvinga fights med Aegis-fördel'},
-  vision:{name:'Vision & Info Warfare',desc:'Dominera wardkriget, fighta bara med informationsövertag'},
-  powerspike:{name:'Powerspike Rush',desc:'Hela laget mot en timing, all-in när spiken slår in'},
-  counterdraft:{name:'Counter-Draft Trap',desc:'Locka fram fiendehjältar och hårdkontra dem'},
-  trilane:{name:'Trilane Domination',desc:'Tre i safelane från start, total laning-dominans'},
-  buybackdenial:{name:'Buyback Denial',desc:'Fighta bara när fienden saknar buyback'},
-  smokechain:{name:'Smoke Timing Chain',desc:'Schemalagda smoke-gankar på fasta power spikes'},
-  roleswap:{name:'Role-Swap Draft',desc:'Hjältar i okonventionella roller gör motpicks värdelösa'},
-  turtlecomeback:{name:'Turtle & Comeback',desc:'Överlev underläget, försvara high ground, vänd på en enda fight'}
-};
-function statBar(label, sub, count, total, w, l) {
-  var pct = total ? Math.round(count/total*100) : 0;
-  var res = (w+l) ? ' <span style="color:#2ecc71">'+w+'V</span>–<span style="color:#e74c3c">'+l+'F</span>' : '';
-  return '<div style="margin-bottom:10px">'
-    + '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><span><strong>'+label+'</strong>'+(sub?' <span style="color:var(--text-dim);font-size:11px">'+sub+'</span>':'')+'</span><span style="color:var(--text-dim)">'+count+' st ('+pct+'%)'+res+'</span></div>'
-    + '<div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:var(--gold);border-radius:3px"></div></div>'
-    + '</div>';
-}
 // Verifierat resultat fran OpenDota har foretrade over manuellt ifyllt
 function effResult(m) { return m.matchResult || m.result; }
 async function loadStats() {
@@ -2165,21 +2133,6 @@ async function loadStats() {
   var uniqueHeroes = Object.keys(heroCount).length;
   var repeats = totalPicks - uniqueHeroes;
 
-  // Archetype & style distribution
-  var archCount = {}, styleCount = {};
-  matches.forEach(function(m){
-    var a = m.archetype || '_unknown';
-    if(!archCount[a]) archCount[a] = {count:0, w:0, l:0};
-    archCount[a].count++;
-    if(effResult(m)==='win') archCount[a].w++;
-    if(effResult(m)==='loss') archCount[a].l++;
-    var s = m.style || 'standard';
-    if(!styleCount[s]) styleCount[s] = {count:0, w:0, l:0};
-    styleCount[s].count++;
-    if(effResult(m)==='win') styleCount[s].w++;
-    if(effResult(m)==='loss') styleCount[s].l++;
-  });
-
   // Utmaningsrekord — aggregeras BARA fran parsade snapshots (challengeResultsParsed) sa siffrorna ar palitliga
   var chStats = {}, chLvl3Feats = [], chParsedMatches = 0;
   matches.forEach(function(m){
@@ -2214,30 +2167,6 @@ async function loadStats() {
   // Pub-matcher rakans in i siffrorna ovan — marker att de ar inblandade (inte filtrerade)
   var pubCount = matches.filter(function(m){return m.mode==='pub';}).length;
   if(pubCount) html += '<p style="color:var(--text-dim);font-size:12px;margin:-8px 0 20px;display:flex;align-items:center;gap:6px"><span style="font-size:10px;background:rgba(230,126,34,.15);border:1px solid #e67e2288;color:#e67e22;padding:1px 6px;border-radius:3px;white-space:nowrap">↩ OMVÄND</span> '+pubCount+' av '+total+' '+(total===1?'match':'matcher')+' är omvända strategier (genererade från en redan låst draft) och räknas in i siffrorna ovan.</p>';
-
-  // Archetypes revealed
-  var unknownCount = matches.filter(function(m){return !m.archetype;}).length;
-  var guessedCount = matches.filter(function(m){return m.archetypeGuessed;}).length;
-  html += '<div class="card" style="margin-bottom:20px"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div class="section-title" style="margin-bottom:0;border-bottom:none;padding-bottom:0">Arketyper — nu avslöjade 🎭</div>'
-    + (unknownCount ? '<button id="analyze-arch-btn" onclick="analyzeArchetypes()" style="padding:6px 14px;background:rgba(44,224,224,.15);border:1px solid var(--gold-dim);color:var(--gold);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px">🔍 Analysera '+unknownCount+' äldre matcher</button>' : '')
-    + '</div>'
-    + '<p style="color:var(--text-dim);font-size:12px;margin:10px 0 14px">Varje strategi byggdes i hemlighet på en av 22 arketyper. Så här fördelade de sig:'
-    + (guessedCount ? '<br>🔍 = '+guessedCount+' arketyper är AI-gissade i efterhand från strategitexten, inte sparade fakta.' : '')
-    + '</p>';
-  Object.keys(archCount).sort(function(a,b){return archCount[b].count-archCount[a].count;}).forEach(function(a){
-    var info = ARCHETYPE_LABELS[a];
-    var label = a==='_unknown' ? 'Okänd (äldre match)' : (info?info.name:a);
-    var desc = a==='_unknown' ? 'sparades inte förr' : (info?info.desc:'');
-    html += statBar(label, desc, archCount[a].count, total, archCount[a].w, archCount[a].l);
-  });
-  html += '</div>';
-
-  // Presentation styles
-  html += '<div class="card" style="margin-bottom:20px"><div class="section-title">Presentationsstilar</div>';
-  Object.keys(styleCount).sort(function(a,b){return styleCount[b].count-styleCount[a].count;}).forEach(function(s){
-    html += statBar(s, '', styleCount[s].count, total, styleCount[s].w, styleCount[s].l);
-  });
-  html += '</div>';
 
   // Hero variation
   var repeated = Object.keys(heroCount).filter(function(h){return heroCount[h]>1;}).sort(function(a,b){return heroCount[b]-heroCount[a];});
@@ -2296,54 +2225,8 @@ async function loadStats() {
   });
   html += '</tbody></table></div>';
 
-  // Match reveal list
-  html += '<div class="card"><div class="section-title">Match för match — vad låg bakom?</div>'
-    + '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;text-align:left"><th style="padding:6px 8px">#</th><th style="padding:6px 8px">Strategi</th><th style="padding:6px 8px">Arketyp</th><th style="padding:6px 8px">Stil</th><th style="padding:6px 8px">Resultat</th></tr></thead><tbody>';
-  matches.forEach(function(m){
-    var info = m.archetype ? ARCHETYPE_LABELS[m.archetype] : null;
-    var arch = (info ? info.name : (m.archetype || '—')) + (m.archetypeGuessed ? ' 🔍' : '');
-    var res = effResult(m)==='win' ? '<span style="color:#2ecc71">Vinst</span>' : effResult(m)==='loss' ? '<span style="color:#e74c3c">Förlust</span>' : '<span style="color:var(--text-dim)">—</span>';
-    html += '<tr class="stat-click" onclick="openDetail(\''+m.id+'\')" title="Öppna matchen" style="border-top:1px solid var(--border)"><td style="padding:6px 8px;color:var(--text-dim)">'+(m.gameNumber||'')+'</td><td style="padding:6px 8px;font-weight:600;color:'+(m.wildcard?'#9b59b6':'var(--gold)')+'">'+(m.name||'(namnlös)')+(m.wildcard?' 🎲':'')+'</td><td style="padding:6px 8px">'+arch+'</td><td style="padding:6px 8px;color:var(--text-dim)">'+(m.style||'standard')+'</td><td style="padding:6px 8px">'+res+'</td></tr>';
-  });
-  html += '</tbody></table></div>';
-
   el.innerHTML = '<div id="season-od-block"></div>' + html;
   renderSeasonOd(matches);
-}
-
-async function analyzeArchetypes() {
-  var btn = document.getElementById('analyze-arch-btn');
-  if(btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
-  var matches = [];
-  try { matches = await apiFetch('/matches'); } catch(e) {}
-  var todo = matches.filter(function(m){ return !m.archetype && m.mode !== 'pub' && (m.currentStrategy || m.strategy); });
-  var archList = Object.keys(ARCHETYPE_LABELS).map(function(id){
-    return id + ': ' + ARCHETYPE_LABELS[id].name + ' — ' + ARCHETYPE_LABELS[id].desc;
-  }).join('\n');
-  var validIds = Object.keys(ARCHETYPE_LABELS);
-  var done = 0, failed = 0;
-  for(var i = 0; i < todo.length; i++) {
-    var m = todo[i];
-    if(btn) btn.textContent = 'Analyserar ' + (i+1) + ' / ' + todo.length + '…';
-    var stratText = (m.currentStrategy || m.strategy || '').slice(0, 4000);
-    var prompt = 'Du ar en Dota 2-expert. Nedan finns en genererad draft-strategi. Den skrevs ursprungligen utifran EN av foljande 22 arketyper. Las texten och avgor vilken arketyp den bygger pa.'
-      + '\n\nARKETYPER:\n' + archList
-      + '\n\nSTRATEGINAMN: ' + (m.name || '(namnlos)')
-      + '\nBRIEFING: ' + (m.briefing || '')
-      + '\n\nSTRATEGITEXT:\n' + stratText
-      + '\n\nSvara ENDAST med arketypens id (ett enda ord fran listan, t.ex. deathball). Ingen annan text.';
-    try {
-      var resp = await apiFetch('/strategy', {method:'POST', body:JSON.stringify({prompt:prompt, maxTokens:20})});
-      var answer = (resp.text || '').trim().toLowerCase();
-      var matched = validIds.find(function(id){ return answer.indexOf(id) !== -1; });
-      if(matched) {
-        await apiFetch('/matches/' + m.id + '/archetype', {method:'PUT', body:JSON.stringify({archetype:matched, guessed:true})});
-        done++;
-      } else { failed++; }
-    } catch(e) { failed++; }
-  }
-  if(btn) btn.textContent = 'Klart: ' + done + ' klassade' + (failed ? ', ' + failed + ' misslyckades' : '');
-  setTimeout(loadStats, 1500);
 }
 
 async function replayOnTv(matchId) {
