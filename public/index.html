@@ -3155,12 +3155,15 @@ async function loadOpenDotaStats(m) {
   // --- 4. Sticker ut: era spelare forst, riktiga namn overallt, siffror i KONTEXT ---
   var all = od.players || [];
   var durMin = Math.max(1, od.duration/60);
+  // Vilket lag en spelare tillhor avgors av player_slot (Radiant/Dire) — INTE av om
+  // steam-ID-matchningen lyckades. En spelare utan sparat steam-ID ar fortfarande
+  // en lagkamrat om han star pa var sida av brackets, bara namnet saknas.
+  function isOurs(op){ return (op.player_slot<128)===weAreRadiant; }
   function nameFor(op) {
     var ours = matched.find(function(r){ return r.od === op; });
     if(ours) return '<span style="color:var(--gold);font-weight:700">'+ours.alias+'</span>';
-    return '<span style="color:var(--text-dim)">'+odHeroName(op.hero_id)+' (motståndare)</span>';
+    return '<span style="color:var(--text-dim)">'+odHeroName(op.hero_id)+' ('+(isOurs(op)?'era':'motståndare')+')</span>';
   }
-  function isOurs(op){ return !!matched.find(function(r){ return r.od === op; }); }
   function sideSum(op, metric){
     var sum = 0;
     all.forEach(function(p){ if((p.player_slot<128)===(op.player_slot<128)) sum += p[metric]||0; });
@@ -3207,10 +3210,11 @@ async function loadOpenDotaStats(m) {
     var every = Math.round(durMin/v);
     return '<strong>'+v+'</strong>'+(every>=1 ? ' (en död var '+every+':e minut)' : '');
   });
-  // Stun-tid: andel av matchens langd
-  topBy('stuns','mest stun-tid', function(v){
+  // Stun-tid: andel av matchens langd — den som stunnar mest ar den vars MOTSTANDARE stod stilla
+  topBy('stuns','mest stun-tid', function(v, p){
     var pct = Math.round(v/od.duration*100);
-    return '<strong>'+Math.round(v)+'s</strong>'+(pct>=1 ? ' — motståndarna stod stilla '+pct+'% av matchen' : '');
+    var stood = isOurs(p) ? 'motståndarna' : 'ni';
+    return '<strong>'+Math.round(v)+'s</strong>'+(pct>=1 ? ' — '+stood+' stod stilla '+pct+'% av matchen' : '');
   });
   outliers.sort(function(a,b){ return (b.ours?1:0)-(a.ours?1:0); });
   if(outliers.length) {
