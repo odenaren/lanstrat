@@ -103,6 +103,13 @@ arbetsregel 8), skriv en brief med konkreta citat, spawna `spelare-ny`/`spelare-
 - **Personliga utmaningars TEXT (inte bara trösklarna)** — nu när kalibreringen är fixad,
   kör en ny runda specifikt på om utmaningstexterna känns kul/personliga eller mallmässiga
   över tid (samma typ av repetitions-risk som season-krokarna hade).
+- **Säsong-sidans statistiksektioner** — hela sidan (per spelare-tabell, hjältevariation,
+  utmaningsrekord, de nya studio/parsad-badgesen) har byggts och ändrats bit för bit över tid
+  utan att panelen någonsin fått en brief om helheten. Upptäckt 2026-07-28 när tre sektioner
+  (arketyp-reveal, presentationsstilar, match-reveal-tabellen) visade sig ge "liksom inte så
+  mycket" och togs bort på Oskars eget omdöme, inte via panelen — precisionen hade varit högre
+  om spelare-ny/archon/divine fått reagera på en skärmdump av hela sidan innan sektioner
+  byggdes eller togs bort.
 
 **Process:** samma pipeline som redan finns i `.claude/skills/radslag/SKILL.md` — brief med
 riktiga citat, spelarpanel parallellt, teknisk rådgivning om något är byggbart, skeptiker
