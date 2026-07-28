@@ -2040,6 +2040,14 @@ async function loadHistory() {
     const date=new Date(m.createdAt).toLocaleString('sv-SE',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
     const playerNames=(m.players||[]).map(p=>p.name).join(', ');
     const hasItems=!!m.items;
+    const hasStudio=!!m.studioBinId;
+    // Parsad-status ar bara meningsfull for lankade matcher — challengeResultsParsed
+    // speglar od.version fran senaste kollen (satt vid lankning/refresh-challenges)
+    var parsedBadge='';
+    if(m.openDotaMatchId){
+      var isParsed=!!m.challengeResultsParsed;
+      parsedBadge='<span class="match-entry-badge" title="Om OpenDota hunnit fardigparsa matchen (wards, stuns, item-kop m.m.)" style="background:'+(isParsed?'rgba(39,174,96,.15)':'rgba(224,160,48,.12)')+';border:1px solid '+(isParsed?'#27ae6055':'#e0a03066')+';color:'+(isParsed?'#2ecc71':'#e0a030')+'">'+(isParsed?'Parsad':'Väntar på parsning')+'</span>';
+    }
     // Lankad till riktig OpenDota-match => visa verifierat resultat istallet for manuella knappar
     var resultCell;
     if(m.openDotaMatchId){
@@ -2068,7 +2076,8 @@ async function loadHistory() {
         <button onclick="event.stopPropagation();replayOnTv('${m.id}')" title="Visa på TV igen" style="padding:8px 14px;border-radius:4px;font-family:Rajdhani,sans-serif;font-size:16px;font-weight:700;cursor:pointer;border:1px solid var(--gold-dim);background:rgba(44,224,224,.08);color:var(--gold);min-width:44px;min-height:36px">📺</button>
       </div>
       <span class="match-entry-badge ${hasItems?'badge-has-items':'badge-no-items'}">${hasItems?'Items klara':'Lägg till motståndare'}</span>
-      <button onclick="toggleMemory(event,'${m.id}',${!m.excludeFromMemory})" title="${m.excludeFromMemory?'Inkludera i minne':'Exkludera från minne'}" style="background:none;border:1px solid ${m.excludeFromMemory?'var(--border)':'var(--gold-dim)'};color:${m.excludeFromMemory?'var(--text-dim)':'var(--gold)'};cursor:pointer;font-size:12px;padding:3px 8px;border-radius:3px;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.04em;white-space:nowrap;transition:all .15s">${m.excludeFromMemory?'● Ej minne':'● Minne'}</button>
+      <span class="match-entry-badge ${hasStudio?'badge-has-items':'badge-no-items'}">${hasStudio?'Eftersnack klart':'Eftersnack ej gjort'}</span>
+      ${parsedBadge}
       <button class="match-entry-del" onclick="deleteMatch(event,'${m.id}')" title="Ta bort">✕</button>`;
     el.onclick=(e)=>{ if(e.target.closest('.match-entry-del') || e.target.closest('button')) return; openDetail(m.id); };
     list.appendChild(el);
@@ -2519,12 +2528,6 @@ async function deleteMatch(e, id) {
   e.stopPropagation();
   if(!confirm('Ta bort denna match?')) return;
   await apiFetch('/matches/'+id, {method:'DELETE'});
-  loadHistory();
-}
-
-async function toggleMemory(e, id, exclude) {
-  e.stopPropagation();
-  await apiFetch('/matches/'+id+'/memory', {method:'PUT', body:JSON.stringify({excludeFromMemory:exclude})});
   loadHistory();
 }
 
