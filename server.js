@@ -1884,7 +1884,7 @@ app.post('/api/matches', async (req, res) => {
       id: req.body.id || Date.now().toString(),
       createdAt: new Date().toISOString(),
       gameNumber: gameNumber,
-      matchMode: req.body.matchMode === 'lan' ? 'lan' : 'season',
+      matchMode: req.body.matchMode === 'season' ? 'season' : 'lan',
       name: name || '',
       briefing: briefing || '',
       briefingEn: briefingEn || '',
