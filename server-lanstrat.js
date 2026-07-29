@@ -2424,24 +2424,32 @@ app.post('/api/gsi', async (req, res) => {
         'DOTA_GAMERULES_STATE_PRE_GAME', 'DOTA_GAMERULES_STATE_GAME_IN_PROGRESS'];
       if (pubStates.includes(state)) {
         const pubAlias = await findAliasBySteamId64(body.player.steamid);
-        if (pubAlias && pubArmed[pubAlias] && !pubArmed[pubAlias].playbookMatchId) {
+        if (pubAlias) {
           const pubKey = pubMid + ':' + myTeam;
           let sess = pubSessions[pubKey];
-          if (!sess) {
+          const isArmedNow = pubArmed[pubAlias] && !pubArmed[pubAlias].playbookMatchId;
+          // Bara en armerad spelare far STARTA en session (opt-in-kravet bevaras).
+          if (!sess && isArmedNow) {
             sess = pubSessions[pubKey] = { dotaMatchId: pubMid, team: myTeam, players: {},
               captureAttempts: 0, lastCaptureReq: 0, generating: false, failed: false, playbookMatchId: null, createdAt: Date.now() };
             console.log('[PUB] Ny session', pubKey, 'via', pubAlias);
           }
-          const pd = sess.players[pubAlias] || (sess.players[pubAlias] = {});
-          if (body.hero && body.hero.id > 0) pd.heroId = body.hero.id;
+          // Nar sessionen finns far VILKEN kand truppmedlem som helst ansluta via sin egen
+          // GSI, aven om de aldrig armerat sig sjalva (samma lag+matchid racker).
+          if (sess && !sess.playbookMatchId) {
+            const isNewMember = !sess.players[pubAlias];
+            const pd = sess.players[pubAlias] || (sess.players[pubAlias] = {});
+            if (body.hero && body.hero.id > 0) pd.heroId = body.hero.id;
+            if (isNewMember && !isArmedNow) console.log('[PUB] ' + pubAlias + ' ansluten till session ' + pubKey + ' utan att sjalv ha armerat sig');
 
-          if ((state === 'DOTA_GAMERULES_STATE_PRE_GAME' || state === 'DOTA_GAMERULES_STATE_GAME_IN_PROGRESS')
-              && !sess.playbookMatchId && !sess.generating && !sess.failed
-              && sess.captureAttempts < 5 && Date.now() - sess.lastCaptureReq > 20000) {
-            sess.lastCaptureReq = Date.now();
-            sess.captureAttempts++;
-            pushOverlay(pubAlias, 'capture-request', '', '');
-            console.log('[PUB] Capture-request till ' + pubAlias + ' (forsok ' + sess.captureAttempts + ')');
+            if ((state === 'DOTA_GAMERULES_STATE_PRE_GAME' || state === 'DOTA_GAMERULES_STATE_GAME_IN_PROGRESS')
+                && !sess.playbookMatchId && !sess.generating && !sess.failed
+                && sess.captureAttempts < 5 && Date.now() - sess.lastCaptureReq > 20000) {
+              sess.lastCaptureReq = Date.now();
+              sess.captureAttempts++;
+              pushOverlay(pubAlias, 'capture-request', '', '');
+              console.log('[PUB] Capture-request till ' + pubAlias + ' (forsok ' + sess.captureAttempts + ')');
+            }
           }
         }
       }
