@@ -327,7 +327,7 @@ tr.stat-click:hover{background:rgba(44,224,224,.06);}
   <div class="page-header">
     <h2>Säsong</h2>
     <span style="color:var(--text-dim);font-size:13px">Statistik, arketyper &amp; matchhistorik — klicka på en match för detaljer &amp; itemtips</span>
-    <button onclick="openLanModal()" style="margin-left:auto;padding:6px 14px;background:rgba(44,224,224,.15);border:1px solid var(--gold-dim);color:var(--gold);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s">⚙️ Admin</button>
+    <button onclick="openLanModal()" style="margin-left:auto;padding:6px 14px;background:rgba(231,76,60,.12);border:1px solid #c0392b88;color:#e74c3c;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border-radius:3px;transition:all .15s">⚠️ Nollställ LAN</button>
   </div>
   <div id="stats-content"></div>
   <div class="section-title" style="margin-top:28px">Matchhistorik</div>
@@ -2085,20 +2085,25 @@ async function loadHistory() {
     }
     // Lankad till riktig OpenDota-match => visa verifierat resultat istallet for manuella knappar
     var resultCell;
-    if(m.openDotaMatchId){
+    if(m.openDotaMatchId && !m.matchResult){
+      resultCell = '<span title="Länkad till OpenDota men resultatet är inte beräknat ännu" style="padding:4px 12px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;border:1px solid var(--border);background:var(--surface2);color:var(--text-dim)">Väntar på resultat</span>';
+    } else if(m.openDotaMatchId){
       var vr = m.matchResult==='win';
       resultCell = '<span title="Verifierad via OpenDota (konfidens: '+(m.matchConfidence||'?')+')" style="padding:4px 12px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border:1px solid '+(vr?'#27ae6088':'#c0392b88')+';background:'+(vr?'rgba(39,174,96,.15)':'rgba(231,76,60,.12)')+';color:'+(vr?'#2ecc71':'#e74c3c')+'">'+(vr?'Vinst':'Förlust')+' ✓</span>';
     } else {
       resultCell = '<button onclick="event.stopPropagation();setMatchResult(\''+m.id+'\',\'win\')" style="padding:3px 10px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:all .15s;border:1px solid #27ae6055;background:'+(m.result==='win'?'rgba(39,174,96,.3)':'none')+';color:'+(m.result==='win'?'#2ecc71':'#27ae6088')+'">✓</button>'
         + '<button onclick="event.stopPropagation();setMatchResult(\''+m.id+'\',\'loss\')" style="padding:3px 10px;border-radius:3px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:all .15s;border:1px solid #c0392b55;background:'+(m.result==='loss'?'rgba(231,76,60,.2)':'none')+';color:'+(m.result==='loss'?'#e74c3c':'#c0392b88')+'">✗</button>';
     }
+    var autoBadge = m.mode==='auto'
+      ? ' <span title="Auto-upptäckt av den nattliga OpenDota-scannen — ingen strategi/briefing skapades" style="font-size:10px;background:rgba(52,152,219,.15);border:1px solid #3498db88;color:#3498db;padding:1px 6px;border-radius:3px;vertical-align:middle">🌙 AUTO-FÅNGAD</span>'
+      : '';
     const el=document.createElement('div');
     el.className='match-entry';
     el.innerHTML=`
       <div class="match-entry-date">${date}</div>
       <div style="flex:1">
         <div class="match-entry-players">${playerNames}</div>
-        ${m.name?`<div style="font-size:12px;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-top:2px"><span style="color:${m.wildcard?'#9b59b6':'var(--gold)'}">${m.name}</span>${m.wildcard?' <span style="font-size:10px;background:rgba(155,89,182,.2);border:1px solid #8e44ad88;color:#9b59b6;padding:1px 6px;border-radius:3px;vertical-align:middle">🎲 WILD</span>':''}${m.mode==='pub'?' <span title="Genererad omvänt: draften var redan låst, strategin skrevs för den" style="font-size:10px;background:rgba(230,126,34,.15);border:1px solid #e67e2288;color:#e67e22;padding:1px 6px;border-radius:3px;vertical-align:middle">↩ OMVÄND</span>':''} ${m.style&&m.style!=='standard'?'<span style="font-size:10px;background:rgba(44,224,224,.08);border:1px solid var(--gold-dim);color:var(--gold);padding:1px 6px;border-radius:3px;vertical-align:middle">'+m.style+'</span>':''}</div>`:""}
+        ${m.name?`<div style="font-size:12px;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-top:2px"><span style="color:${m.wildcard?'#9b59b6':'var(--gold)'}">${m.name}</span>${m.wildcard?' <span style="font-size:10px;background:rgba(155,89,182,.2);border:1px solid #8e44ad88;color:#9b59b6;padding:1px 6px;border-radius:3px;vertical-align:middle">🎲 WILD</span>':''}${m.mode==='pub'?' <span title="Genererad omvänt: draften var redan låst, strategin skrevs för den" style="font-size:10px;background:rgba(230,126,34,.15);border:1px solid #e67e2288;color:#e67e22;padding:1px 6px;border-radius:3px;vertical-align:middle">↩ OMVÄND</span>':''}${autoBadge} ${m.style&&m.style!=='standard'?'<span style="font-size:10px;background:rgba(44,224,224,.08);border:1px solid var(--gold-dim);color:var(--gold);padding:1px 6px;border-radius:3px;vertical-align:middle">'+m.style+'</span>':''}</div>`:""}
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${(m.players||[]).map(p=>{
           const hero=(m.draft||{})[p.name];
           const img=hero?heroImgByName(hero):null;
@@ -2339,6 +2344,9 @@ async function loadStats() {
   // Pub-matcher rakans in i siffrorna ovan — marker att de ar inblandade (inte filtrerade)
   var pubCount = matches.filter(function(m){return m.mode==='pub';}).length;
   if(pubCount) html += '<p style="color:var(--text-dim);font-size:12px;margin:-8px 0 20px;display:flex;align-items:center;gap:6px"><span style="font-size:10px;background:rgba(230,126,34,.15);border:1px solid #e67e2288;color:#e67e22;padding:1px 6px;border-radius:3px;white-space:nowrap">↩ OMVÄND</span> '+pubCount+' av '+total+' '+(total===1?'match':'matcher')+' är omvända strategier (genererade från en redan låst draft) och räknas in i siffrorna ovan.</p>';
+
+  var autoCount = matches.filter(function(m){return m.mode==='auto';}).length;
+  if(autoCount) html += '<p style="color:var(--text-dim);font-size:12px;margin:-8px 0 20px;display:flex;align-items:center;gap:6px"><span style="font-size:10px;background:rgba(52,152,219,.15);border:1px solid #3498db88;color:#3498db;padding:1px 6px;border-radius:3px;white-space:nowrap">🌙 AUTO-FÅNGAD</span> '+autoCount+' '+(autoCount===1?'match':'matcher')+' upptäcktes automatiskt av nattscannen (ingen draft sparades) — räknas in i Matcher ovan, men bidrar inte till hjältevariation/spelarstatistiken, och saknar verifierat resultat tills OpenDota-länkningen kompletteras.</p>';
 
   // Hero variation
   var repeated = Object.keys(heroCount).filter(function(h){return heroCount[h]>1;}).sort(function(a,b){return heroCount[b]-heroCount[a];});
@@ -2697,7 +2705,9 @@ async function openDetail(id) {
 
   // Result buttons
   var resultEl = document.getElementById('match-result-btns');
-  if(resultEl && m.openDotaMatchId) {
+  if(resultEl && m.openDotaMatchId && !m.matchResult) {
+    resultEl.innerHTML = '<span title="Länkad till OpenDota match '+m.openDotaMatchId+' men resultatet är inte beräknat ännu" style="padding:7px 18px;border-radius:4px;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;border:1px solid var(--border);background:var(--surface2);color:var(--text-dim)">Väntar på resultat</span>';
+  } else if(resultEl && m.openDotaMatchId) {
     // Lankad till riktig match — visa verifierat resultat, inga manuella knappar
     var vwin = m.matchResult==='win';
     resultEl.innerHTML = '<span title="OpenDota match '+m.openDotaMatchId+'" style="padding:7px 18px;border-radius:4px;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border:1px solid '+(vwin?'#27ae6088':'#c0392b88')+';background:'+(vwin?'rgba(39,174,96,.2)':'rgba(231,76,60,.15)')+';color:'+(vwin?'#2ecc71':'#e74c3c')+'">'+(vwin?'Vinst':'Förlust')+' — verifierad</span>'
