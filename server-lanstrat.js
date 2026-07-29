@@ -262,6 +262,18 @@ app.put('/api/players/:name/challenge-pool', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+app.put('/api/players/:name/prefs', async (req, res) => {
+  try {
+    const players = await readPlayers();
+    const p = players.find(p => p.name === req.params.name);
+    if (!p) return res.status(404).json({ error: 'Not found' });
+    if (req.body.itemTipsEnabled !== undefined) p.itemTipsEnabled = !!req.body.itemTipsEnabled;
+    if (req.body.challengeTipsEnabled !== undefined) p.challengeTipsEnabled = !!req.body.challengeTipsEnabled;
+    await writePlayers(players);
+    res.json(p);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // Lagg till ett Steam-konto pa en spelare (flera konton per person stods).
 // Markerar (blockerar INTE) om kontot redan finns pa nagon annans profil —
 // delade konton ar ett kant randfall som medvetet lamnas oatgardat, se TODO.
@@ -491,6 +503,11 @@ function playerSteamIds(p) {
 }
 function playerAccountIds(p) {
   return playerSteamIds(p).map(Number).filter(n => Number.isFinite(n));
+}
+// Faltet saknas for alla spelare idag -> tolkas som PA (opt-out, inte opt-in) sa
+// ingen tystnar av misstag nar funktionen lanseras.
+function tipsEnabled(player, field) {
+  return !player || player[field] !== false;
 }
 async function findAliasBySteamId64(steamid64) {
   const accountId = steam64ToAccountId(steamid64);
@@ -1086,7 +1103,7 @@ app.post('/api/overlay-capture', async (req, res) => {
     if (merged.ok && !result.ok) console.log('[capture] full avlasning via bast-per-slot:', JSON.stringify(merged.heroes));
 
     if (!heroesToUse) {
-      pushOverlay(p.name, 'itemtips', 'Itemtips', 'Kunde bara lasa av ' + confident.length + '/5 fiendehjaltar sakert — fyll i dem manuellt i Playbook.');
+      if (tipsEnabled(p, 'itemTipsEnabled')) pushOverlay(p.name, 'itemtips', 'Itemtips', 'Kunde bara lasa av ' + confident.length + '/5 fiendehjaltar sakert — fyll i dem manuellt i Playbook.');
       return res.json({ ok: false, reason: merged.reason, confident, heroes: merged.heroes, slots: merged.slots });
     }
 
@@ -1113,9 +1130,9 @@ app.post('/api/overlay-capture', async (req, res) => {
     // ingen matchad match, saknad strategitext) trots att fienderna las av korrekt.
     if (generated) {
       const note = partial ? ' (' + heroesToUse.length + '/5 avlasta — tipsen raknar bara med dessa)' : '';
-      pushOverlay(p.name, 'itemtips', 'Itemtips klara', 'Fiender: ' + heroesToUse.join(', ') + note + '. Paminnelser kommer live under matchen.');
+      if (tipsEnabled(p, 'itemTipsEnabled')) pushOverlay(p.name, 'itemtips', 'Itemtips klara', 'Fiender: ' + heroesToUse.join(', ') + note + '. Paminnelser kommer live under matchen.');
     } else {
-      pushOverlay(p.name, 'itemtips', 'Fiender identifierade', 'Fiender: ' + heroesToUse.join(', ') + '. Kunde inte generera itemtips automatiskt just nu — kolla matchen i Playbook.');
+      if (tipsEnabled(p, 'itemTipsEnabled')) pushOverlay(p.name, 'itemtips', 'Fiender identifierade', 'Fiender: ' + heroesToUse.join(', ') + '. Kunde inte generera itemtips automatiskt just nu — kolla matchen i Playbook.');
     }
     res.json({ ok: true, partial, heroes: heroesToUse, generated, slots: merged.slots });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1623,7 +1640,9 @@ async function regenerateChallengeForAlias(matchId, alias, newHero) {
     if (idx === -1) return;
     freshMatch.challenges[idx] = buildChallengeRecord(Object.assign({ alias: alias }, parsed));
     await writeMatches(fresh);
-    pushOverlay(alias, 'challenge-update', 'Ny utmaning', parsed.text);
+    const prefPlayers = await readPlayers();
+    const prefPlayer = prefPlayers.find(pl => pl.name === alias);
+    if (tipsEnabled(prefPlayer, 'challengeTipsEnabled')) pushOverlay(alias, 'challenge-update', 'Ny utmaning', parsed.text);
     console.log('[GSI] Utmaning omgenererad for', alias, '(' + newHero + '):', parsed.text);
   } catch (e) { console.error('[GSI] Kunde inte omgenerera utmaning for', alias, e.message); }
 }
@@ -2548,6 +2567,8 @@ app.post('/api/gsi', async (req, res) => {
         const now = Date.now();
         if (now - (gsiLastItemCheck[alias] || 0) >= 5000) { // throttla JSONBin-lasningar till var 5:e sekund per spelare
           gsiLastItemCheck[alias] = now;
+          const prefPlayers = await readPlayers();
+          const prefPlayer = prefPlayers.find(pl => pl.name === alias);
 
           if (gsiItemCache.matchId !== serverStatus.latestMatchId) {
             gsiItemCache = { matchId: serverStatus.latestMatchId, timingsByAlias: {} };
@@ -2575,7 +2596,7 @@ app.post('/api/gsi', async (req, res) => {
             const clockSeconds = (body.map && body.map.clock_time) || 0;
             const due = dueReminders(timings, owned, clockSeconds, nameMap, gsiRemindedItems, gsiItemCache.matchId, alias);
             due.forEach(t => {
-              pushOverlay(alias, 'item-reminder', 'Itemtips', 'Dags att kopa ' + t.item + ' (senast minut ' + t.minute + ')');
+              if (tipsEnabled(prefPlayer, 'itemTipsEnabled')) pushOverlay(alias, 'item-reminder', 'Itemtips', 'Dags att kopa ' + t.item + ' (senast minut ' + t.minute + ')');
               console.log('[GSI] Itemparminnelse:', alias, '->', t.item);
             });
           }
@@ -2595,11 +2616,11 @@ app.post('/api/gsi', async (req, res) => {
             const ch = (chMatch && Array.isArray(chMatch.challenges)) ? chMatch.challenges.find(c => c.alias === alias) : null;
             if (ch) {
               if (needStart) {
-                pushOverlay(alias, 'challenge-update', 'Din utmaning', ch.text);
+                if (tipsEnabled(prefPlayer, 'challengeTipsEnabled')) pushOverlay(alias, 'challenge-update', 'Din utmaning', ch.text);
                 gsiRemindedChallenges.add(startKey);
                 console.log('[GSI] Utmaning (start):', alias, '->', ch.text);
               } else if (needMid) {
-                pushOverlay(alias, 'challenge-reminder', 'Utmaning kvar', ch.text);
+                if (tipsEnabled(prefPlayer, 'challengeTipsEnabled')) pushOverlay(alias, 'challenge-reminder', 'Utmaning kvar', ch.text);
                 gsiRemindedChallenges.add(midKey);
                 console.log('[GSI] Utmaning (min 15):', alias, '->', ch.text);
               }

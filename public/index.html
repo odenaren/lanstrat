@@ -756,6 +756,14 @@ function renderHome() {
     });
     steamHtml += '<div onclick="startSteamIdAdd(' + i + ')" style="color:var(--gold-dim);cursor:pointer">+ ' + (_myIds.length ? 'Lägg till konto' : 'Lägg till Steam-ID') + '</div>';
     steamHtml += '</div>';
+    var itemTipsOn = p.itemTipsEnabled !== false;
+    var challengeTipsOn = p.challengeTipsEnabled !== false;
+    var tipsHtml = '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'
+      + '<button class="player-card-btn" onclick="togglePlayerPref(' + i + ',\'itemTipsEnabled\')" style="' + (itemTipsOn ? '' : 'opacity:.5') + '" title="Skicka itemtips till overlayn under matchen">'
+      + (itemTipsOn ? '🔔 Itemtips' : '🔕 Itemtips av') + '</button>'
+      + '<button class="player-card-btn" onclick="togglePlayerPref(' + i + ',\'challengeTipsEnabled\')" style="' + (challengeTipsOn ? '' : 'opacity:.5') + '" title="Skicka utmaningspaminnelser till overlayn under matchen">'
+      + (challengeTipsOn ? '🔔 Utmaningstips' : '🔕 Utmaningstips av') + '</button>'
+      + '</div>';
     card.innerHTML = `
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
         <div class="player-card-name" id="pname-${i}" ondblclick="startRename(${i})">${p.name}</div>
@@ -767,6 +775,7 @@ function renderHome() {
       <div class="player-card-count"><span>${count}</span> hjältar valda</div>
       <div class="player-card-roles">${roles.map(r=>`<span class="role-pill ${r.toLowerCase()}">${r}</span>`).join('')}</div>
       ${steamHtml}
+      ${tipsHtml}
       <button class="player-card-btn" onclick="openPicker(${i})">${poolOnlyMode?"Valj mina hjaltar":"Redigera pool"}</button>`;
     var cpSection = document.createElement('div');
     cpSection.className = 'challenge-pool-section';
@@ -807,6 +816,19 @@ function renderHome() {
   add.innerHTML = `<div class="plus">+</div><span>Lägg till spelare</span>`;
   add.onclick = ()=>document.getElementById('modal-overlay').classList.add('open');
   grid.appendChild(add);
+}
+
+async function togglePlayerPref(i, field) {
+  var p = players[i];
+  if(!p) return;
+  var newVal = !(p[field] !== false);
+  try {
+    var body = {};
+    body[field] = newVal;
+    await apiFetch('/players/' + encodeURIComponent(p.name) + '/prefs', { method:'PUT', body:JSON.stringify(body) });
+    p[field] = newVal;
+    renderHome();
+  } catch(err) { alert('Kunde inte spara installning: ' + err.message); }
 }
 
 // ===================== PUB-STRATEGI =====================
