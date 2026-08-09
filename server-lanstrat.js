@@ -970,6 +970,8 @@ const OVERLAY_ACTION_KINDS = new Set(['capture-request', 'capture-ban-request'])
 // over. Nagot kortare an klientens showMs (12s, se overlay/index.html) sa notiser
 // avloser varandra utan glapp.
 const OVERLAY_DISPLAY_MS = 11000;
+// Notiser aldre an sa har ar utspelade och serveras aldrig — se serveOverlay.
+const OVERLAY_STALE_MS = 3 * 60 * 1000;
 
 function pushOverlay(alias, kind, title, body) {
   const msg = { id: Date.now().toString() + '-' + Math.random().toString(36).slice(2, 6), kind: kind, title: title, body: body, ts: Date.now(), delivered: false };
@@ -990,6 +992,15 @@ function serveOverlay(alias) {
   const s = overlayStates[alias];
   if (!s) return OVERLAY_EMPTY;
   const now = Date.now();
+  // Utspelade notiser serveras aldrig. En notis som ingen hamtat ligger kvar i
+  // minnet hur lange som helst (kon avancerar bara nar nagon pollar), och
+  // klienten startar med lastId=null — utan det har visade en nystartad overlay
+  // den senaste notisen direkt, aven om den var timmar gammal (bekraftat
+  // 2026-08-09: "Kunde inte lasa av hjaltarna" dok upp innan nagon match ens
+  // sokts). Samma sak gjorde att en gammal capture-request kunde utlosa en
+  // screenshot av skrivbordet, som sedan raknades som en misslyckad avlasning.
+  if (s.current && now - s.current.ts > OVERLAY_STALE_MS) s.current = null;
+  while (s.queue.length && now - s.queue[0].ts > OVERLAY_STALE_MS) s.queue.shift();
   const c = s.current;
   const finished = !c || (OVERLAY_ACTION_KINDS.has(c.kind) ? c.delivered : (now - s.servedAt >= OVERLAY_DISPLAY_MS));
   if (finished && s.queue.length) {
@@ -1048,15 +1059,32 @@ app.post('/api/overlay-capture', async (req, res) => {
         const enemyResult = await identifyTopbarHeroes(buf, enemySide);
         console.log('[PUB capture] egna ok=' + ownResult.ok, JSON.stringify(ownResult.heroes),
           '| fiender ok=' + enemyResult.ok, JSON.stringify(enemyResult.heroes));
-        if (!ownResult.ok || !enemyResult.ok) {
-          if (pubSess.captureAttempts >= 5) {
+        // Bast-per-slot over forsoken, samma maskineri som LAN-flodet (se
+        // gsiCaptureAccum nedan). Utan detta maste EN enda frame traffa alla TIO
+        // ikonerna samtidigt — dubbelt sa svart som LAN-vagens fem, och en enskild
+        // slot fladdrar (dokumenterat 2026-07-20/07-26). Draften ar last nar vi
+        // borjar fraga, sa topbaren andrar sig inte mellan forsoken, och sessionen
+        // ar nycklad pa matchid+lag sa ingen annan match kan blandas in.
+        pubSess.slotsOwn = mergeBestSlots(pubSess.slotsOwn, ownResult.slots);
+        pubSess.slotsEnemy = mergeBestSlots(pubSess.slotsEnemy, enemyResult.slots);
+        const own = evaluateSlots(pubSess.slotsOwn);
+        const enemy = evaluateSlots(pubSess.slotsEnemy);
+        if (own.ok && !ownResult.ok) console.log('[PUB capture] egna: full avlasning via bast-per-slot:', JSON.stringify(own.heroes));
+        if (enemy.ok && !enemyResult.ok) console.log('[PUB capture] fiender: full avlasning via bast-per-slot:', JSON.stringify(enemy.heroes));
+        // Till skillnad fran itemtipsen (som nojer sig med >=3/5 sakra) kravs full
+        // avlasning har: spelplanen skrivs mot bada lagens kompletta sammansattning,
+        // och en gissad hjalte skulle ge en tyst felaktig strategi.
+        if (!own.ok || !enemy.ok) {
+          if (pubSess.captureAttempts >= PUB_CAPTURE_MAX_ATTEMPTS) {
             pubSess.failed = true;
-            pushOverlay(p.name, 'pub-strategi', 'Pub-strategi', 'Kunde inte lasa av hjaltarna fran skarmen — ingen strategi genererad.');
+            pushOverlay(p.name, 'pub-strategi', 'Pub-strategi',
+              'Kunde inte lasa av hjaltarna fran skarmen (egna ' + confidentHeroes(pubSess.slotsOwn).length
+              + '/5, fiender ' + confidentHeroes(pubSess.slotsEnemy).length + '/5) — ingen strategi genererad.');
           }
-          return res.json({ ok: false, reason: ownResult.reason || enemyResult.reason, own: ownResult.slots, enemy: enemyResult.slots });
+          return res.json({ ok: false, reason: own.reason || enemy.reason, own: own.slots, enemy: enemy.slots });
         }
-        const pubMatch = await createPubMatch(pubSess, ownResult.heroes, enemyResult.heroes);
-        await generateItemTipsForMatch(pubMatch.id, enemyResult.heroes);
+        const pubMatch = await createPubMatch(pubSess, own.heroes, enemy.heroes);
+        await generateItemTipsForMatch(pubMatch.id, enemy.heroes);
         // Recap direkt i overlayn (strateginamn + briefing + spelarens egna
         // nyckelitems) sa spelaren far hela planen upp pa skarmen redan nu, i
         // stallet for forst nar item-paminnelserna borjar ticka in live.
@@ -1196,6 +1224,11 @@ app.post('/api/overlay-console-event', async (req, res) => {
 let pubArmed = {}; // alias -> { armedAt, playbookMatchId }
 let pubSessions = {}; // "dotaMatchId:team" -> session (se GSI-hooken for falten)
 const PUB_ARM_TTL_MS = 2 * 60 * 60 * 1000; // armering sjalvdör efter 2h utan match
+// Antal screenshot-forsok innan omvand strategi ger upp. Hojt fran 5 (2026-08-09)
+// av samma skal som LAN-flodets GSI_CAPTURE_MAX_ATTEMPTS hojdes till 8: en osaker
+// slot fladdrar, och nu ackumuleras forsoken bast-per-slot i stallet for att varje
+// frame maste traffa allt sjalv.
+const PUB_CAPTURE_MAX_ATTEMPTS = 8;
 
 function pubPrune() {
   const now = Date.now();
@@ -1221,7 +1254,12 @@ app.post('/api/pub/arm/:alias', async (req, res) => {
       if (s.players[req.params.alias] && s.playbookMatchId) delete s.players[req.params.alias];
     });
     const sess = pubFindSessionByAlias(req.params.alias);
-    if (sess && !sess.playbookMatchId) { sess.captureAttempts = 0; sess.failed = false; }
+    // Slotarna nollas ocksa: en ny armering betyder att forra rundans avlasning
+    // domdes ut, och da ska inte dess sammanslagna slots leva vidare.
+    if (sess && !sess.playbookMatchId) {
+      sess.captureAttempts = 0; sess.failed = false;
+      sess.slotsOwn = null; sess.slotsEnemy = null;
+    }
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1236,7 +1274,7 @@ app.get('/api/pub/status', (req, res) => {
     const sess = pubFindSessionByAlias(alias);
     const ready = pubArmed[alias].playbookMatchId || (sess && sess.playbookMatchId) || null;
     const failed = sess && !ready && (sess.failed
-      || (sess.captureAttempts >= 5 && Date.now() - sess.lastCaptureReq > 60000)); // overlayn svarar inte
+      || (sess.captureAttempts >= PUB_CAPTURE_MAX_ATTEMPTS && Date.now() - sess.lastCaptureReq > 60000)); // overlayn svarar inte
     out[alias] = {
       state: ready ? 'ready' : failed ? 'failed' : sess ? 'match' : 'armed',
       playbookMatchId: ready
@@ -2463,7 +2501,7 @@ app.post('/api/gsi', async (req, res) => {
 
             if ((state === 'DOTA_GAMERULES_STATE_PRE_GAME' || state === 'DOTA_GAMERULES_STATE_GAME_IN_PROGRESS')
                 && !sess.playbookMatchId && !sess.generating && !sess.failed
-                && sess.captureAttempts < 5 && Date.now() - sess.lastCaptureReq > 20000) {
+                && sess.captureAttempts < PUB_CAPTURE_MAX_ATTEMPTS && Date.now() - sess.lastCaptureReq > 20000) {
               sess.lastCaptureReq = Date.now();
               sess.captureAttempts++;
               pushOverlay(pubAlias, 'capture-request', '', '');
