@@ -10,12 +10,19 @@
 //     — beviset pa att spelarens GSI-config faktiskt laddas av Dota.
 //     Saknas raden nar en match startat varnas spelaren lokalt i overlayn
 //     (vanligaste felet: cfg-filen ligger i fel mapp).
+//     OBS (verifierat mot riktig logg 2026-08-12): Dota loggar raden BARA EN
+//     GANG per klientsession, vid forsta matchens map-load — inte per match.
+//     Beviset galler darfor hela sessionen och nollstalls forst nar loggen
+//     trunkeras (= Dota startats om). Tidigare kravdes att raden var hogst
+//     3 min gammal, vilket gav falsk varning pa varje match efter den forsta.
 //
 // Ren Node (ingen Electron) sa modulen kan testas fristaende.
 const fs = require('fs');
 const { execSync } = require('child_process');
 
 const CONSOLE_LOG_REL = '\\steamapps\\common\\dota 2 beta\\game\\dota\\console.log';
+const GSI_CFG_LINE = 'Loading Game State Integration: gamestate_integration_dhs.cfg';
+const MAX_CHUNK = 512 * 1024;
 
 // Hittar console.log via Steams registernyckel + libraryfolders.vdf (Dota kan
 // ligga i ett annat Steam-bibliotek an huvudinstallationen).
@@ -41,17 +48,32 @@ function findDotaConsoleLog() {
 // Skapar en tailer. emit anropas med:
 //   { type: 'match-connect', logAccountId, matchId }  — ny match sedd i loggen
 //   { type: 'gsi-missing' }                           — match startad men dhs-cfg:en laddades aldrig
-// opts.path kan overrida sokvagen (tester); opts.warnDelayMs/gsiFreshMs styr
-// GSI-varningens timing (default 60s vantan, 3 min farskhetskrav).
+// opts.path kan overrida sokvagen (tester); opts.warnDelayMs styr hur lange vi
+// vantar efter matchanslutning innan GSI-varningen bedoms (default 60s).
 function createConsoleTail(emit, opts) {
   opts = opts || {};
   const warnDelayMs = opts.warnDelayMs != null ? opts.warnDelayMs : 60000;
-  const gsiFreshMs = opts.gsiFreshMs != null ? opts.gsiFreshMs : 3 * 60 * 1000;
   let logPath = opts.path || null;
   let offset = -1; // -1 = annu inte initierad (borja vid EOF, gamla rader ar inaktuella)
-  let gsiCfgSeenAt = 0;
+  let gsiCfgSeen = false; // galler hela Dota-sessionen, nollstalls vid trunkering
   let lastMatchId = null;
   let warnTimer = null;
+
+  // Laser [start, start+len) ur loggen. Tom strang vid lasfel.
+  function readChunk(start, len) {
+    if (len <= 0) return '';
+    const buf = Buffer.alloc(len);
+    let fd;
+    try {
+      fd = fs.openSync(logPath, 'r');
+      fs.readSync(fd, buf, 0, len, start);
+    } catch (e) {
+      return '';
+    } finally {
+      if (fd !== undefined) { try { fs.closeSync(fd); } catch (e2) {} }
+    }
+    return buf.toString('utf8');
+  }
 
   function poll() {
     if (!logPath) {
@@ -60,27 +82,22 @@ function createConsoleTail(emit, opts) {
     }
     let st;
     try { st = fs.statSync(logPath); } catch (e) { return; }
-    if (offset === -1) { offset = st.size; return; } // forsta varvet: stall oss vid EOF
-    if (st.size < offset) offset = 0; // filen trunkerad (ny Dota-start)
-    if (st.size === offset) return;
-    const start = Math.max(offset, st.size - 512 * 1024); // max 512KB per varv
-    const len = st.size - start;
-    const buf = Buffer.alloc(len);
-    let fd;
-    try {
-      fd = fs.openSync(logPath, 'r');
-      fs.readSync(fd, buf, 0, len, start);
-    } catch (e) {
+    if (offset === -1) {
+      // Forsta varvet: stall oss vid EOF (gamla matchid-rader ar inaktuella) —
+      // men cfg-raden kan redan ha loggats innan overlayn startade, sa skanna
+      // det befintliga innehallet efter den forst.
+      if (readChunk(Math.max(0, st.size - MAX_CHUNK), Math.min(st.size, MAX_CHUNK)).indexOf(GSI_CFG_LINE) !== -1) gsiCfgSeen = true;
+      offset = st.size;
       return;
-    } finally {
-      if (fd !== undefined) { try { fs.closeSync(fd); } catch (e2) {} }
     }
+    if (st.size < offset) { offset = 0; gsiCfgSeen = false; } // filen trunkerad (ny Dota-start) — nytt cfg-bevis kravs
+    if (st.size === offset) return;
+    const start = Math.max(offset, st.size - MAX_CHUNK); // max 512KB per varv
+    const text = readChunk(start, st.size - start);
+    if (!text) return; // lasfel — forsok igen nasta varv
     offset = st.size;
-    const text = buf.toString('utf8');
 
-    if (text.indexOf('Loading Game State Integration: gamestate_integration_dhs.cfg') !== -1) {
-      gsiCfgSeenAt = Date.now();
-    }
+    if (text.indexOf(GSI_CFG_LINE) !== -1) gsiCfgSeen = true;
 
     // Ta sista matchid-raden i chunken (spelaren kan ha lamnat/omkoat)
     const re = /Player AccountID (\d+) connecting to MatchID (\d+)/g;
@@ -93,7 +110,7 @@ function createConsoleTail(emit, opts) {
       // LOBBY STATE RUN — vanta darfor innan vi bedomer att cfg:en saknas.
       clearTimeout(warnTimer);
       warnTimer = setTimeout(function () {
-        if (Date.now() - gsiCfgSeenAt > gsiFreshMs) emit({ type: 'gsi-missing' });
+        if (!gsiCfgSeen) emit({ type: 'gsi-missing' });
       }, warnDelayMs);
       if (warnTimer.unref) warnTimer.unref();
     }
