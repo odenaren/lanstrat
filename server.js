@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { identifyTopbarHeroes, evaluateSlots, confidentHeroes, mergeBestSlots } = require('./topbar-match');
 const { readBannedHeroes } = require('./ban-log-match');
+const diag = require('./diag'); // sjalvdiagnostik for draftavlasningen, se GET /api/diag
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -68,15 +69,24 @@ async function jsonbinRequest(method, path, body) {
     'Content-Type': 'application/json',
     'X-Access-Key': JSONBIN_API_KEY
   };
-  const res = await fetch(JSONBIN_BASE + path, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined
-  });
+  const kind = method.toLowerCase();
+  let res;
+  try {
+    res = await fetch(JSONBIN_BASE + path, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined
+    });
+  } catch (e) {
+    diag.bin(kind, false, 'natverksfel: ' + e.message);
+    throw e;
+  }
   if (!res.ok) {
     const text = await res.text();
+    diag.bin(kind, false, res.status + ' ' + text.slice(0, 120));
     throw new Error(`JSONBin ${method} ${path}: ${res.status} ${text}`);
   }
+  diag.bin(kind, true);
   return res.json();
 }
 
@@ -102,7 +112,7 @@ async function getBin(key) {
     BIN_IDS[key] = id;
   }
   const cached = binCache.get(key);
-  if (cached && Date.now() - cached.ts < BIN_CACHE_TTL_MS) return cached.record;
+  if (cached && Date.now() - cached.ts < BIN_CACHE_TTL_MS) { diag.cacheHit(); return cached.record; }
   try {
     const data = await jsonbinRequest('GET', `/b/${BIN_IDS[key]}/latest`);
     binCache.set(key, { record: data.record, ts: Date.now() });
@@ -990,6 +1000,35 @@ app.get('/studio/:odId/:file', async (req, res) => {
 
 // ── STATUS (polling) ─────────────────────────────────
 let serverStatus = { generating: false, latestMatchId: null, replayToken: null, studioMatchId: null, studioToken: null };
+// ── SJALVDIAGNOSTIK ────────────────────────────────────────────────────────
+// Hela underlaget for "varfor lastes inte draften av?" i ett svar: hur manga
+// capture-requests servern skickade per spelare, om overlayn svarade, vad varje
+// slot fick for score, JSONBin-forbrukningen, och GSI-trafiken per spelare.
+// Skyddad av samma Basic Auth som resten av sajten (allt utom /api/gsi).
+// Ligger bara i minnet — nollstalls vid deploy/omstart, precis som avsett: det
+// ar kvallens korning som ska granskas, inte all historik.
+app.get('/api/diag', (req, res) => {
+  res.json(diag.snapshot({
+    // Varfor slutade servern fraga? done=true betyder att capture-flodet stangdes
+    // av for matchen (fiender/items fanns redan — eller, fore 2026-08-16, att en
+    // misslyckad JSONBin-lasning sag ut som en tom matchlista).
+    latestMatchId: serverStatus.latestMatchId,
+    captureState: { matchId: gsiCaptureState.matchId, done: gsiCaptureState.done, byAlias: gsiCaptureState.byAlias },
+    captureAccumSides: Object.keys(gsiCaptureAccum.bySide || {}),
+    gsiTeamsKnown: Object.keys(gsiTeamBySteamId).length,
+    binCacheKeys: Array.from(binCache.keys())
+  }));
+});
+
+// Den sparade remsan som PNG — kor topbar-match.js lokalt mot den for att se
+// varfor en slot inte gick att identifiera (upplosning, HUD-skal, fel utsnitt).
+app.get('/api/diag/capture/:id.png', (req, res) => {
+  const buf = diag.image(req.params.id);
+  if (!buf) return res.status(404).json({ error: 'ingen sparad bild med det id:t' });
+  res.set('Content-Type', 'image/png');
+  res.send(buf);
+});
+
 app.get('/api/status', (req, res) => res.json(serverStatus));
 app.post('/api/status/generating', (req, res) => {
   serverStatus.generating = !!req.body.generating;
@@ -1018,6 +1057,7 @@ const OVERLAY_STALE_MS = 3 * 60 * 1000;
 function pushOverlay(alias, kind, title, body) {
   const msg = { id: Date.now().toString() + '-' + Math.random().toString(36).slice(2, 6), kind: kind, title: title, body: body, ts: Date.now(), delivered: false };
   const s = overlayStates[alias] || (overlayStates[alias] = { current: null, servedAt: 0, queue: [] });
+  if (OVERLAY_ACTION_KINDS.has(kind)) diag.captureRequest(alias, kind);
   if (OVERLAY_ACTION_KINDS.has(kind)) {
     s.current = msg; // preempterar synlig notis — capture maste ske direkt
   } else {
@@ -1031,6 +1071,7 @@ function pushOverlay(alias, kind, title, body) {
 // levererats en gang. Klienten pollar var 2:a sekund och dedupar pa id, sa den
 // hinner fanga varje notis under dess fonster utan nagon klientandring.
 function serveOverlay(alias) {
+  diag.overlayPoll(alias); // enda stallet bada overlay-routerna passerar — visar vilka widgets som lever
   const s = overlayStates[alias];
   if (!s) return OVERLAY_EMPTY;
   const now = Date.now();
@@ -1085,29 +1126,39 @@ app.post('/api/overlay/:alias', (req, res) => {
 // (topbar-match.js) och genererar itemtips — vagen runt att GSI aldrig exponerar
 // fiendehjaltar i All Pick (bekraftat 2026-07-13).
 app.post('/api/overlay-capture', async (req, res) => {
+  // Varje forsok hamnar i diagnostikbufferten redan har (se diag.js) — rec muteras
+  // vid varje utgang nedan, sa /api/diag visar exakt var avlasningen tog slut.
+  const rec = diag.capture({ accountId: Number(req.body && req.body.accountId) || null });
   try {
     const accountId = Number(req.body.accountId);
     const image = req.body.image; // base64-PNG, bara skarmens topp-remsa
-    if (!accountId || !image) return res.status(400).json({ error: 'accountId + image kravs' });
+    if (!accountId || !image) { rec.outcome = 'ogiltig request (accountId/image saknas)'; return res.status(400).json({ error: 'accountId + image kravs' }); }
     const players = await readPlayers();
     const p = players.find(pl => playerAccountIds(pl).includes(accountId));
-    if (!p) return res.status(404).json({ error: 'okant steam-konto' });
+    if (!p) { rec.outcome = 'okant steam-konto'; return res.status(404).json({ error: 'okant steam-konto' }); }
+    rec.alias = p.name;
     const steamid64 = (BigInt(accountId) + STEAM64_OFFSET).toString();
     const myTeam = gsiTeamBySteamId[steamid64];
-    if (!myTeam) return res.status(409).json({ error: 'GSI har inte rapporterat lagsida an — kan inte veta vilken sida som ar fienden' });
+    if (!myTeam) { rec.outcome = 'GSI har inte rapporterat lagsida an'; return res.status(409).json({ error: 'GSI har inte rapporterat lagsida an — kan inte veta vilken sida som ar fienden' }); }
     const enemySide = myTeam === 'radiant' ? 'dire' : 'radiant';
+    rec.enemySide = enemySide;
 
     // Pub-strategi-session? Da lases BADA sidorna av topbaren (alla 10 hjaltar)
     // och en spelplan for den redan lasta draften genereras, istallet for
     // LAN-flodets fiende-avlasning mot latestMatchId.
     const pubSess = pubFindSessionByAlias(p.name);
     if (pubSess && !pubSess.playbookMatchId) {
-      if (pubSess.generating) return res.json({ ok: true, pending: true });
+      rec.mode = 'pub';
+      if (pubSess.generating) { rec.outcome = 'annan capture genererade redan'; return res.json({ ok: true, pending: true }); }
       pubSess.generating = true;
       try {
         const buf = Buffer.from(image, 'base64');
         const ownResult = await identifyTopbarHeroes(buf, myTeam);
         const enemyResult = await identifyTopbarHeroes(buf, enemySide);
+        rec.ok = ownResult.ok && enemyResult.ok;
+        rec.slots = { egna: ownResult.slots, fiender: enemyResult.slots };
+        rec.reason = ownResult.reason || enemyResult.reason;
+        diag.captureImage(rec, buf);
         console.log('[PUB capture] egna ok=' + ownResult.ok, JSON.stringify(ownResult.heroes),
           '| fiender ok=' + enemyResult.ok, JSON.stringify(enemyResult.heroes));
         // Bast-per-slot over forsoken, samma maskineri som LAN-flodet (se
@@ -1132,6 +1183,8 @@ app.post('/api/overlay-capture', async (req, res) => {
               'Kunde inte lasa av hjaltarna fran skarmen (egna ' + confidentHeroes(pubSess.slotsOwn).length
               + '/5, fiender ' + confidentHeroes(pubSess.slotsEnemy).length + '/5) — ingen strategi genererad.');
           }
+          rec.outcome = 'pub: ofullstandig avlasning (egna ' + confidentHeroes(pubSess.slotsOwn).length
+            + '/5, fiender ' + confidentHeroes(pubSess.slotsEnemy).length + '/5)' + (pubSess.failed ? ' — gav upp' : ' — vantar pa fler forsok');
           return res.json({ ok: false, reason: own.reason || enemy.reason, own: own.slots, enemy: enemy.slots });
         }
         const pubMatch = await createPubMatch(pubSess, own.heroes, enemy.heroes);
@@ -1145,11 +1198,18 @@ app.post('/api/overlay-capture', async (req, res) => {
         // vag for vanlig och omvand strategi.
         generateChallengesForMatch(pubMatch.id)
           .catch(e => console.error('[PUB] Utmaningar:', e.message));
+        rec.outcome = 'pub: spelplan genererad (' + pubMatch.id + ')';
         return res.json({ ok: true, pub: true, matchId: pubMatch.id, own: ownResult.heroes, enemies: enemyResult.heroes });
       } finally { pubSess.generating = false; }
     }
 
-    const result = await identifyTopbarHeroes(Buffer.from(image, 'base64'), enemySide);
+    const lanBuf = Buffer.from(image, 'base64');
+    const result = await identifyTopbarHeroes(lanBuf, enemySide);
+    rec.mode = 'lan';
+    rec.ok = result.ok;
+    rec.slots = result.slots;
+    rec.reason = result.reason;
+    diag.captureImage(rec, lanBuf);
     console.log('[capture]', enemySide, 'ok=' + result.ok, JSON.stringify(result.heroes), result.reason || '');
     // Per-slot score/margin/runnerUp — utan detta kravdes en extra rond med
     // riktiga skarmdumpar 2026-07-20 for att forsta VARFOR ett gissat namn
@@ -1173,6 +1233,7 @@ app.post('/api/overlay-capture', async (req, res) => {
     bucket.slots = mergeBestSlots(bucket.slots, result.slots);
     const merged = evaluateSlots(bucket.slots);
     const confident = confidentHeroes(bucket.slots);
+    rec.confident = confident; // efter bast-per-slot-mergen over alla spelares skarmar
 
     // Vilka hjaltar bygger vi itemtips mot? Hela femman om alla lastes sakert,
     // annars delträff: >=3 sakra hjaltar racker (beslut 2026-07-26 — hellre tips
@@ -1183,6 +1244,7 @@ app.post('/api/overlay-capture', async (req, res) => {
 
     if (!heroesToUse) {
       if (tipsEnabled(p, 'itemTipsEnabled')) pushOverlay(p.name, 'itemtips', 'Itemtips', 'Kunde bara lasa av ' + confident.length + '/5 fiendehjaltar sakert — fyll i dem manuellt i Playbook.');
+      rec.outcome = 'for fa sakra slots (' + confident.length + '/5) — bad om manuell ifyllnad';
       return res.json({ ok: false, reason: merged.reason, confident, heroes: merged.heroes, slots: merged.slots });
     }
 
@@ -1194,9 +1256,11 @@ app.post('/api/overlay-capture', async (req, res) => {
       if (!bucket.since) {
         bucket.since = Date.now();
         console.log('[capture] deltraff ' + confident.length + '/5 (' + enemySide + ') — vantar in fler skarmar ' + (GSI_CAPTURE_COLLECT_MS / 1000) + 's');
+        rec.outcome = 'deltraff ' + confident.length + '/5 — insamlingsfonstret oppnat';
         return res.json({ ok: true, collecting: true, confident, slots: merged.slots });
       }
       if (Date.now() - bucket.since < GSI_CAPTURE_COLLECT_MS) {
+        rec.outcome = 'deltraff ' + confident.length + '/5 — vantar in fler skarmar';
         return res.json({ ok: true, collecting: true, confident, slots: merged.slots });
       }
       console.log('[capture] deltraff ' + confident.length + '/5 (' + enemySide + '), fonster ute — genererar mot:', JSON.stringify(confident));
@@ -1213,8 +1277,13 @@ app.post('/api/overlay-capture', async (req, res) => {
     } else {
       if (tipsEnabled(p, 'itemTipsEnabled')) pushOverlay(p.name, 'itemtips', 'Fiender identifierade', 'Fiender: ' + heroesToUse.join(', ') + '. Kunde inte generera itemtips automatiskt just nu — kolla matchen i Playbook.');
     }
+    rec.outcome = (partial ? 'deltraff ' + heroesToUse.length + '/5' : 'full avlasning 5/5')
+      + (generated ? ' — itemtips genererade' : ' — inga itemtips genererades');
     res.json({ ok: true, partial, heroes: heroesToUse, generated, slots: merged.slots });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    rec.outcome = 'fel: ' + e.message;
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Tar emot en ban-logg-screenshot fran overlay-widgeten (svar pa
@@ -2504,6 +2573,8 @@ app.post('/api/gsi', async (req, res) => {
     const justEnteredStrategyTime = state === 'DOTA_GAMERULES_STATE_STRATEGY_TIME' && gsiLastState !== state;
     gsiLastState = state;
     if (enteringHeroSelection) gsiSeenUnavailable = new Set();
+
+    diag.gsi(body.player && body.player.steamid, state, body.map && body.map.matchid);
 
     const myTeam = body.player && body.player.team_name; // 'radiant' | 'dire'
     const draft = body.draft;
