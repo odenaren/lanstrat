@@ -80,17 +80,41 @@ async function jsonbinRequest(method, path, body) {
   return res.json();
 }
 
+// ── Cache framfor JSONBin ───────────────────────────────────────────────────
+// JSONBins requests ar en ENGANGSPUCKEL (Pro: 100 000 st, aterstalls aldrig,
+// verifierat mot pricing-sidan 2026-08-16) — inte en manadskvot. Hela puckeln
+// tog slut pa en enda spelkvall: GSI-configen vi delar ut har throttle 0.1, sa
+// nio spelare postar ~90 payloads/s, och varje payload gjorde forr en egen
+// readPlayers() plus (under capture-fonstret) en readMatches() = uppemot 180
+// JSONBin-anrop i sekunden precis nar draften skulle lasas av.
+//
+// Cachen ar write-through: setBin lagger in det skrivna vardet direkt, sa
+// appens egna andringar syns omedelbart oavsett TTL. TTL:n behovs bara for
+// skrivningar fran UTSIDAN av serverprocessen (lokala scripts som
+// link-matches.js och generate-studio.js skriver rakt mot JSONBin).
+const BIN_CACHE_TTL_MS = Number(process.env.BIN_CACHE_TTL_MS) || 10 * 60 * 1000; // env-knappen finns for tester
+const binCache = new Map(); // key -> { record, ts }
+
 async function getBin(key) {
   if (!BIN_IDS[key]) {
     const id = process.env['JSONBIN_' + key.toUpperCase() + '_ID'];
     if (!id) return null;
     BIN_IDS[key] = id;
   }
+  const cached = binCache.get(key);
+  if (cached && Date.now() - cached.ts < BIN_CACHE_TTL_MS) return cached.record;
   try {
     const data = await jsonbinRequest('GET', `/b/${BIN_IDS[key]}/latest`);
+    binCache.set(key, { record: data.record, ts: Date.now() });
     return data.record;
   } catch (e) {
     console.error('getBin error:', e.message);
+    // Hellre gammal data an ingen alls: null tolkades forr som "tom lista" av
+    // anroparna (se readPlayers nedan) och stangde av funktioner tyst.
+    if (cached) {
+      console.error('getBin: serverar utgangen cache for ' + key + ' (' + Math.round((Date.now() - cached.ts) / 1000) + 's gammal)');
+      return cached.record;
+    }
     return null;
   }
 }
@@ -102,6 +126,7 @@ async function setBin(key, data) {
     BIN_IDS[key] = id;
   }
   await jsonbinRequest('PUT', `/b/${BIN_IDS[key]}`, data);
+  binCache.set(key, { record: data, ts: Date.now() }); // forst efter lyckad skrivning
 }
 
 async function createBin(key, initial) {
@@ -132,11 +157,28 @@ async function initBins() {
   }
 }
 
-async function readPlayers() { const r = await getBin('players'); return (r && r.data) ? r.data : []; }
+// Ett misslyckat bin-anrop far ALDRIG se ut som "det finns inga data". Forr gav
+// getBin null -> [], vilket tyst gjorde tre skadliga saker nar JSONBin var nere
+// (verifierat 2026-08-16, nar requestpuckeln tagit slut):
+//   1. GSI-capture-blocket sag ingen match och satte gsiCaptureState.done = true
+//      — servern slutade be om topbar-screenshots helt for den matchen.
+//   2. /api/overlay-capture hittade ingen spelare och svarade "okant steam-konto"
+//      — screenshoten kastades.
+//   3. Las-andra-skriv-vagarna (t.ex. POST /api/players) kunde skriva tillbaka en
+//      trunkerad lista over hela binen.
+// Nu kastas ett fel istallet: routes svarar 500, GSI-handlerns catch loggar, och
+// ingen skrivning sker pa tomt underlag. Cachen ovan gor att detta bara intraffar
+// nar binen ALDRIG kunnat lasas sedan servern startade.
+async function binData(key) {
+  const r = await getBin(key);
+  if (!r) throw new Error('JSONBin: kunde inte lasa ' + key + '-binen');
+  return r.data || [];
+}
+async function readPlayers() { return binData('players'); }
 async function writePlayers(data) { await setBin('players', { data }); }
-async function readDraftPools() { const r = await getBin('draftpools'); return (r && r.data) ? r.data : []; }
+async function readDraftPools() { return binData('draftpools'); }
 async function writeDraftPools(data) { await setBin('draftpools', { data }); }
-async function readMatches() { const r = await getBin('matches'); return (r && r.data) ? r.data : []; }
+async function readMatches() { return binData('matches'); }
 async function writeMatches(data) { await setBin('matches', { data }); }
 async function readAppConfig() { const r = await getBin('config'); return (r && r.scoring) ? r : DEFAULT_CONFIG; }
 async function writeAppConfig(data) { await setBin('config', data); }
@@ -1015,11 +1057,20 @@ function serveOverlay(alias) {
 // ratt alias har, sa INGEN per-spelare-config behovs langre — en och samma
 // config.js/overlay-mapp funkar for alla 9 spelare.
 app.get('/api/overlay/by-steamid/:accountId', async (req, res) => {
-  const accountId = Number(req.params.accountId);
-  const players = await readPlayers();
-  const p = players.find(pl => playerAccountIds(pl).includes(accountId));
-  if (!p) return res.json(OVERLAY_EMPTY);
-  res.json(serveOverlay(p.name));
+  // Try/catch kravs: alla nio overlays pollar den har routen varannan sekund, och
+  // readPlayers kastar numera nar binen inte gar att lasa. Express 4 fangar inte
+  // fel ur async-handlers — utan detta skulle ett JSONBin-avbrott bli en
+  // unhandled rejection och slaka hela serverprocessen.
+  try {
+    const accountId = Number(req.params.accountId);
+    const players = await readPlayers();
+    const p = players.find(pl => playerAccountIds(pl).includes(accountId));
+    if (!p) return res.json(OVERLAY_EMPTY);
+    res.json(serveOverlay(p.name));
+  } catch (e) {
+    console.error('[overlay/by-steamid]', e.message);
+    res.json(OVERLAY_EMPTY); // overlayn visar inget och pollar vidare
+  }
 });
 
 app.get('/api/overlay/:alias', (req, res) => {
